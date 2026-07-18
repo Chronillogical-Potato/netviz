@@ -1395,15 +1395,6 @@ export const useFlowStore = create<FlowState>()(
       }
 
       const lastNodeId = draft.nodeIds[draft.nodeIds.length - 1];
-      if (lastNodeId === nodeId) return s;
-      if (draft.nodeIds.includes(nodeId)) {
-        return {
-          animationPathDraft: {
-            ...draft,
-            error: "That block is already in this path.",
-          },
-        };
-      }
       const edge = s.edges.find(
         (candidate) =>
           candidate.source === lastNodeId && candidate.target === nodeId
@@ -1413,6 +1404,14 @@ export const useFlowStore = create<FlowState>()(
           animationPathDraft: {
             ...draft,
             error: "Choose a directly connected outgoing block.",
+          },
+        };
+      }
+      if (draft.edgeIds.includes(edge.id)) {
+        return {
+          animationPathDraft: {
+            ...draft,
+            error: "That connection is already in this path.",
           },
         };
       }
@@ -1537,6 +1536,7 @@ export const useFlowStore = create<FlowState>()(
         scenarioDocument = applyNodeEffect(scenarioDocument, {
           nodeIds: [nodeId],
           effect: nodeEffect,
+          append: true,
           clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
         });
       });

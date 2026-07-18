@@ -43,6 +43,7 @@ export interface ApplyNodeEffectInput {
   nodeIds: readonly string[];
   effect: ScenarioEffectV1;
   scenarioId?: string;
+  append?: boolean;
   clip?: Partial<Omit<ScenarioClipV1, "id" | "effect">>;
   idFactory?: AnimationIdFactory;
 }
@@ -229,6 +230,16 @@ export function applyNodeEffect(
     if (!isSelectedNodeTrack(track, selected)) return track;
     const firstClip = track.clips[0];
     updatedTargets.add(track.target.id);
+    if (input.append) {
+      return {
+        ...track,
+        enabled: true,
+        clips: [
+          ...track.clips,
+          createScenarioClip(input.effect, { ...input.clip, idFactory }),
+        ],
+      };
+    }
     if (firstClip === undefined) {
       return {
         ...track,

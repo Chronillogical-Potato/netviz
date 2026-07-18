@@ -664,7 +664,7 @@ export function AnimationPathBuilder() {
         <p className="text-xs font-semibold text-foreground">Custom path</p>
         <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
           Click connected blocks in order. Each click adds the next request
-          hop; connection lines cannot be selected while building.
+          hop. A block can appear again when a return connection exists.
         </p>
 
         <label className="mb-3 block text-[10px] text-muted-foreground">
@@ -686,7 +686,7 @@ export function AnimationPathBuilder() {
           <div className="max-h-60 overflow-y-auto rounded-lg bg-input p-1.5">
             {pathNodes.map((node, index) => (
               <div
-                key={node.id}
+                key={`${node.id}-${index}`}
                 className="flex min-h-8 items-center gap-2 rounded-md px-2"
               >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">

@@ -385,6 +385,45 @@ describe("animation target lifecycle", () => {
     });
   });
 
+  test("allows a request path to return to an earlier block", () => {
+    useFlowStore.setState({
+      nodes: [node("provider"), node("container"), node("database")],
+      edges: [
+        edge("provider-container", "provider", "container"),
+        edge("container-database", "container", "database"),
+        edge("database-container", "database", "container"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath("provider");
+    useFlowStore.getState().appendAnimationPathNode("container");
+    useFlowStore.getState().appendAnimationPathNode("database");
+    useFlowStore.getState().appendAnimationPathNode("container");
+
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      nodeIds: ["provider", "container", "database", "container"],
+      edgeIds: [
+        "provider-container",
+        "container-database",
+        "database-container",
+      ],
+      error: null,
+    });
+
+    useFlowStore.getState().animateDraftPath();
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const containerTrack = scenario.tracks.find(
+      (track) =>
+        track.property === "node-effect" &&
+        "id" in track.target &&
+        track.target.id === "container"
+    );
+    expect(containerTrack?.clips.map((clip) => clip.startMs)).toEqual([
+      2_100,
+      6_300,
+    ]);
+  });
+
   test("saves and reloads custom path appearance", () => {
     useFlowStore.setState({
       nodes: [node("user"), node("server")],

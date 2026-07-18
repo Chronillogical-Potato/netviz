@@ -247,7 +247,8 @@
   z-index: 20;
   display: flex;
   height: 18px;
-  width: 18px;
+  min-width: 18px;
+  padding: 0 4px;
   align-items: center;
   justify-content: center;
   border: 2px solid hsl(var(--background));

@@ -542,10 +542,15 @@ function CanvasInner() {
   );
 
   const animationPathSteps = useMemo(
-    () =>
-      new Map(
-        (animationPathDraft?.nodeIds ?? []).map((id, index) => [id, index + 1])
-      ),
+    () => {
+      const steps = new Map<string, string>();
+      (animationPathDraft?.nodeIds ?? []).forEach((id, index) => {
+        const step = String(index + 1);
+        const previous = steps.get(id);
+        steps.set(id, previous ? `${previous}, ${step}` : step);
+      });
+      return steps;
+    },
     [animationPathDraft]
   );
   const animationPathEdgeIds = useMemo(
