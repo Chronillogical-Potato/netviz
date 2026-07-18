@@ -327,6 +327,17 @@ function withHistoryReset(fn: () => void) {
   t.resume();
 }
 
+// Per-node identity fields that must NOT be broadcast across a
+// multi-selection when editing shared style in the inspector.
+const IDENTITY_KEYS = new Set([
+  "label",
+  "subtitle",
+  "text",
+  "code",
+  "step",
+  "alt",
+]);
+
 const infraSize = (variant: InfraVariant) =>
   variant === "card" ? { width: 180, height: 150 } : { width: 220, height: 72 };
 
@@ -726,13 +737,37 @@ export const useFlowStore = create<FlowState>()(
     }),
 
   updateNodeData: (id, patch) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
-        n.id === id
-          ? ({ ...n, data: { ...n.data, ...patch } } as AppNode)
-          : n
-      ),
-    })),
+    set((s) => {
+      const editing = s.nodes.find((n) => n.id === id);
+      const selectedCount = s.nodes.reduce(
+        (acc, n) => acc + (n.selected ? 1 : 0),
+        0
+      );
+      // With a multi-selection, propagate shared style props to every
+      // selected node (Figma-style); identity fields stay on the edited one.
+      if (editing?.selected && selectedCount > 1) {
+        const shared: NodeDataPatch = {};
+        for (const [k, v] of Object.entries(patch)) {
+          if (!IDENTITY_KEYS.has(k)) (shared as Record<string, unknown>)[k] = v;
+        }
+        return {
+          nodes: s.nodes.map((n) => {
+            if (n.id === id)
+              return { ...n, data: { ...n.data, ...patch } } as AppNode;
+            if (n.selected)
+              return { ...n, data: { ...n.data, ...shared } } as AppNode;
+            return n;
+          }),
+        };
+      }
+      return {
+        nodes: s.nodes.map((n) =>
+          n.id === id
+            ? ({ ...n, data: { ...n.data, ...patch } } as AppNode)
+            : n
+        ),
+      };
+    }),
 
   updateEdgeLabel: (id, label) =>
     set((s) => ({
