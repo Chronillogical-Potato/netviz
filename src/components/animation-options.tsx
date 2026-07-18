@@ -439,7 +439,7 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   scenarioId: null,
   name: "",
   preset: "single-line" as const,
-  staggerMs: 300,
+  staggerMs: 0,
   appearance: {
     colors: ["#ffaa40", "#9c40ff"] as [string, string],
     responseColors: ["#38bdf8", "#818cf8"] as [string, string],
@@ -462,7 +462,6 @@ const PATH_PRESETS: Array<{ value: AnimationPathPreset; label: string }> = [
   { value: "request-response", label: "Request + response" },
   { value: "scatter-gather", label: "Scatter + gather" },
   { value: "round-robin", label: "Round robin" },
-  { value: "staggered-outputs", label: "Staggered outputs" },
   { value: "failover", label: "Fallback / failover" },
   { value: "cascade", label: "Cascade / tree" },
   { value: "loop", label: "Loop / polling" },
@@ -476,7 +475,7 @@ const PATH_PRESET_HELP: Record<AnimationPathPreset, string> = {
   "multiple-inputs":
     "Click the receiving block first, then each block that sends into it.",
   "multiple-outputs":
-    "Click the source block first, then each block that receives from it.",
+    "Click the source block first, then each receiver. Output timing can be simultaneous or staggered.",
   "request-response":
     "Click a request route in order. The response returns along the same route.",
   "scatter-gather":
@@ -492,6 +491,46 @@ const PATH_PRESET_HELP: Record<AnimationPathPreset, string> = {
   loop:
     "Click connected blocks in order, then click the first block again to close the loop.",
 };
+
+const OUTPUT_TIMING_OPTIONS = [
+  { value: "simultaneous", label: "Simultaneous" },
+  { value: "staggered", label: "Staggered" },
+];
+
+export function OutputTimingControls({
+  staggerMs,
+  onChange,
+}: {
+  staggerMs: number;
+  onChange: (staggerMs: number) => void;
+}) {
+  const staggered = staggerMs > 0;
+  return (
+    <div className="flex flex-col gap-2">
+      <Row label="Output timing">
+        <Picker
+          label="Output timing"
+          value={staggered ? "staggered" : "simultaneous"}
+          options={OUTPUT_TIMING_OPTIONS}
+          onChange={(value) =>
+            onChange(value === "staggered" ? Math.max(staggerMs, 300) : 0)
+          }
+        />
+      </Row>
+      {staggered ? (
+        <TimingRow
+          label="Stagger"
+          ariaLabel="Path stagger delay"
+          state={{ status: "uniform", value: staggerMs }}
+          min={0.1}
+          max={2}
+          disabled={false}
+          onChange={(seconds) => onChange(seconds * 1_000)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 const ANIMATION_PATH_DRAG_MIME = "application/x-netviz-animation-path";
 
@@ -624,9 +663,6 @@ export function ExistingAnimationPath() {
             }
             if (path.preset === "round-robin") {
               return `${names.join(" → ")} ↻`;
-            }
-            if (path.preset === "staggered-outputs") {
-              return `${names[0] ?? ""} → ${names.slice(1).join(" ⋯ ")}`;
             }
             if (path.preset === "failover") {
               return `${names[0] ?? ""} → ${names[1] ?? ""} ⇢ ${names[2] ?? ""}`;
@@ -837,7 +873,6 @@ export function AnimationPathBuilder() {
       draft.preset === "multiple-inputs" ||
       draft.preset === "multiple-outputs" ||
       draft.preset === "round-robin" ||
-      draft.preset === "staggered-outputs" ||
       draft.preset === "cascade"
     ) {
       return draft.edgeIds.length >= 2;
@@ -875,17 +910,10 @@ export function AnimationPathBuilder() {
               }
             />
           </Row>
-          {draft.preset === "staggered-outputs" ? (
-            <TimingRow
-              label="Stagger"
-              ariaLabel="Path stagger delay"
-              state={{ status: "uniform", value: draft.staggerMs }}
-              min={0.1}
-              max={2}
-              disabled={false}
-              onChange={(seconds) =>
-                setAnimationPathStaggerMs(seconds * 1_000)
-              }
+          {draft.preset === "multiple-outputs" ? (
+            <OutputTimingControls
+              staggerMs={draft.staggerMs}
+              onChange={setAnimationPathStaggerMs}
             />
           ) : null}
         </div>
@@ -896,7 +924,6 @@ export function AnimationPathBuilder() {
               ? "Click the receiving block on the canvas"
               : draft.preset === "multiple-outputs" ||
                   draft.preset === "round-robin" ||
-                  draft.preset === "staggered-outputs" ||
                   draft.preset === "failover" ||
                   draft.preset === "scatter-gather"
                 ? "Click the source block on the canvas"

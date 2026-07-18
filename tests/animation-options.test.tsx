@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
+import * as AnimationOptionComponents from "../src/components/animation-options";
 import {
   AnimationOverview,
   AnimationOptions,
@@ -78,6 +79,29 @@ describe("AnimationOptions", () => {
     expect(markup).toContain('aria-label="Block shimmer"');
     expect(markup).toContain("Save &amp; play");
     expect(markup).toContain("Undo last");
+  });
+
+  test("provides a dedicated multiple-output timing control", () => {
+    const simultaneous = renderToStaticMarkup(
+      <AnimationOptionComponents.OutputTimingControls
+        staggerMs={0}
+        onChange={() => {}}
+      />
+    );
+    expect(simultaneous).toContain('aria-label="Output timing"');
+    expect(simultaneous).toContain('aria-haspopup="listbox"');
+    expect(simultaneous).toContain("Simultaneous");
+    expect(simultaneous).not.toContain('aria-label="Path stagger delay"');
+
+    const staggered = renderToStaticMarkup(
+      <AnimationOptionComponents.OutputTimingControls
+        staggerMs={400}
+        onChange={() => {}}
+      />
+    );
+    expect(staggered).toContain("Staggered");
+    expect(staggered).toContain('aria-label="Path stagger delay"');
+    expect(staggered).toContain('aria-label="Path stagger delay slider"');
   });
 
   test("renders custom paths as draggable animation cards", () => {
