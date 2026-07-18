@@ -25,6 +25,8 @@ export interface SvgAttributeTarget {
   setAttribute(name: string, value: string): void;
   removeAttribute(name: string): void;
   getAttribute(name: string): string | null;
+  getTotalLength?(): number;
+  getPointAtLength?(length: number): { x: number; y: number };
 }
 
 export interface EdgeMotionSlotElements {
@@ -274,6 +276,30 @@ const beamGradientVector = (
   return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
 };
 
+const pathBeamGradientVector = (
+  path: SvgAttributeTarget | null,
+  fallback: EdgeGradientVector,
+  phase: number,
+  span: number,
+  reversed: boolean
+): EdgeGradientVector => {
+  if (!path?.getTotalLength || !path.getPointAtLength) {
+    return beamGradientVector(fallback, phase, span, reversed);
+  }
+  const length = path.getTotalLength();
+  if (!Number.isFinite(length) || length <= 0) {
+    return beamGradientVector(fallback, phase, span, reversed);
+  }
+  const headRatio = Math.min(
+    1,
+    Math.max(0, reversed ? phase - span : phase + span)
+  );
+  const tailRatio = Math.min(1, Math.max(0, phase));
+  const head = path.getPointAtLength(length * headRatio);
+  const tail = path.getPointAtLength(length * tailRatio);
+  return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
+};
+
 const gradientStops = (colors: [string, string]) =>
   [
     ["0", colors[0], 0],
@@ -344,7 +370,8 @@ const applyProjectionToSlot = (
     const vector =
       primitive.gradientPhase === undefined
         ? context.gradientVector
-        : beamGradientVector(
+        : pathBeamGradientVector(
+            path,
             context.gradientVector,
             primitive.gradientPhase,
             beamSpan,

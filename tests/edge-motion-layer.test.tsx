@@ -60,6 +60,16 @@ class FakeSvgNode {
   }
 }
 
+class FakeMeasuredPath extends FakeSvgNode {
+  getTotalLength() {
+    return 100;
+  }
+
+  getPointAtLength(length: number) {
+    return { x: length, y: length * 2 };
+  }
+}
+
 const fakeSlot = (): EdgeMotionSlotElements => ({
   group: new FakeSvgNode(),
   gradients: Array.from({ length: 4 }, () => new FakeSvgNode()),
@@ -177,6 +187,23 @@ describe("EdgeMotionLayer", () => {
 
     unsubscribe();
     expect(runtime.unsubscribed).toBe(true);
+  });
+
+  test("aligns the beam gradient to its exact curved path segment", () => {
+    const runtime = new FakeTargetRuntime();
+    const slot = fakeSlot();
+    slot.paths[1] = new FakeMeasuredPath();
+    subscribeEdgeMotionTarget(runtime, "edge:/one", [slot], () => ({
+      motionState: "playing",
+      gradientVector: { x1: 0, y1: 0, x2: 1_000, y2: 0 },
+    }));
+
+    runtime.listener?.(targetFrame([clip("edge.gradient-beam")]));
+
+    expect(slot.gradients[1]?.getAttribute("x1")).toBe("35");
+    expect(slot.gradients[1]?.getAttribute("y1")).toBe("70");
+    expect(slot.gradients[1]?.getAttribute("x2")).toBe("25");
+    expect(slot.gradients[1]?.getAttribute("y2")).toBe("50");
   });
 
   test("reuses the exact base edge path for every motion primitive", () => {
