@@ -1,4 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 import {
   AlignCenter,
@@ -15,7 +23,7 @@ import {
   Search,
   Upload,
   X,
-} from "lucide-react";
+} from "@/ui/icons";
 import {
   resolveBlock,
   useFlowStore,
@@ -38,10 +46,12 @@ import {
   COLOR_PRESETS,
   type Accent,
 } from "@/blocks/registry";
-import { LUCIDE_ICON_NAMES, resolveIcon } from "@/blocks/icons";
+import { ICON_NAMES, canonicalIconName, resolveIcon } from "@/blocks/icons";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
-import { Label } from "@/ui/label";
+import { Segmented } from "@/ui/segmented";
+import { Slider } from "@/ui/slider";
+import { CanvasOptions, PageOptions } from "./canvas-options";
 import { cn } from "@/lib/utils";
 import {
   deriveLegacyLineEndpoints,
@@ -67,54 +77,629 @@ const ACCENTS: Accent[] = [
   "slate",
 ];
 
+const STATIC_POSITION = { x: 0, y: 0 };
+
+const NODE_TYPE_LABEL: Record<string, string> = {
+  infra: "Block",
+  shape: "Shape",
+  text: "Text",
+  step: "Step",
+  line: "Line",
+  image: "Image",
+  code: "Code",
+};
+
 export function Inspector() {
   const selectedProjection = useFlowStore(
     useShallow((s) => {
       const n = s.nodes.find((x) => x.selected);
       if (!n) return null;
-      return n;
+      // Strip per-frame drag churn (position/dragging) so moving a
+      // selected node doesn't re-render the inspector 60×/s. Editors that
+      // need the live position read it via useFlowStore.getState().
+      return { ...n, position: STATIC_POSITION, dragging: false };
     })
   );
-  if (!selectedProjection) return null;
-  const selectedNode = selectedProjection as unknown as AppNode;
+  const selectedNode = selectedProjection as unknown as AppNode | null;
+  const hasSelectedEdge = useFlowStore((s) =>
+    s.edges.some((e) => e.selected)
+  );
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-card/40">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Inspector
-        </p>
-      </div>
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        <NodeEditor node={selectedNode} />
-      </div>
+    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-background">
+      {selectedNode ? (
+        <div className="flex-1 overflow-y-auto pb-4">
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-xs font-semibold text-foreground">
+              {NODE_TYPE_LABEL[selectedNode.type ?? ""] ?? "Layer"}
+            </p>
+          </div>
+          <NodeEditor node={selectedNode} />
+          <Section title="Arrange">
+            <LayerRow id={selectedNode.id} />
+          </Section>
+        </div>
+      ) : hasSelectedEdge ? (
+        <>
+          <div className="px-4 pb-1 pt-3">
+            <p className="text-xs font-semibold text-foreground">Edge</p>
+          </div>
+          <CanvasOptions />
+        </>
+      ) : (
+        <>
+          <div className="px-4 pb-1 pt-3">
+            <p className="text-xs font-semibold text-foreground">Page</p>
+          </div>
+          <PageOptions />
+        </>
+      )}
     </aside>
   );
 }
 
-function LayerControls({ id }: { id: string }) {
-  const bringToFront = useFlowStore((s) => s.bringToFront);
-  const bringForward = useFlowStore((s) => s.bringForward);
-  const sendBackward = useFlowStore((s) => s.sendBackward);
-  const sendToBack = useFlowStore((s) => s.sendToBack);
+/* ── Framer-style panel primitives ─────────────────────────────── */
+
+// A titled block separated from the next section by a hairline.
+function Section({
+  title,
+  children,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="grid gap-1.5">
-      <Label>Layer</Label>
-      <div className="flex gap-1">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => bringToFront(id)} title="Bring to front">
-          <ChevronsUp className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => bringForward(id)} title="Bring forward">
-          <ChevronUp className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => sendBackward(id)} title="Send backward">
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => sendToBack(id)} title="Send to back">
-          <ChevronsDown className="h-4 w-4" />
-        </Button>
-      </div>
+    <div className="border-b border-border px-4 py-3.5 last:border-b-0">
+      {title && (
+        <p className="pb-2.5 text-xs font-semibold text-foreground">{title}</p>
+      )}
+      <div className="flex flex-col gap-2">{children}</div>
     </div>
+  );
+}
+
+// Label on the left, control(s) on the right.
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid min-h-7 grid-cols-[72px_1fr] items-center gap-2">
+      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+// Small editable number box shown next to sliders (Framer style).
+function NumberField({
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  format = (v: number) => String(v),
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft);
+    if (!Number.isNaN(n)) {
+      const clamped = Math.min(max, Math.max(min, n));
+      onChange(step >= 1 ? Math.round(clamped) : clamped);
+    }
+    setDraft(null);
+  };
+  return (
+    <input
+      inputMode="decimal"
+      value={draft ?? format(value)}
+      onFocus={(e) => {
+        setDraft(format(value));
+        e.target.select();
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setDraft(null);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className="h-7 w-11 shrink-0 rounded-md bg-input px-1.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring"
+      aria-label="Value"
+    />
+  );
+}
+
+function SliderRow({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+  format,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => string;
+}) {
+  return (
+    <Row label={label}>
+      <Slider
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="min-w-0 flex-1"
+        aria-label={label}
+      />
+      <NumberField
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        onChange={onChange}
+        format={format}
+      />
+    </Row>
+  );
+}
+
+// Compact filled text input for rows.
+function FieldInput(props: React.ComponentProps<typeof Input>) {
+  return <Input {...props} className={cn("h-7 px-2 text-xs", props.className)} />;
+}
+
+/* ── Popover control (Framer-style dropdown pickers) ───────────── */
+
+function PopoverControl({
+  trigger,
+  children,
+  panelWidth = 240,
+}: {
+  trigger: React.ReactNode;
+  children: (close: () => void) => React.ReactNode;
+  panelWidth?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const r = btnRef.current!.getBoundingClientRect();
+    const left = Math.max(
+      8,
+      Math.min(r.right - panelWidth, window.innerWidth - panelWidth - 8)
+    );
+    const spaceBelow = window.innerHeight - r.bottom;
+    setPos(
+      spaceBelow < 340
+        ? { left, bottom: window.innerHeight - r.top + 4 }
+        : { left, top: r.bottom + 4 }
+    );
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    // Anchored to a fixed position — close if the panel scrolls away.
+    const onScroll = (e: Event) => {
+      if (panelRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        className={cn(
+          "flex h-7 w-full min-w-0 flex-1 items-center gap-1.5 rounded-md bg-input px-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted",
+          open && "ring-1 ring-ring"
+        )}
+      >
+        {trigger}
+        <ChevronDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
+      </button>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-50 overflow-y-auto rounded-xl border border-border/60 bg-popover p-2 shadow-xl"
+            style={{
+              left: pos.left,
+              top: pos.top,
+              bottom: pos.bottom,
+              width: panelWidth,
+              maxHeight: 400,
+            }}
+          >
+            {children(close)}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+function Swatch({ hex }: { hex: string | null | undefined }) {
+  const isTransparent = hex === "transparent";
+  const style: React.CSSProperties = {};
+  if (isTransparent) {
+    style.backgroundImage = TRANSPARENT_BG;
+    style.backgroundSize = "6px 6px";
+  } else if (hex) {
+    style.backgroundColor = hex;
+  }
+  return (
+    <span
+      className={cn(
+        "h-4 w-4 shrink-0 rounded border border-foreground/15",
+        !hex && "bg-muted"
+      )}
+      style={style}
+    />
+  );
+}
+
+function colorLabel(hex: string | undefined) {
+  if (hex === undefined) return "Default";
+  if (hex === "transparent") return "Transparent";
+  return hex.replace("#", "").toUpperCase();
+}
+
+// The default palette laid out as a logical matrix: a basics row (none,
+// transparent, white → black), then one column per hue with light/mid/dark
+// rows — like a design tool's color ramp.
+const HUE_ORDER = [
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "fuchsia",
+  "pink",
+];
+const BASIC_IDS = [
+  "none",
+  "transparent",
+  "white",
+  "slate-100",
+  "slate-300",
+  "slate-500",
+  "slate-700",
+  "black",
+];
+const SHADE_ROWS = ["200", "500", "700"];
+const presetById = (id: string) => COLOR_PRESETS.find((p) => p.id === id);
+
+function MiniSwatch({
+  p,
+  active,
+  onClick,
+}: {
+  p: { id: string; hex: string | null; label: string };
+  active: boolean;
+  onClick: () => void;
+}) {
+  const isNone = p.hex === null;
+  const isTransparent = p.hex === "transparent";
+  const style: React.CSSProperties = {};
+  if (isTransparent) {
+    style.backgroundImage = TRANSPARENT_BG;
+    style.backgroundSize = "6px 6px";
+  } else if (!isNone) {
+    style.backgroundColor = p.hex ?? undefined;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={p.label}
+      aria-label={p.label}
+      className={cn(
+        "flex h-6 w-6 items-center justify-center rounded-[5px] ring-1 ring-inset ring-foreground/10 transition-transform hover:scale-110",
+        isNone && "bg-muted",
+        active && "ring-2 ring-inset ring-ring"
+      )}
+      style={style}
+    >
+      {isNone ? <X className="h-3 w-3 text-muted-foreground" /> : null}
+    </button>
+  );
+}
+
+// [swatch + value] control that opens a palette dropdown with a custom
+// color wheel + hex input at the bottom.
+function ColorControl({
+  value,
+  presets,
+  onChange,
+}: {
+  value: string | undefined;
+  presets?: { id: string; hex: string | null; label: string }[];
+  onChange: (v: string | undefined) => void;
+}) {
+  const [hexDraft, setHexDraft] = useState<string | null>(null);
+  const isMatrix = !presets;
+  const customValue = value && value !== "transparent" ? value : "#808080";
+  const commitHex = (close: () => void) => {
+    if (hexDraft === null) return;
+    const v = hexDraft.trim().replace(/^#/, "");
+    if (/^[0-9a-fA-F]{6}$/.test(v) || /^[0-9a-fA-F]{3}$/.test(v)) {
+      onChange(`#${v.toLowerCase()}`);
+      close();
+    }
+    setHexDraft(null);
+  };
+  const pick = (close: () => void) => (hex: string | null) => {
+    onChange(hex ?? undefined);
+    close();
+  };
+  return (
+    <PopoverControl
+      panelWidth={240}
+      trigger={
+        <>
+          <Swatch hex={value} />
+          <span className="truncate tabular-nums">{colorLabel(value)}</span>
+        </>
+      }
+    >
+      {(close) => (
+        <div className="flex flex-col gap-2">
+          {isMatrix ? (
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between">
+                {BASIC_IDS.map((id) => {
+                  const p = presetById(id);
+                  if (!p) return null;
+                  return (
+                    <MiniSwatch
+                      key={p.id}
+                      p={p}
+                      active={(value ?? null) === p.hex}
+                      onClick={() => pick(close)(p.hex)}
+                    />
+                  );
+                })}
+              </div>
+              <div className="h-px bg-border" />
+              {[HUE_ORDER.slice(0, 7), HUE_ORDER.slice(7)].map((bank, bi) =>
+                SHADE_ROWS.map((shade) => (
+                  <div key={`${bi}-${shade}`} className="flex justify-between">
+                    {bank.map((hue) => {
+                      const p = presetById(`${hue}-${shade}`);
+                      if (!p) return null;
+                      return (
+                        <MiniSwatch
+                          key={p.id}
+                          p={p}
+                          active={(value ?? null) === p.hex}
+                          onClick={() => pick(close)(p.hex)}
+                        />
+                      );
+                    })}
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {(presets ?? []).map((p) => (
+                <PresetButton
+                  key={p.id}
+                  p={p}
+                  active={(value ?? null) === p.hex}
+                  onClick={() => pick(close)(p.hex)}
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 rounded-lg bg-muted p-1 pr-2">
+            <label
+              className="relative block h-5 w-5 shrink-0 cursor-pointer overflow-hidden rounded border border-foreground/15"
+              style={{ backgroundColor: customValue }}
+              title="Custom color"
+            >
+              <input
+                type="color"
+                value={customValue}
+                onChange={(e) => onChange(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Custom color"
+              />
+            </label>
+            <input
+              value={
+                hexDraft ??
+                (value && value !== "transparent"
+                  ? value.replace("#", "").toUpperCase()
+                  : "")
+              }
+              onFocus={(e) => {
+                setHexDraft(
+                  value && value !== "transparent"
+                    ? value.replace("#", "").toUpperCase()
+                    : ""
+                );
+                e.target.select();
+              }}
+              onChange={(e) => setHexDraft(e.target.value)}
+              onBlur={() => commitHex(close)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitHex(close);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  setHexDraft(null);
+                }
+              }}
+              placeholder="Custom hex…"
+              spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent text-xs uppercase tabular-nums text-foreground outline-none placeholder:normal-case placeholder:text-muted-foreground/60"
+              aria-label="Hex value"
+            />
+          </div>
+        </div>
+      )}
+    </PopoverControl>
+  );
+}
+
+// Accent control: swatch + name, dropdown with the accent grid.
+function AccentControl({
+  value,
+  onChange,
+}: {
+  value: Accent;
+  onChange: (a: Accent) => void;
+}) {
+  const c = ACCENT_CLASSES[value];
+  return (
+    <PopoverControl
+      panelWidth={200}
+      trigger={
+        <>
+          <span
+            className={cn(
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded border border-foreground/10",
+              c.tile
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", c.dot)} />
+          </span>
+          <span className="truncate capitalize">{value}</span>
+        </>
+      }
+    >
+      {(close) => (
+        <div className="flex flex-wrap gap-1">
+          {ACCENTS.map((a) => {
+            const ac = ACCENT_CLASSES[a];
+            return (
+              <button
+                key={a}
+                type="button"
+                onClick={() => {
+                  onChange(a);
+                  close();
+                }}
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-md transition-shadow",
+                  ac.tile,
+                  value === a &&
+                    "ring-2 ring-ring ring-offset-1 ring-offset-popover"
+                )}
+                aria-label={a}
+                title={a}
+              >
+                <span className={cn("h-2 w-2 rounded-full", ac.dot)} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </PopoverControl>
+  );
+}
+
+// Icon control: current icon + name, dropdown with search + catalog grid.
+function IconControl({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  // Stored names can be legacy aliases (e.g. "server") — compare and
+  // display via the canonical catalog name.
+  const canonical = canonicalIconName(value);
+  const Ic = resolveIcon(value);
+  return (
+    <PopoverControl
+      panelWidth={248}
+      trigger={
+        <>
+          {canonical ? (
+            <Ic className="h-3.5 w-3.5 shrink-0 text-foreground" />
+          ) : (
+            <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate">{canonical || "None"}</span>
+        </>
+      }
+    >
+      {(close) => (
+        <IconPicker
+          value={canonical}
+          onClose={close}
+          onChange={(name) => {
+            onChange(name);
+            close();
+          }}
+        />
+      )}
+    </PopoverControl>
   );
 }
 
@@ -128,154 +713,51 @@ function NodeEditor({ node }: { node: AppNode }) {
   return <TextEditor node={node as TextNode} />;
 }
 
-const CODE_LANGUAGES: CodeLanguage[] = [
-  "plaintext",
-  "bash",
-  "javascript",
-  "typescript",
-  "tsx",
-  "jsx",
-  "json",
-  "yaml",
-  "python",
-  "go",
-  "sql",
-  "html",
-  "css",
-  "markdown",
-];
-
-function CodeEditor({ node }: { node: CodeNode }) {
-  const updateNodeData = useFlowStore((s) => s.updateNodeData);
+function LayerRow({ id }: { id: string }) {
+  const bringToFront = useFlowStore((s) => s.bringToFront);
+  const bringForward = useFlowStore((s) => s.bringForward);
+  const sendBackward = useFlowStore((s) => s.sendBackward);
+  const sendToBack = useFlowStore((s) => s.sendToBack);
+  const actions = [
+    { icon: ChevronsUp, title: "Bring to front", fn: () => bringToFront(id) },
+    { icon: ChevronUp, title: "Bring forward", fn: () => bringForward(id) },
+    { icon: ChevronDown, title: "Send backward", fn: () => sendBackward(id) },
+    { icon: ChevronsDown, title: "Send to back", fn: () => sendToBack(id) },
+  ];
   return (
-    <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-label`}>Title</Label>
-        <Input
-          id={`${node.id}-label`}
-          value={node.data.label ?? ""}
-          onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
-          placeholder="Optional"
-        />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-lang`}>Language</Label>
-        <select
-          id={`${node.id}-lang`}
-          value={node.data.language}
-          onChange={(e) =>
-            updateNodeData(node.id, {
-              language: e.target.value as CodeLanguage,
-            })
-          }
-          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {CODE_LANGUAGES.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-code`}>Code</Label>
-        <textarea
-          id={`${node.id}-code`}
-          value={node.data.code}
-          onChange={(e) => updateNodeData(node.id, { code: e.target.value })}
-          spellCheck={false}
-          className="flex min-h-[180px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </div>
-      <RadiusSlider
-        id={`${node.id}-radius`}
-        value={node.data.borderRadius}
-        fallback={8}
-        onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
-      />
-      <LayerControls id={node.id} />
-      <ColorsSection
-        targets={[
-          {
-            key: "bg",
-            label: "Background",
-            value: node.data.bgColor,
-            onChange: (v) => updateNodeData(node.id, { bgColor: v }),
-          },
-          {
-            key: "title",
-            label: "Title",
-            value: node.data.titleColor,
-            onChange: (v) => updateNodeData(node.id, { titleColor: v }),
-          },
-          {
-            key: "border",
-            label: "Border",
-            value: node.data.borderColor,
-            onChange: (v) => updateNodeData(node.id, { borderColor: v }),
-          },
-        ]}
-      />
-    </>
+    <Row label="Order">
+      {actions.map((a) => {
+        const Ic = a.icon;
+        return (
+          <button
+            key={a.title}
+            type="button"
+            onClick={a.fn}
+            title={a.title}
+            aria-label={a.title}
+            className="flex h-7 flex-1 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Ic className="h-3.5 w-3.5" />
+          </button>
+        );
+      })}
+    </Row>
   );
 }
 
-function ImageEditor({ node }: { node: ImageNode }) {
-  const updateNodeData = useFlowStore((s) => s.updateNodeData);
+function AccentRow({
+  label = "Color",
+  value,
+  onChange,
+}: {
+  label?: string;
+  value: Accent;
+  onChange: (a: Accent) => void;
+}) {
   return (
-    <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-alt`}>Alt text</Label>
-        <Input
-          id={`${node.id}-alt`}
-          value={node.data.alt ?? ""}
-          onChange={(e) => updateNodeData(node.id, { alt: e.target.value })}
-          placeholder="Optional"
-        />
-      </div>
-      <RadiusSlider
-        id={`${node.id}-radius`}
-        value={node.data.borderRadius}
-        fallback={6}
-        onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
-      />
-      <LayerControls id={node.id} />
-      <ColorsSection
-        targets={[
-          { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
-          { key: "border", label: "Border", value: node.data.borderColor, onChange: (v) => updateNodeData(node.id, { borderColor: v }) },
-        ]}
-      />
-    </>
-  );
-}
-
-function AccentPicker({ value, onChange, label = "Icon color" }: { value: Accent; onChange: (a: Accent) => void; label?: string }) {
-  return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {ACCENTS.map((a) => {
-          const c = ACCENT_CLASSES[a];
-          return (
-            <button
-              key={a}
-              type="button"
-              onClick={() => onChange(a)}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-md border border-border transition-colors",
-                c.tile,
-                value === a && "ring-1 ring-ring"
-              )}
-              aria-label={a}
-              title={a}
-            >
-              <span className={cn("h-2.5 w-2.5 rounded-full", c.dot)} />
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <Row label={label}>
+      <AccentControl value={value} onChange={onChange} />
+    </Row>
   );
 }
 
@@ -307,42 +789,14 @@ function PresetButton({
       title={p.label}
       aria-label={p.label}
       className={cn(
-        "flex h-7 w-7 items-center justify-center rounded-md border border-border transition-colors",
-        active && "ring-1 ring-ring"
+        "flex h-6 w-6 items-center justify-center rounded-md transition-shadow",
+        isNone && "bg-muted",
+        active && "ring-2 ring-ring ring-offset-1 ring-offset-background"
       )}
       style={style}
     >
-      {isNone ? <X className="h-3.5 w-3.5 text-muted-foreground" /> : null}
+      {isNone ? <X className="h-3 w-3 text-muted-foreground" /> : null}
     </button>
-  );
-}
-
-function SwatchPicker({
-  label,
-  presets,
-  value,
-  onChange,
-}: {
-  label: string;
-  presets: { id: string; hex: string | null; label: string }[];
-  value: string | undefined;
-  onChange: (v: string | undefined) => void;
-}) {
-  const current = value ?? null;
-  return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {presets.map((p) => (
-          <PresetButton
-            key={p.id}
-            p={p}
-            active={(current ?? null) === p.hex}
-            onClick={() => onChange(p.hex ?? undefined)}
-          />
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -353,114 +807,117 @@ type ColorTarget = {
   onChange: (v: string | undefined) => void;
 };
 
+// Framer-style: one row per color target, each a [swatch + value]
+// dropdown control.
 function ColorsSection({ targets }: { targets: ColorTarget[] }) {
-  const [activeKey, setActiveKey] = useState(targets[0]?.key ?? "");
-  const active = targets.find((t) => t.key === activeKey) ?? targets[0];
-  if (!active) return null;
   return (
-    <div className="grid gap-2">
-      <Label>Colors</Label>
-      <div className="flex flex-wrap gap-1">
-        {targets.map((t) => {
-          const selected = t.key === active.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setActiveKey(t.key)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs transition-colors",
-                selected
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <span
-                className="h-3 w-3 rounded-sm border border-border"
-                style={t.value ? { backgroundColor: t.value } : undefined}
-              />
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {COLOR_PRESETS.map((p) => (
-          <PresetButton
-            key={p.id}
-            p={p}
-            active={(active.value ?? null) === p.hex}
-            onClick={() => active.onChange(p.hex ?? undefined)}
-          />
-        ))}
-      </div>
-    </div>
+    <Section title="Colors">
+      {targets.map((t) => (
+        <Row key={t.key} label={t.label}>
+          <ColorControl value={t.value} onChange={t.onChange} />
+        </Row>
+      ))}
+    </Section>
   );
 }
 
-function IconPicker({ value, onChange }: { value: string; onChange: (name: string) => void }) {
+// Rendering all 2680 catalog icons at once is a hot path — cap the grid
+// and let search narrow the rest.
+const MAX_VISIBLE_ICONS = 240;
+
+const IconPicker = memo(function IconPicker({
+  value,
+  onChange,
+  onClose,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+  onClose?: () => void;
+}) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return LUCIDE_ICON_NAMES;
-    return LUCIDE_ICON_NAMES.filter((n) => n.toLowerCase().includes(q));
+    if (!q) return ICON_NAMES;
+    return ICON_NAMES.filter((n) => n.toLowerCase().includes(q));
   }, [query]);
+  const shown =
+    filtered.length > MAX_VISIBLE_ICONS
+      ? filtered.slice(0, MAX_VISIBLE_ICONS)
+      : filtered;
+
+  const tile = (active: boolean) =>
+    cn(
+      "flex h-[52px] items-center justify-center rounded-lg bg-muted text-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
+      active &&
+        "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+    );
 
   return (
-    <div className="grid gap-2">
-      <Label>Icon</Label>
+    <div className="flex flex-col gap-2 p-1">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-foreground">Icons</p>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Close icon picker"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
       <div className="relative">
         <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
+          autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search icons…"
-          className="h-8 pl-7 text-xs"
+          placeholder="Search…"
+          className="h-7 pl-7 text-xs"
         />
       </div>
-      <div className="grid max-h-44 grid-cols-8 gap-1 overflow-y-auto rounded-md border border-border bg-background/40 p-1.5">
+      <div className="grid max-h-[264px] grid-cols-4 gap-1.5 overflow-y-auto pr-0.5">
         <button
           type="button"
           onClick={() => onChange("")}
-          className={cn(
-            "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-            value === "" && "bg-accent text-foreground ring-1 ring-ring"
-          )}
+          className={tile(value === "")}
           title="None"
           aria-label="No icon"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4" />
         </button>
-        {filtered.map((name) => {
+        {shown.map((name) => {
           const Ic = resolveIcon(name);
-          const active = value === name;
           return (
             <button
               key={name}
               type="button"
               onClick={() => onChange(name)}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                active && "bg-accent text-foreground ring-1 ring-ring"
-              )}
+              className={tile(value === name)}
               title={name}
               aria-label={name}
             >
-              <Ic className="h-3.5 w-3.5" />
+              <Ic className="h-5 w-5" />
             </button>
           );
         })}
+        {filtered.length > shown.length && (
+          <p className="col-span-4 px-2 py-1.5 text-center text-[10px] text-muted-foreground/70">
+            +{filtered.length - shown.length} more — search to narrow
+          </p>
+        )}
         {filtered.length === 0 && (
-          <p className="col-span-8 px-2 py-4 text-center text-xs text-muted-foreground">
+          <p className="col-span-4 px-2 py-4 text-center text-xs text-muted-foreground">
             No icons match.
           </p>
         )}
       </div>
     </div>
   );
-}
+});
 
-function CustomIconUpload({
+function CustomIconRow({
   value,
   onChange,
 }: {
@@ -478,49 +935,44 @@ function CustomIconUpload({
   };
 
   return (
-    <div className="grid gap-2">
-      <Label>Custom icon</Label>
-      <div className="flex items-center gap-2">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background/40"
-        >
-          {value ? (
-            <img src={value} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 flex-1"
-          onClick={() => inputRef.current?.click()}
-        >
-          {value ? "Replace" : "Upload"}
-        </Button>
+    <Row label="Image">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
         {value ? (
-          <button
-            onClick={() => onChange(undefined)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:text-foreground"
-            title="Remove custom icon"
-            aria-label="Remove custom icon"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleFile(f);
-            e.target.value = "";
-          }}
-        />
+          <img src={value} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Upload className="h-3 w-3 text-muted-foreground" />
+        )}
       </div>
-    </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 flex-1 text-[11px]"
+        onClick={() => inputRef.current?.click()}
+      >
+        {value ? "Replace" : "Upload"}
+      </Button>
+      {value ? (
+        <button
+          onClick={() => onChange(undefined)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Remove custom icon"
+          aria-label="Remove custom icon"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      ) : null}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleFile(f);
+          e.target.value = "";
+        }}
+      />
+    </Row>
   );
 }
 
@@ -531,146 +983,123 @@ const ICON_POSITIONS: { id: IconPosition; icon: typeof ArrowLeft; label: string 
   { id: "bottom", icon: ArrowDown, label: "Bottom" },
 ];
 
-function IconPositionPicker({
-  value,
-  onChange,
-}: {
-  value: IconPosition;
-  onChange: (v: IconPosition) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label>Icon position</Label>
-      <div className="flex gap-1">
-        {ICON_POSITIONS.map((p) => {
-          const Ic = p.icon;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              aria-label={p.label}
-              title={p.label}
-              onClick={() => onChange(p.id)}
-              className={cn(
-                "flex flex-1 items-center justify-center rounded-md border border-border px-2 py-1.5 transition-colors",
-                value === p.id
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Ic className="h-3.5 w-3.5" />
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 const TEXT_ALIGNS: { id: TextAlign; icon: typeof AlignLeft }[] = [
   { id: "left", icon: AlignLeft },
   { id: "center", icon: AlignCenter },
   { id: "right", icon: AlignRight },
 ];
 
-function TextAlignPicker({
-  value,
-  onChange,
-}: {
-  value: TextAlign;
-  onChange: (v: TextAlign) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label>Content align</Label>
-      <div className="flex gap-1">
-        {TEXT_ALIGNS.map((a) => {
-          const Ic = a.icon;
-          return (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => onChange(a.id)}
-              className={cn(
-                "flex h-8 flex-1 items-center justify-center rounded-md border border-border transition-colors",
-                value === a.id
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              title={a.id}
-            >
-              <Ic className="h-4 w-4" />
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+/* ── Editors ───────────────────────────────────────────────────── */
+
+const CODE_LANGUAGES: CodeLanguage[] = [
+  "plaintext",
+  "bash",
+  "javascript",
+  "typescript",
+  "tsx",
+  "jsx",
+  "json",
+  "yaml",
+  "python",
+  "go",
+  "sql",
+  "html",
+  "css",
+  "markdown",
+];
 
 function InfraEditor({ node }: { node: InfraNode }) {
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
+  const onIconChange = useCallback(
+    (name: string) => updateNodeData(node.id, { iconName: name }),
+    [node.id, updateNodeData]
+  );
   const block = resolveBlock(node.data.blockId, customBlocks);
   const iconName = node.data.iconName ?? block?.iconName ?? "box";
   const accent = node.data.accent ?? block?.accent ?? "slate";
   const iconPosition =
-    node.data.iconPosition ??
-    (block?.variant === "card" ? "top" : "left");
+    node.data.iconPosition ?? (block?.variant === "card" ? "top" : "left");
   const textAlign =
     node.data.textAlign ?? (block?.variant === "card" ? "center" : "left");
 
   return (
     <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-title`}>Title</Label>
-        <Input
-          id={`${node.id}-title`}
-          value={node.data.label}
-          onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
+      <Section>
+        <Row label="Title">
+          <FieldInput
+            value={node.data.label}
+            onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
+          />
+        </Row>
+        <Row label="Info">
+          <FieldInput
+            value={node.data.subtitle ?? ""}
+            onChange={(e) =>
+              updateNodeData(node.id, { subtitle: e.target.value })
+            }
+            placeholder="Optional"
+          />
+        </Row>
+        <Row label="Align">
+          <Segmented
+            className="flex-1"
+            value={textAlign}
+            onChange={(v) => updateNodeData(node.id, { textAlign: v })}
+            options={TEXT_ALIGNS.map((a) => ({
+              value: a.id,
+              icon: a.icon,
+              title: a.id,
+            }))}
+          />
+        </Row>
+      </Section>
+      <Section title="Icon">
+        <Row label="Icon">
+          <IconControl value={iconName} onChange={onIconChange} />
+        </Row>
+        <CustomIconRow
+          value={node.data.customIcon}
+          onChange={(v) => updateNodeData(node.id, { customIcon: v })}
         />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-desc`}>Description</Label>
-        <Input
-          id={`${node.id}-desc`}
-          value={node.data.subtitle ?? ""}
-          onChange={(e) => updateNodeData(node.id, { subtitle: e.target.value })}
-          placeholder="Optional"
+        <Row label="Position">
+          <Segmented
+            className="flex-1"
+            value={iconPosition}
+            onChange={(v) => updateNodeData(node.id, { iconPosition: v })}
+            options={ICON_POSITIONS.map((p) => ({
+              value: p.id,
+              icon: p.icon,
+              title: p.label,
+            }))}
+          />
+        </Row>
+        <AccentRow
+          value={accent}
+          onChange={(a) => updateNodeData(node.id, { accent: a })}
         />
-      </div>
-      <IconPicker value={iconName} onChange={(name) => updateNodeData(node.id, { iconName: name })} />
-      <CustomIconUpload
-        value={node.data.customIcon}
-        onChange={(v) => updateNodeData(node.id, { customIcon: v })}
-      />
-      <IconPositionPicker
-        value={iconPosition}
-        onChange={(v) => updateNodeData(node.id, { iconPosition: v })}
-      />
-      <TextAlignPicker
-        value={textAlign}
-        onChange={(v) => updateNodeData(node.id, { textAlign: v })}
-      />
-      <AccentPicker value={accent} onChange={(a) => updateNodeData(node.id, { accent: a })} />
-      <RadiusSlider
-        id={`${node.id}-radius`}
-        value={node.data.borderRadius}
-        fallback={12}
-        onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
-      />
-      <WidthSlider
-        id={`${node.id}-bw`}
-        value={node.data.borderWidth}
-        fallback={1}
-        onChange={(v) => updateNodeData(node.id, { borderWidth: v })}
-      />
-      <LayerControls id={node.id} />
+      </Section>
+      <Section title="Style">
+        <SliderRow
+          label="Radius"
+          value={node.data.borderRadius ?? 12}
+          min={0}
+          max={48}
+          onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
+        />
+        <SliderRow
+          label="Border"
+          value={node.data.borderWidth ?? 1}
+          min={0}
+          max={8}
+          onChange={(v) => updateNodeData(node.id, { borderWidth: v })}
+        />
+      </Section>
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
           { key: "title", label: "Title", value: node.data.titleColor, onChange: (v) => updateNodeData(node.id, { titleColor: v }) },
-          { key: "desc", label: "Description", value: node.data.subtitleColor, onChange: (v) => updateNodeData(node.id, { subtitleColor: v }) },
+          { key: "desc", label: "Info", value: node.data.subtitleColor, onChange: (v) => updateNodeData(node.id, { subtitleColor: v }) },
           { key: "border", label: "Border", value: node.data.borderColor, onChange: (v) => updateNodeData(node.id, { borderColor: v }) },
         ]}
       />
@@ -678,155 +1107,50 @@ function InfraEditor({ node }: { node: InfraNode }) {
   );
 }
 
-function RadiusSlider({
-  id,
-  value,
-  fallback,
-  max = 48,
-  onChange,
-}: {
-  id: string;
-  value: number | undefined;
-  fallback: number;
-  max?: number;
-  onChange: (v: number) => void;
-}) {
-  const current = value ?? fallback;
-  return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>Border radius ({current}px)</Label>
-      <input
-        id={id}
-        type="range"
-        min={0}
-        max={max}
-        step={1}
-        value={current}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-primary"
-      />
-    </div>
-  );
-}
-
-function WidthSlider({
-  id,
-  value,
-  fallback,
-  max = 8,
-  onChange,
-}: {
-  id: string;
-  value: number | undefined;
-  fallback: number;
-  max?: number;
-  onChange: (v: number) => void;
-}) {
-  const current = value ?? fallback;
-  return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>Border width ({current}px)</Label>
-      <input
-        id={id}
-        type="range"
-        min={0}
-        max={max}
-        step={1}
-        value={current}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-primary"
-      />
-    </div>
-  );
-}
-
 const BORDER_STYLES: BorderStyle[] = ["solid", "dashed", "dotted"];
-
-function BorderStylePreview({ kind }: { kind: BorderStyle }) {
-  const dash =
-    kind === "dashed" ? "6 4" : kind === "dotted" ? "1 4" : undefined;
-  const cap = kind === "dotted" ? "round" : undefined;
-  return (
-    <svg viewBox="0 0 40 6" className="h-1.5 w-full">
-      <line
-        x1="2"
-        y1="3"
-        x2="38"
-        y2="3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeDasharray={dash}
-        strokeLinecap={cap}
-      />
-    </svg>
-  );
-}
-
-function BorderStylePicker({
-  value,
-  onChange,
-}: {
-  value: BorderStyle;
-  onChange: (v: BorderStyle) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <Label>Border style</Label>
-      <div className="flex gap-1">
-        {BORDER_STYLES.map((k) => {
-          const active = value === k;
-          return (
-            <button
-              key={k}
-              type="button"
-              onClick={() => onChange(k)}
-              className={cn(
-                "flex-1 rounded-md border border-border px-2 py-1.5 text-[11px] capitalize transition-colors",
-                active
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <BorderStylePreview kind={k} />
-              <span className="block pt-0.5">{k}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function ShapeEditor({ node }: { node: ShapeNode }) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
   const isRectangle = node.data.shape === "rectangle";
   return (
     <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-label`}>Label</Label>
-        <Input
-          id={`${node.id}-label`}
-          value={node.data.label ?? ""}
-          onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
-          placeholder="Optional"
+      <Section>
+        <Row label="Label">
+          <FieldInput
+            value={node.data.label ?? ""}
+            onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
+            placeholder="Optional"
+          />
+        </Row>
+        <AccentRow
+          value={node.data.accent ?? "slate"}
+          onChange={(a) => updateNodeData(node.id, { accent: a })}
         />
-      </div>
-      {isRectangle && (
-        <BorderStylePicker
-          value={node.data.borderStyle ?? "dashed"}
-          onChange={(v) => updateNodeData(node.id, { borderStyle: v })}
-        />
-      )}
-      <AccentPicker value={node.data.accent ?? "slate"} onChange={(a) => updateNodeData(node.id, { accent: a })} />
-      {isRectangle && (
-        <RadiusSlider
-          id={`${node.id}-radius`}
-          value={node.data.borderRadius}
-          fallback={12}
-          onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
-        />
-      )}
-      <LayerControls id={node.id} />
+      </Section>
+      <Section title="Style">
+        {isRectangle && (
+          <Row label="Border">
+            <Segmented
+              className="flex-1"
+              value={node.data.borderStyle ?? "dashed"}
+              onChange={(v) => updateNodeData(node.id, { borderStyle: v })}
+              options={BORDER_STYLES.map((k) => ({
+                value: k,
+                label: k[0].toUpperCase() + k.slice(1),
+              }))}
+            />
+          </Row>
+        )}
+        {isRectangle && (
+          <SliderRow
+            label="Radius"
+            value={node.data.borderRadius ?? 12}
+            min={0}
+            max={48}
+            onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
+          />
+        )}
+      </Section>
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
@@ -842,19 +1166,23 @@ function StepEditor({ node }: { node: StepNode }) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
   return (
     <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-step`}>Number</Label>
-        <Input
-          id={`${node.id}-step`}
-          type="number"
-          value={node.data.step}
-          onChange={(e) =>
-            updateNodeData(node.id, { step: Math.max(0, Number(e.target.value) || 0) })
-          }
+      <Section>
+        <Row label="Number">
+          <FieldInput
+            type="number"
+            value={node.data.step}
+            onChange={(e) =>
+              updateNodeData(node.id, {
+                step: Math.max(0, Number(e.target.value) || 0),
+              })
+            }
+          />
+        </Row>
+        <AccentRow
+          value={node.data.accent ?? "indigo"}
+          onChange={(a) => updateNodeData(node.id, { accent: a })}
         />
-      </div>
-      <AccentPicker value={node.data.accent ?? "indigo"} onChange={(a) => updateNodeData(node.id, { accent: a })} />
-      <LayerControls id={node.id} />
+      </Section>
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
@@ -870,64 +1198,144 @@ function TextEditor({ node }: { node: TextNode }) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
   return (
     <>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-text`}>Text</Label>
+      <Section>
         <textarea
-          id={`${node.id}-text`}
           value={node.data.text}
           onChange={(e) => updateNodeData(node.id, { text: e.target.value })}
           rows={3}
-          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex w-full rounded-lg bg-input px-2.5 py-2 text-xs placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          aria-label="Text content"
         />
-      </div>
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-fs`}>
-          Font size ({node.data.fontSize ?? 14}px)
-        </Label>
-        <input
-          id={`${node.id}-fs`}
-          type="range"
+        <SliderRow
+          label="Size"
+          value={node.data.fontSize ?? 14}
           min={10}
           max={64}
-          step={1}
-          value={node.data.fontSize ?? 14}
-          onChange={(e) =>
-            updateNodeData(node.id, { fontSize: Number(e.target.value) })
-          }
-          className="w-full accent-primary"
+          onChange={(v) => updateNodeData(node.id, { fontSize: v })}
         />
-      </div>
-      <AccentPicker value={node.data.accent ?? "slate"} onChange={(a) => updateNodeData(node.id, { accent: a })} label="Color" />
-      <div className="flex items-center justify-between">
-        <Label>Background</Label>
-        <button
-          type="button"
-          onClick={() =>
-            updateNodeData(node.id, {
-              bgColor: node.data.bgColor === "transparent" ? undefined : "transparent",
-            })
-          }
-          className={cn(
-            "rounded-md border border-border px-2 py-1 text-xs transition-colors",
-            node.data.bgColor !== "transparent"
-              ? "bg-accent text-accent-foreground ring-1 ring-ring"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {node.data.bgColor !== "transparent" ? "On" : "Off"}
-        </button>
-      </div>
-      <RadiusSlider
-        id={`${node.id}-radius`}
-        value={node.data.borderRadius}
-        fallback={6}
-        onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
-      />
-      <LayerControls id={node.id} />
+        <AccentRow
+          value={node.data.accent ?? "slate"}
+          onChange={(a) => updateNodeData(node.id, { accent: a })}
+        />
+      </Section>
+      <Section title="Style">
+        <Row label="Fill">
+          <Segmented
+            className="flex-1"
+            value={node.data.bgColor !== "transparent" ? "on" : "off"}
+            onChange={(v) =>
+              updateNodeData(node.id, {
+                bgColor: v === "on" ? undefined : "transparent",
+              })
+            }
+            options={[
+              { value: "on", label: "Yes" },
+              { value: "off", label: "No" },
+            ]}
+          />
+        </Row>
+        <SliderRow
+          label="Radius"
+          value={node.data.borderRadius ?? 6}
+          min={0}
+          max={48}
+          onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
+        />
+      </Section>
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
           { key: "text", label: "Text", value: node.data.titleColor, onChange: (v) => updateNodeData(node.id, { titleColor: v }) },
+        ]}
+      />
+    </>
+  );
+}
+
+function CodeEditor({ node }: { node: CodeNode }) {
+  const updateNodeData = useFlowStore((s) => s.updateNodeData);
+  return (
+    <>
+      <Section>
+        <Row label="Title">
+          <FieldInput
+            value={node.data.label ?? ""}
+            onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
+            placeholder="Optional"
+          />
+        </Row>
+        <Row label="Language">
+          <select
+            value={node.data.language}
+            onChange={(e) =>
+              updateNodeData(node.id, {
+                language: e.target.value as CodeLanguage,
+              })
+            }
+            className="h-7 w-full flex-1 rounded-lg bg-input px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label="Language"
+          >
+            {CODE_LANGUAGES.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </Row>
+        <textarea
+          value={node.data.code}
+          onChange={(e) => updateNodeData(node.id, { code: e.target.value })}
+          spellCheck={false}
+          className="flex min-h-[160px] w-full rounded-lg bg-input px-2.5 py-2 font-mono text-xs leading-relaxed placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          aria-label="Code"
+        />
+      </Section>
+      <Section title="Style">
+        <SliderRow
+          label="Radius"
+          value={node.data.borderRadius ?? 8}
+          min={0}
+          max={48}
+          onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
+        />
+      </Section>
+      <ColorsSection
+        targets={[
+          { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
+          { key: "title", label: "Title", value: node.data.titleColor, onChange: (v) => updateNodeData(node.id, { titleColor: v }) },
+          { key: "border", label: "Border", value: node.data.borderColor, onChange: (v) => updateNodeData(node.id, { borderColor: v }) },
+        ]}
+      />
+    </>
+  );
+}
+
+function ImageEditor({ node }: { node: ImageNode }) {
+  const updateNodeData = useFlowStore((s) => s.updateNodeData);
+  return (
+    <>
+      <Section>
+        <Row label="Alt text">
+          <FieldInput
+            value={node.data.alt ?? ""}
+            onChange={(e) => updateNodeData(node.id, { alt: e.target.value })}
+            placeholder="Optional"
+          />
+        </Row>
+      </Section>
+      <Section title="Style">
+        <SliderRow
+          label="Radius"
+          value={node.data.borderRadius ?? 6}
+          min={0}
+          max={48}
+          onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
+        />
+      </Section>
+      <ColorsSection
+        targets={[
+          { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
+          { key: "border", label: "Border", value: node.data.borderColor, onChange: (v) => updateNodeData(node.id, { borderColor: v }) },
         ]}
       />
     </>
@@ -943,7 +1351,7 @@ const ARROW_SHAPES: { id: ArrowShape; label: string; svg: React.ReactNode }[] = 
   { id: "bar", label: "Bar", svg: <path d="M 5 0 L 5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /> },
 ];
 
-function ArrowShapePicker({
+function ArrowShapeRow({
   label,
   value,
   onChange,
@@ -953,8 +1361,7 @@ function ArrowShapePicker({
   onChange: (v: ArrowShape) => void;
 }) {
   return (
-    <div className="grid gap-2">
-      <Label>{label}</Label>
+    <Row label={label}>
       <div className="flex flex-wrap gap-1">
         {ARROW_SHAPES.map((s) => {
           const active = value === s.id;
@@ -966,20 +1373,20 @@ function ArrowShapePicker({
               title={s.label}
               aria-label={s.label}
               className={cn(
-                "flex h-8 w-10 items-center justify-center rounded-md border border-border transition-colors",
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
                 active
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-accent text-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
               )}
             >
-              <svg viewBox="0 0 10 10" className="h-4 w-4">
+              <svg viewBox="0 0 10 10" className="h-3.5 w-3.5">
                 {s.svg}
               </svg>
             </button>
           );
         })}
       </div>
-    </div>
+    </Row>
   );
 }
 
@@ -1035,60 +1442,72 @@ function LineEditor({ node }: { node: LineNode }) {
   const arrowStartShape: ArrowShape = node.data.arrowStartShape ?? "triangle";
   const arrowEndShape: ArrowShape = node.data.arrowEndShape ?? "triangle";
 
+  const rotate = (angle: number) => {
+    // The projected node has a neutralized position; read live.
+    const live = useFlowStore.getState().nodes.find((n) => n.id === node.id);
+    const geometry = rotateLineToAngle({
+      position: live?.position ?? node.position,
+      width,
+      height,
+      start: endpoints.start,
+      end: endpoints.end,
+      angle,
+    });
+    updateLineGeometry(node.id, geometry);
+  };
+
   return (
     <>
-      <LayerControls id={node.id} />
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-rot`}>Rotation ({rotation}°)</Label>
-        <input
-          id={`${node.id}-rot`}
-          type="range"
+      <Section>
+        <SliderRow
+          label="Rotate"
+          value={rotation}
           min={0}
           max={359}
-          step={1}
-          value={rotation}
-          onChange={(e) => {
-            const geometry = rotateLineToAngle({
-              position: node.position,
-              width,
-              height,
-              start: endpoints.start,
-              end: endpoints.end,
-              angle: Number(e.target.value),
-            });
-            updateLineGeometry(node.id, geometry);
-          }}
-          className="w-full"
+          onChange={rotate}
         />
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-curv`}>Curvature ({curvature.toFixed(2)})</Label>
-        <input
-          id={`${node.id}-curv`}
-          type="range"
+        <SliderRow
+          label="Curve"
+          value={curvature}
           min={-1}
           max={1}
           step={0.05}
-          value={curvature}
-          onChange={(e) =>
-            updateNodeData(node.id, { curvature: Number(e.target.value) })
-          }
-          className="w-full"
+          onChange={(v) => updateNodeData(node.id, { curvature: v })}
+          format={(v) => v.toFixed(2)}
         />
-      </div>
-
-      <div className="grid gap-2">
-        <Label>Arrow ends</Label>
-        <div className="flex gap-1">
+        <Row label="Style">
+          <Segmented
+            className="flex-1"
+            value={dashed ? "dashed" : "solid"}
+            onChange={(v) =>
+              updateNodeData(node.id, { dashed: v === "dashed" })
+            }
+            options={[
+              { value: "solid", label: "Solid" },
+              { value: "dashed", label: "Dashed" },
+            ]}
+          />
+        </Row>
+        <SliderRow
+          label="Width"
+          value={strokeWidth}
+          min={1}
+          max={12}
+          onChange={(v) => updateNodeData(node.id, { strokeWidth: v })}
+        />
+      </Section>
+      <Section title="Arrows">
+        <Row label="Ends">
           <button
             type="button"
-            onClick={() => updateNodeData(node.id, { arrowStart: !arrowStart })}
+            onClick={() =>
+              updateNodeData(node.id, { arrowStart: !arrowStart })
+            }
             className={cn(
-              "flex-1 rounded-md border border-border px-2 py-1 text-xs transition-colors",
+              "h-7 flex-1 rounded-md text-xs font-medium transition-colors",
               arrowStart
-                ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-accent text-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
             )}
           >
             Start
@@ -1097,86 +1516,41 @@ function LineEditor({ node }: { node: LineNode }) {
             type="button"
             onClick={() => updateNodeData(node.id, { arrowEnd: !arrowEnd })}
             className={cn(
-              "flex-1 rounded-md border border-border px-2 py-1 text-xs transition-colors",
+              "h-7 flex-1 rounded-md text-xs font-medium transition-colors",
               arrowEnd
-                ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-accent text-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
             )}
           >
             End
           </button>
-        </div>
-      </div>
-
-      {arrowStart && (
-        <ArrowShapePicker
-          label="Start shape"
-          value={arrowStartShape}
-          onChange={(v) => updateNodeData(node.id, { arrowStartShape: v })}
-        />
-      )}
-      {arrowEnd && (
-        <ArrowShapePicker
-          label="End shape"
-          value={arrowEndShape}
-          onChange={(v) => updateNodeData(node.id, { arrowEndShape: v })}
-        />
-      )}
-
-      <div className="grid gap-2">
-        <Label>Style</Label>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => updateNodeData(node.id, { dashed: false })}
-            className={cn(
-              "flex-1 rounded-md border border-border px-2 py-1 text-xs transition-colors",
-              !dashed
-                ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Solid
-          </button>
-          <button
-            type="button"
-            onClick={() => updateNodeData(node.id, { dashed: true })}
-            className={cn(
-              "flex-1 rounded-md border border-border px-2 py-1 text-xs transition-colors",
-              dashed
-                ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Dashed
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label htmlFor={`${node.id}-sw`}>Stroke width</Label>
-        <Input
-          id={`${node.id}-sw`}
-          type="number"
-          min={1}
-          max={12}
-          value={strokeWidth}
-          onChange={(e) =>
-            updateNodeData(node.id, {
-              strokeWidth: Math.max(1, Number(e.target.value) || 1),
-            })
-          }
-        />
-      </div>
-
-      <SwatchPicker
-        label="Stroke color"
-        presets={LINE_STROKE_PRESETS}
-        value={strokeColor}
-        onChange={(v) =>
-          updateNodeData(node.id, { strokeColor: v ?? "#94a3b8" })
-        }
-      />
+        </Row>
+        {arrowStart && (
+          <ArrowShapeRow
+            label="Start"
+            value={arrowStartShape}
+            onChange={(v) => updateNodeData(node.id, { arrowStartShape: v })}
+          />
+        )}
+        {arrowEnd && (
+          <ArrowShapeRow
+            label="End"
+            value={arrowEndShape}
+            onChange={(v) => updateNodeData(node.id, { arrowEndShape: v })}
+          />
+        )}
+      </Section>
+      <Section title="Stroke">
+        <Row label="Color">
+          <ColorControl
+            value={strokeColor}
+            presets={LINE_STROKE_PRESETS}
+            onChange={(v) =>
+              updateNodeData(node.id, { strokeColor: v ?? "#94a3b8" })
+            }
+          />
+        </Row>
+      </Section>
     </>
   );
 }
