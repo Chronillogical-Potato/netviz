@@ -62,8 +62,10 @@ class FakeSvgNode {
 
 const fakeSlot = (): EdgeMotionSlotElements => ({
   group: new FakeSvgNode(),
-  gradient: new FakeSvgNode(),
-  gradientStops: [new FakeSvgNode(), new FakeSvgNode(), new FakeSvgNode()],
+  gradients: Array.from({ length: 4 }, () => new FakeSvgNode()),
+  gradientStops: Array.from({ length: 4 }, () =>
+    Array.from({ length: 4 }, () => new FakeSvgNode())
+  ),
   paths: Array.from({ length: 4 }, () => new FakeSvgNode()),
 });
 
@@ -161,11 +163,12 @@ describe("EdgeMotionLayer", () => {
       slots.map((slot) => slot.group?.getAttribute("data-effect-id"))
     ).toEqual(["clip-0", "clip-1", "clip-2", "clip-3"]);
     expect(slots[1].paths[0]?.getAttribute("data-motion-role")).toBe(
-      "beam-trail"
+      "gradient-beam-base"
     );
     expect(slots[1].paths[1]?.getAttribute("data-motion-role")).toBe(
-      "beam-core"
+      "gradient-beam"
     );
+    expect(slots[1].paths[2]?.getAttribute("display")).toBe("none");
 
     runtime.listener?.(targetFrame([], true));
     expect(
@@ -234,14 +237,26 @@ describe("EdgeMotionLayer", () => {
     expect(dash).toContain('data-motion-role="moving-dash"');
     expect(dash).toContain('stroke-dasharray="6px 11px"');
 
-    const beam = renderEffect(clip("edge.gradient-beam"));
-    expect(beam).toContain('data-motion-role="beam-trail"');
-    expect(beam).toContain('data-motion-role="beam-core"');
+    const beam = renderEffect(clip("edge.gradient-beam"), 500);
+    expect(beam).toContain('data-motion-role="gradient-beam-base"');
+    expect(beam).toContain('stroke="gray"');
+    expect(beam).toContain('stroke-width="2"');
+    expect(beam).toContain('opacity="0.2"');
+    expect(beam).toContain('data-motion-role="gradient-beam"');
     expect(beam).toContain('gradientUnits="userSpaceOnUse"');
-    expect(beam).toContain('x1="0"');
-    expect(beam).toContain('y1="0"');
-    expect(beam).toContain('x2="30"');
-    expect(beam).toContain('y2="10"');
+    expect(beam).toContain('x1="18"');
+    expect(beam).toContain('y1="6"');
+    expect(beam).toContain('x2="15"');
+    expect(beam).toContain('y2="5"');
+    expect(beam).toContain(
+      '<stop offset="0" stop-color="#ffaa40" stop-opacity="0"'
+    );
+    expect(beam).toContain('<stop offset="0" stop-color="#ffaa40"');
+    expect(beam).toContain('<stop offset="0.325" stop-color="#9c40ff"');
+    expect(beam).toContain(
+      '<stop offset="1" stop-color="#9c40ff" stop-opacity="0"'
+    );
+    expect(beam).not.toContain("drop-shadow");
 
     const packet = renderEffect(clip("edge.packet", { sizePx: 7 }));
     expect(packet).toContain('data-motion-role="packet-tail"');
@@ -266,7 +281,9 @@ describe("EdgeMotionLayer", () => {
     const repeated = renderEffect(authored, 250, "edge/a");
     const similar = renderEffect(authored, 250, "edge a");
     const gradientId = (markup: string) =>
-      markup.match(/<linearGradient id="([^"]+)"/)?.[1];
+      markup.match(
+        /data-motion-role="gradient-beam"[^>]*stroke="url\(#([^"]+)\)"/
+      )?.[1];
 
     expect(gradientId(first)).toBeDefined();
     expect(gradientId(first)).toBe(gradientId(repeated));

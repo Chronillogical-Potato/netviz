@@ -29,8 +29,8 @@ export interface SvgAttributeTarget {
 
 export interface EdgeMotionSlotElements {
   group: SvgAttributeTarget | null;
-  gradient: SvgAttributeTarget | null;
-  gradientStops: Array<SvgAttributeTarget | null>;
+  gradients: Array<SvgAttributeTarget | null>;
+  gradientStops: Array<Array<SvgAttributeTarget | null>>;
   paths: Array<SvgAttributeTarget | null>;
 }
 
@@ -51,8 +51,8 @@ export interface EdgeMotionLayerProps {
 interface MotionPrimitive {
   role:
     | "moving-dash"
-    | "beam-trail"
-    | "beam-core"
+    | "gradient-beam-base"
+    | "gradient-beam"
     | "packet-tail"
     | "packet-core"
     | "pulse"
@@ -64,6 +64,8 @@ interface MotionPrimitive {
   dashoffset?: number;
   linecap?: "butt" | "round";
   particleCount?: number;
+  gradientPhase?: number;
+  gradientReversed?: boolean;
 }
 
 export const MAX_EDGE_EFFECT_SLOTS = 4;
@@ -88,9 +90,14 @@ const stableHash = (value: string) => {
   return (hash >>> 0).toString(36);
 };
 
-const gradientIdFor = (edgeId: string, effectId: string, slotIndex: number) =>
-  `nv-edge-gradient-${idPart(edgeId)}-${idPart(effectId)}-${slotIndex}-${stableHash(
-    `${edgeId}\0${effectId}\0${slotIndex}`
+const gradientIdFor = (
+  edgeId: string,
+  effectId: string,
+  slotIndex: number,
+  primitiveIndex: number
+) =>
+  `nv-edge-gradient-${idPart(edgeId)}-${idPart(effectId)}-${slotIndex}-${primitiveIndex}-${stableHash(
+    `${edgeId}\0${effectId}\0${slotIndex}\0${primitiveIndex}`
   )}`;
 
 const boundedPhases = (
@@ -99,7 +106,7 @@ const boundedPhases = (
 
 export function createEdgeMotionPrimitives(
   projection: Extract<EdgeEffectProjection, { supported: true }>,
-  gradientId: string
+  gradientIds: readonly string[]
 ): MotionPrimitive[] {
   const colors = projection.colors;
   const phases = boundedPhases(projection);
@@ -116,30 +123,29 @@ export function createEdgeMotionPrimitives(
         linecap: "round",
       }));
 
-    case "gradient-beam": {
-      const trailLength = projection.trailLengthRatio;
-      const coreLength = Math.max(0.01, trailLength * 0.35);
-      return phases.flatMap((phase) => [
+    case "gradient-beam":
+      return [
         {
-          role: "beam-trail" as const,
-          stroke: `url(#${gradientId})`,
-          strokeWidth: projection.widthPx * 2,
-          opacity: projection.opacity * 0.35,
-          dasharray: `${trailLength} ${1 - trailLength}`,
-          dashoffset: 1 - phase,
-          linecap: "round" as const,
+          role: "gradient-beam-base",
+          stroke: "gray",
+          strokeWidth: projection.widthPx,
+          opacity: 0.2,
+          linecap: "round",
         },
-        {
-          role: "beam-core" as const,
-          stroke: `url(#${gradientId})`,
+        ...phases.map((phase, index) => ({
+          role: "gradient-beam" as const,
+          stroke: `url(#${gradientIds[index + 1]})`,
           strokeWidth: projection.widthPx,
           opacity: projection.opacity,
-          dasharray: `${coreLength} ${1 - coreLength}`,
-          dashoffset: 1 - phase,
           linecap: "round" as const,
-        },
-      ]);
-    }
+          gradientPhase: phase,
+          gradientReversed:
+            projection.direction === "reverse" ||
+            (projection.direction === "ping-pong" &&
+              projection.travelDirection === "reverse") ||
+            (projection.direction === "bidirectional" && index === 1),
+        })),
+      ];
 
     case "packet": {
       const coreLength = projection.packetLengthRatio;
@@ -242,6 +248,52 @@ const hideSlot = (slot: EdgeMotionSlotElements) => {
   for (const path of slot.paths) hidePath(path);
 };
 
+const pointOnVector = (vector: EdgeGradientVector, ratio: number) => ({
+  x: vector.x1 + (vector.x2 - vector.x1) * ratio,
+  y: vector.y1 + (vector.y2 - vector.y1) * ratio,
+});
+
+const beamGradientVector = (
+  vector: EdgeGradientVector,
+  phase: number,
+  span: number,
+  reversed: boolean
+): EdgeGradientVector => {
+  const head = pointOnVector(vector, reversed ? phase - span : phase + span);
+  const tail = pointOnVector(vector, phase);
+  return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
+};
+
+const gradientStops = (colors: [string, string]) =>
+  [
+    ["0", colors[0], 0],
+    ["0", colors[0], undefined],
+    ["0.325", colors[1], undefined],
+    ["1", colors[1], 0],
+  ] as const;
+
+const applyGradient = (
+  gradient: SvgAttributeTarget | null,
+  stops: Array<SvgAttributeTarget | null>,
+  id: string,
+  vector: EdgeGradientVector,
+  colors: [string, string]
+) => {
+  writeAttribute(gradient, "id", id);
+  writeAttribute(gradient, "gradientUnits", "userSpaceOnUse");
+  writeAttribute(gradient, "x1", vector.x1);
+  writeAttribute(gradient, "y1", vector.y1);
+  writeAttribute(gradient, "x2", vector.x2);
+  writeAttribute(gradient, "y2", vector.y2);
+  const values = gradientStops(colors);
+  for (let index = 0; index < stops.length; index += 1) {
+    const [offset, color, opacity] = values[index] ?? values[values.length - 1];
+    writeAttribute(stops[index], "offset", offset);
+    writeAttribute(stops[index], "stop-color", color);
+    writeAttribute(stops[index], "stop-opacity", opacity);
+  }
+};
+
 const applyProjectionToSlot = (
   slot: EdgeMotionSlotElements,
   slotIndex: number,
@@ -249,38 +301,28 @@ const applyProjectionToSlot = (
   projection: Extract<EdgeEffectProjection, { supported: true }>,
   context: EdgeMotionApplyContext
 ) => {
-  const gradientId = gradientIdFor(edgeId, projection.effectId, slotIndex);
-  const primitives = createEdgeMotionPrimitives(projection, gradientId).slice(
+  const gradientIds = Array.from(
+    { length: MAX_EDGE_PRIMITIVES_PER_SLOT },
+    (_, primitiveIndex) =>
+      gradientIdFor(edgeId, projection.effectId, slotIndex, primitiveIndex)
+  );
+  const primitives = createEdgeMotionPrimitives(projection, gradientIds).slice(
     0,
     MAX_EDGE_PRIMITIVES_PER_SLOT
   );
   const colors = projection.colors;
   const glowBlurPx = projection.glowBlurPx;
   const glowColor = projection.glowColor;
+  const beamSpan =
+    projection.preset === "gradient-beam"
+      ? projection.trailLengthRatio
+      : 0.1;
 
   writeAttribute(slot.group, "display", undefined);
   writeAttribute(slot.group, "data-effect-id", projection.effectId);
   writeAttribute(slot.group, "data-effect-type", projection.effectType);
   writeAttribute(slot.group, "data-motion-preset", projection.preset);
   writeAttribute(slot.group, "data-motion-state", context.motionState);
-
-  writeAttribute(slot.gradient, "id", gradientId);
-  writeAttribute(slot.gradient, "gradientUnits", "userSpaceOnUse");
-  writeAttribute(slot.gradient, "x1", context.gradientVector.x1);
-  writeAttribute(slot.gradient, "y1", context.gradientVector.y1);
-  writeAttribute(slot.gradient, "x2", context.gradientVector.x2);
-  writeAttribute(slot.gradient, "y2", context.gradientVector.y2);
-  const stopValues: Array<[string, string, number | undefined]> = [
-    ["0", colors[0], 0],
-    ["0.5", colors[1], undefined],
-    ["1", colors[0], 0],
-  ];
-  for (let index = 0; index < slot.gradientStops.length; index += 1) {
-    const [offset, color, opacity] = stopValues[index] ?? stopValues[2];
-    writeAttribute(slot.gradientStops[index], "offset", offset);
-    writeAttribute(slot.gradientStops[index], "stop-color", color);
-    writeAttribute(slot.gradientStops[index], "stop-opacity", opacity);
-  }
 
   for (let index = 0; index < slot.paths.length; index += 1) {
     const path = slot.paths[index];
@@ -289,6 +331,22 @@ const applyProjectionToSlot = (
       hidePath(path);
       continue;
     }
+    const vector =
+      primitive.gradientPhase === undefined
+        ? context.gradientVector
+        : beamGradientVector(
+            context.gradientVector,
+            primitive.gradientPhase,
+            beamSpan,
+            primitive.gradientReversed ?? false
+          );
+    applyGradient(
+      slot.gradients[index],
+      slot.gradientStops[index] ?? [],
+      gradientIds[index],
+      vector,
+      colors
+    );
     writeAttribute(path, "display", undefined);
     writeAttribute(path, "data-edge-layer", "motion");
     writeAttribute(path, "data-effect-id", projection.effectId);
@@ -378,8 +436,14 @@ export function subscribeEdgeMotionTarget(
 
 const emptySlot = (): EdgeMotionSlotElements => ({
   group: null,
-  gradient: null,
-  gradientStops: Array.from({ length: 3 }, () => null),
+  gradients: Array.from(
+    { length: MAX_EDGE_PRIMITIVES_PER_SLOT },
+    () => null
+  ),
+  gradientStops: Array.from(
+    { length: MAX_EDGE_PRIMITIVES_PER_SLOT },
+    () => Array.from({ length: 4 }, () => null)
+  ),
   paths: Array.from({ length: MAX_EDGE_PRIMITIVES_PER_SLOT }, () => null),
 });
 
@@ -426,9 +490,13 @@ export function EdgeMotionLayer({
       {Array.from({ length: MAX_EDGE_EFFECT_SLOTS }, (_, slotIndex) => {
         const slotProjection = slotIndex === 0 ? initialProjection : null;
         const effectId = slotProjection?.effectId ?? `slot-${slotIndex}`;
-        const gradientId = gradientIdFor(edgeId, effectId, slotIndex);
+        const gradientIds = Array.from(
+          { length: MAX_EDGE_PRIMITIVES_PER_SLOT },
+          (_, primitiveIndex) =>
+            gradientIdFor(edgeId, effectId, slotIndex, primitiveIndex)
+        );
         const primitives = slotProjection
-          ? createEdgeMotionPrimitives(slotProjection, gradientId).slice(
+          ? createEdgeMotionPrimitives(slotProjection, gradientIds).slice(
               0,
               MAX_EDGE_PRIMITIVES_PER_SLOT
             )
@@ -436,6 +504,10 @@ export function EdgeMotionLayer({
         const colors = slotProjection?.colors ?? ["#38bdf8", "#818cf8"];
         const glowBlurPx = slotProjection ? slotProjection.glowBlurPx : 0;
         const glowColor = slotProjection?.glowColor ?? colors[0];
+        const beamSpan =
+          slotProjection?.preset === "gradient-beam"
+            ? slotProjection.trailLengthRatio
+            : 0.1;
 
         return (
           <g
@@ -451,34 +523,56 @@ export function EdgeMotionLayer({
             data-motion-slot={slotIndex}
           >
             <defs>
-              <linearGradient
-                ref={(node) => {
-                  if (slotsRef.current) {
-                    slotsRef.current[slotIndex].gradient = node;
-                  }
-                }}
-                id={gradientId}
-                gradientUnits="userSpaceOnUse"
-                x1={gradientVector.x1}
-                y1={gradientVector.y1}
-                x2={gradientVector.x2}
-                y2={gradientVector.y2}
-              >
-                {[0, 0.5, 1].map((offset, stopIndex) => (
-                  <stop
-                    key={offset}
-                    ref={(node) => {
-                      if (slotsRef.current) {
-                        slotsRef.current[slotIndex].gradientStops[stopIndex] =
-                          node;
-                      }
-                    }}
-                    offset={offset}
-                    stopColor={colors[stopIndex === 1 ? 1 : 0]}
-                    stopOpacity={stopIndex === 1 ? undefined : 0}
-                  />
-                ))}
-              </linearGradient>
+              {Array.from(
+                { length: MAX_EDGE_PRIMITIVES_PER_SLOT },
+                (_, primitiveIndex) => {
+                  const primitive = primitives[primitiveIndex];
+                  const vector =
+                    primitive?.gradientPhase === undefined || !slotProjection
+                      ? gradientVector
+                      : beamGradientVector(
+                          gradientVector,
+                          primitive.gradientPhase,
+                          beamSpan,
+                          primitive.gradientReversed ?? false
+                        );
+                  return (
+                    <linearGradient
+                      key={primitiveIndex}
+                      ref={(node) => {
+                        if (slotsRef.current) {
+                          slotsRef.current[slotIndex].gradients[primitiveIndex] =
+                            node;
+                        }
+                      }}
+                      id={gradientIds[primitiveIndex]}
+                      gradientUnits="userSpaceOnUse"
+                      x1={vector.x1}
+                      y1={vector.y1}
+                      x2={vector.x2}
+                      y2={vector.y2}
+                    >
+                      {gradientStops(colors).map(
+                        ([offset, color, opacity], stopIndex) => (
+                          <stop
+                            key={stopIndex}
+                            ref={(node) => {
+                              if (slotsRef.current) {
+                                slotsRef.current[slotIndex].gradientStops[
+                                  primitiveIndex
+                                ][stopIndex] = node;
+                              }
+                            }}
+                            offset={offset}
+                            stopColor={color}
+                            stopOpacity={opacity}
+                          />
+                        )
+                      )}
+                    </linearGradient>
+                  );
+                }
+              )}
             </defs>
             {Array.from(
               { length: MAX_EDGE_PRIMITIVES_PER_SLOT },

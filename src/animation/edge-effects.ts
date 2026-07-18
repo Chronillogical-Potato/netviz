@@ -19,6 +19,7 @@ interface CommonEdgeEffectProjection {
   active: boolean;
   timingPhase: ClipTimingPhase;
   direction: AnimationDirectionV1;
+  travelDirection: "forward" | "reverse";
   phases: number[];
   startOffset: number;
   endOffset: number;
@@ -112,6 +113,10 @@ const hasFiniteNumberParam = (clip: ScenarioClipV1, keys: string[]) =>
   });
 
 const colorPair = (clip: ScenarioClipV1): [string, string] => {
+  const defaults: [string, string] =
+    clip.effect.type === "edge.gradient-beam"
+      ? ["#ffaa40", "#9c40ff"]
+      : ["#38bdf8", "#818cf8"];
   const value = clip.effect.params.colors;
   const authored = Array.isArray(value)
     ? value.filter(
@@ -122,10 +127,10 @@ const colorPair = (clip: ScenarioClipV1): [string, string] => {
   const primary = stringParam(
     clip,
     "color",
-    authored[0] ?? "#38bdf8"
+    authored[0] ?? defaults[0]
   );
   const secondary =
-    authored[1] ?? stringParam(clip, "secondaryColor", "#818cf8");
+    authored[1] ?? stringParam(clip, "secondaryColor", defaults[1]);
   return [primary, secondary];
 };
 
@@ -178,6 +183,7 @@ export function projectEdgeEffect(
     active: timing.active,
     timingPhase: timing.phase,
     direction: directionOf(clip),
+    travelDirection: timing.travelDirection,
     phases: timing.progresses.map(
       (phase) => startOffset + clamp(phase, 0, 1) * pathSpan
     ),
@@ -205,7 +211,7 @@ export function projectEdgeEffect(
         trailLengthRatio: numberParamAliases(
           clip,
           ["trailLengthRatio", "trailLength"],
-          0.24,
+          0.1,
           0.02,
           0.95
         ),

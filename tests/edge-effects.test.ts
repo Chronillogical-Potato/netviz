@@ -112,8 +112,11 @@ describe("edge effect projection", () => {
     expect(projection).toMatchObject({
       preset: "gradient-beam",
       phases: [0.5],
-      colors: ["#38bdf8", "#818cf8"],
-      trailLengthRatio: 0.24,
+      colors: ["#ffaa40", "#9c40ff"],
+      widthPx: 2,
+      opacity: 1,
+      glowBlurPx: 0,
+      trailLengthRatio: 0.1,
     });
   });
 

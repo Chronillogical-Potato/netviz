@@ -133,6 +133,20 @@ describe("clip timing", () => {
     });
   });
 
+  test("matches the reference beam easing curve", () => {
+    const timing = evaluateClipTiming(
+      clip("forward", {
+        startMs: 0,
+        durationMs: 1_000,
+        repeatCount: 0,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+      }),
+      500
+    );
+
+    expect(timing.progress).toBeCloseTo(0.971779, 5);
+  });
+
   test("treats a non-positive duration as an inert clip", () => {
     expect(
       evaluateClipTiming(clip("forward", { durationMs: 0 }), 100)

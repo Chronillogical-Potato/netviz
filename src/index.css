@@ -193,6 +193,26 @@
 .react-flow__edge:focus .react-flow__edge-path {
   stroke: hsl(var(--ring));
 }
+.animation-mode .react-flow__edge > .react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground));
+  stroke-width: 1.5;
+  opacity: 0.25;
+}
+.react-flow__edge:has(
+    .nv-edge-motion [data-motion-role="gradient-beam-base"]:not([display="none"])
+  ) > .react-flow__edge-path {
+  opacity: 0;
+}
+.animation-mode .react-flow__edge.selected > .react-flow__edge-path,
+.animation-mode .react-flow__edge:focus > .react-flow__edge-path {
+  stroke: hsl(var(--ring));
+  stroke-width: 2;
+  opacity: 0.45 !important;
+}
+.animation-mode .react-flow__edgelabel-renderer [data-empty-label] {
+  opacity: 0 !important;
+  pointer-events: none;
+}
 .react-flow__attribution {
   display: none !important;
 }

@@ -91,6 +91,7 @@ export default function App() {
       <div
         className={cn(
           "flex h-screen w-screen flex-col bg-background text-foreground",
+          workMode === "animation" && "animation-mode",
           isPreview && "preview-mode"
         )}
         data-motion={reducedMotion ? "reduced" : "full"}

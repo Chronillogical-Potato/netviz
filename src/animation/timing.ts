@@ -22,6 +22,31 @@ const finiteOr = (value: number, fallback: number) =>
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
+const cubicBezierValue = (
+  progress: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+) => {
+  const sample = (time: number, first: number, second: number) => {
+    const inverse = 1 - time;
+    return (
+      3 * inverse * inverse * time * first +
+      3 * inverse * time * time * second +
+      time * time * time
+    );
+  };
+  let lower = 0;
+  let upper = 1;
+  for (let index = 0; index < 20; index += 1) {
+    const time = (lower + upper) / 2;
+    if (sample(time, x1, x2) < progress) lower = time;
+    else upper = time;
+  }
+  return sample((lower + upper) / 2, y1, y2);
+};
+
 const getDirection = (clip: ScenarioClipV1): MotionDirection => {
   const direction = clip.effect.params.direction;
   if (
@@ -36,6 +61,9 @@ const getDirection = (clip: ScenarioClipV1): MotionDirection => {
 
 const applyEasing = (progress: number, easing: string) => {
   const value = clamp01(progress);
+  if (easing === "cubic-bezier(0.16, 1, 0.3, 1)") {
+    return cubicBezierValue(value, 0.16, 1, 0.3, 1);
+  }
   switch (easing) {
     case "ease-in":
       return value * value;
