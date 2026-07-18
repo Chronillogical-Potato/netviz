@@ -43,6 +43,16 @@ import {
   prefersReducedMotion,
   scenarioRuntime,
 } from "@/animation/runtime-instance";
+import {
+  createGradientBeamClip,
+  createGradientBeamEffect,
+  normalizeGradientBeamDefaults,
+  REQUEST_FLOW_HOP_DELAY_MS,
+} from "@/animation/gradient-beam";
+import {
+  buildRequestFlow,
+  buildSelectedRequestFlow,
+} from "@/animation/request-flow";
 
 export type InfraVariant = "row" | "card";
 export type IconPosition = "left" | "right" | "top" | "bottom";
@@ -325,6 +335,9 @@ type FlowState = Snapshot & {
   ) => void;
   patchSelectedEdgeEffects: (patch: ScenarioClipPatchV1) => void;
   removeSelectedEdgeEffects: () => void;
+  animateAllEdges: () => void;
+  animateRequestFlow: (startNodeId: string) => void;
+  animateSelectedPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
   deleteSelected: () => void;
@@ -1080,6 +1093,73 @@ export const useFlowStore = create<FlowState>()(
         : { scenarioDocument };
     }),
 
+  animateAllEdges: () =>
+    set((s) => {
+      const edgeIds = s.edges.map((edge) => edge.id);
+      if (edgeIds.length === 0) return s;
+      const cleared = removeEdgeEffects(s.scenarioDocument, { edgeIds });
+      return {
+        scenarioDocument: applyEdgeEffect(cleared, {
+          edgeIds,
+          effect: createGradientBeamEffect(),
+          clip: createGradientBeamClip(),
+        }),
+      };
+    }),
+
+  animateRequestFlow: (startNodeId) =>
+    set((s) => {
+      const steps = buildRequestFlow(s.edges, startNodeId);
+      if (steps.length === 0) return s;
+      const allEdgeIds = s.edges.map((edge) => edge.id);
+      let scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
+        edgeIds: allEdgeIds,
+      });
+      for (const step of steps) {
+        scenarioDocument = applyEdgeEffect(scenarioDocument, {
+          edgeIds: [step.edgeId],
+          effect: createGradientBeamEffect(),
+          clip: createGradientBeamClip(
+            step.hop * REQUEST_FLOW_HOP_DELAY_MS
+          ),
+        });
+      }
+      return { scenarioDocument };
+    }),
+
+  animateSelectedPath: () =>
+    set((s) => {
+      const selectedEdges = s.edges.filter((edge) => edge.selected);
+      const selectedNodeIds = new Set(
+        s.nodes.filter((node) => node.selected).map((node) => node.id)
+      );
+      const pathEdges =
+        selectedEdges.length > 0
+          ? selectedEdges
+          : s.edges.filter(
+              (edge) =>
+                selectedNodeIds.has(edge.source) &&
+                selectedNodeIds.has(edge.target)
+            );
+      const steps = buildSelectedRequestFlow(pathEdges);
+      if (steps.length === 0) return s;
+
+      const allEdgeIds = s.edges.map((edge) => edge.id);
+      let scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
+        edgeIds: allEdgeIds,
+      });
+      for (const step of steps) {
+        scenarioDocument = applyEdgeEffect(scenarioDocument, {
+          edgeIds: [step.edgeId],
+          effect: createGradientBeamEffect(),
+          clip: createGradientBeamClip(
+            step.hop * REQUEST_FLOW_HOP_DELAY_MS
+          ),
+        });
+      }
+      return { scenarioDocument };
+    }),
+
   setEdgeColor: (color) =>
     set((s) => {
       const selected = s.edges.filter((e) => e.selected);
@@ -1558,7 +1638,9 @@ export const useFlowStore = create<FlowState>()(
                   nodes: strip(c.nodes) ?? c.nodes,
                   edges: clearLegacyAnimatedFlags(c.edges),
                   scenarioDocument:
-                    c.scenarioDocument ?? createEmptyScenarioDocument(),
+                    normalizeGradientBeamDefaults(
+                      c.scenarioDocument ?? createEmptyScenarioDocument()
+                    ),
                 },
               ])
             )
@@ -1570,7 +1652,9 @@ export const useFlowStore = create<FlowState>()(
           edges,
           pageContents,
           scenarioDocument:
-            p.scenarioDocument ?? createEmptyScenarioDocument(),
+            normalizeGradientBeamDefaults(
+              p.scenarioDocument ?? createEmptyScenarioDocument()
+            ),
           motionPreference: p.motionPreference ?? "system",
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
         };

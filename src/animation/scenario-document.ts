@@ -191,7 +191,7 @@ export function applyEdgeEffect(
     });
   }
 
-  const nextScenario = extendScenarioToClips({ ...scenario, tracks });
+  const nextScenario = fitScenarioToClips({ ...scenario, tracks });
   return replaceScenario(workingDocument, scenarioIndex, nextScenario);
 }
 
@@ -221,7 +221,7 @@ export function patchEdgeEffects(
   });
 
   if (!changed) return document;
-  const nextScenario = extendScenarioToClips({ ...scenario, tracks });
+  const nextScenario = fitScenarioToClips({ ...scenario, tracks });
   return replaceScenario(document, scenarioIndex, nextScenario);
 }
 
@@ -242,7 +242,11 @@ export function removeEdgeEffects(
   );
   if (tracks.length === scenario.tracks.length) return document;
 
-  return replaceScenario(document, scenarioIndex, { ...scenario, tracks });
+  return replaceScenario(
+    document,
+    scenarioIndex,
+    fitScenarioToClips({ ...scenario, tracks })
+  );
 }
 
 export function cloneScenarioTargets(
@@ -391,7 +395,7 @@ function replaceScenario(
   };
 }
 
-function extendScenarioToClips(scenario: ScenarioV1): ScenarioV1 {
+export function fitScenarioToClips(scenario: ScenarioV1): ScenarioV1 {
   const requiredDurationMs = scenario.tracks.reduce(
     (maximum, track) =>
       track.clips.reduce(
@@ -399,8 +403,9 @@ function extendScenarioToClips(scenario: ScenarioV1): ScenarioV1 {
           Math.max(trackMaximum, clip.startMs + clip.durationMs),
         maximum
       ),
-    scenario.durationMs
+    Math.max(1, ...scenario.markers.map((marker) => marker.atMs))
   );
+  if (!scenario.tracks.some((track) => track.clips.length > 0)) return scenario;
   if (requiredDurationMs === scenario.durationMs) return scenario;
 
   const loop = scenario.playback.loop;
@@ -411,8 +416,11 @@ function extendScenarioToClips(scenario: ScenarioV1): ScenarioV1 {
       ...scenario.playback,
       loop: {
         ...loop,
+        startMs: loop.startMs >= requiredDurationMs ? 0 : loop.startMs,
         endMs:
-          loop.endMs === scenario.durationMs ? requiredDurationMs : loop.endMs,
+          loop.endMs === scenario.durationMs || loop.endMs > requiredDurationMs
+            ? requiredDurationMs
+            : loop.endMs,
       },
     },
   };

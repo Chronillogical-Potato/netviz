@@ -115,6 +115,8 @@ describe("scenario document edits", () => {
 
     expect(original).toEqual(createEmptyScenarioDocument());
     expect(updated.defaultScenarioId).toBe("scenario-1");
+    expect(updated.scenarios[0]?.durationMs).toBe(1_800);
+    expect(updated.scenarios[0]?.playback.loop.endMs).toBe(1_800);
     expect(updated.scenarios[0]?.tracks).toEqual([
       {
         id: "track-a",
@@ -192,6 +194,8 @@ describe("scenario document edits", () => {
         },
       })
     );
+    expect(updated.scenarios[0]?.durationMs).toBe(900);
+    expect(updated.scenarios[0]?.playback.loop.endMs).toBe(900);
   });
 
   test("returns the original document when a timing patch has no existing clip", () => {

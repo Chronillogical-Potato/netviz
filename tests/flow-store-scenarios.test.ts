@@ -171,6 +171,99 @@ describe("page-owned animation state", () => {
 });
 
 describe("animation target lifecycle", () => {
+  test("animates every connection with one short gradient beam", () => {
+    useFlowStore.setState({
+      nodes: [node("a"), node("b"), node("c")],
+      edges: [edge("edge-a", "a", "b"), edge("edge-b", "b", "c")],
+    });
+
+    useFlowStore.getState().animateAllEdges();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(scenario.durationMs).toBe(1_500);
+    expect(scenario.playback.loop).toEqual({
+      mode: "repeat",
+      startMs: 0,
+      endMs: 1_500,
+    });
+    expect(
+      scenario.tracks.map((track) => ({
+        target: "id" in track.target ? track.target.id : null,
+        startMs: track.clips[0].startMs,
+        durationMs: track.clips[0].durationMs,
+        easing: track.clips[0].easing,
+        type: track.clips[0].effect.type,
+      }))
+    ).toEqual([
+      {
+        target: "edge-a",
+        startMs: 0,
+        durationMs: 1_500,
+        easing: "linear",
+        type: "edge.gradient-beam",
+      },
+      {
+        target: "edge-b",
+        startMs: 0,
+        durationMs: 1_500,
+        easing: "linear",
+        type: "edge.gradient-beam",
+      },
+    ]);
+  });
+
+  test("builds a staggered request chain from the selected start block", () => {
+    useFlowStore.setState({
+      nodes: [node("user", true), node("firewall"), node("proxy"), node("server"), node("db")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("firewall-proxy", "firewall", "proxy"),
+        edge("proxy-server", "proxy", "server"),
+        edge("unrelated", "db", "server"),
+      ],
+    });
+
+    useFlowStore.getState().animateRequestFlow("user");
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(scenario.durationMs).toBe(4_500);
+    expect(
+      scenario.tracks.map((track) => [
+        "id" in track.target ? track.target.id : null,
+        track.clips[0].startMs,
+      ])
+    ).toEqual([
+      ["user-firewall", 0],
+      ["firewall-proxy", 1_500],
+      ["proxy-server", 3_000],
+    ]);
+  });
+
+  test("chains only the specifically selected path", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("firewall"), node("proxy"), node("server")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("firewall-proxy", "firewall", "proxy", true),
+        edge("proxy-server", "proxy", "server", true),
+        edge("user-server", "user", "server"),
+      ],
+    });
+
+    useFlowStore.getState().animateSelectedPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(
+      scenario.tracks.map((track) => [
+        "id" in track.target ? track.target.id : null,
+        track.clips[0].startMs,
+      ])
+    ).toEqual([
+      ["firewall-proxy", 0],
+      ["proxy-server", 1_500],
+    ]);
+  });
+
   test("duplicates internal edge tracks with fresh target, track, and clip IDs", () => {
     useFlowStore.setState({
       nodes: [node("a", true), node("b", true)],
@@ -363,5 +456,34 @@ describe("document replacement", () => {
 
     expect(hydrated.edges[0].animated).toBe(false);
     expect(hydrated.pageContents["page-2"].edges[0].animated).toBe(false);
+  });
+
+  test("updates the previous five-second beam default on hydration", () => {
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!merge) throw new Error("Expected persisted-state merge");
+    useFlowStore.setState({ edges: [edge("edge-a", "a", "b", true)] });
+    useFlowStore.getState().applySelectedEdgeEffect(
+      {
+        type: "edge.gradient-beam",
+        params: { colors: ["#ffaa40", "#9c40ff"] },
+      },
+      {
+        durationMs: 5_000,
+        easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+      }
+    );
+    const persisted = useFlowStore.getState().scenarioDocument;
+
+    const hydrated = merge(
+      { scenarioDocument: persisted },
+      useFlowStore.getState()
+    ) as ReturnType<typeof useFlowStore.getState>;
+    const scenario = hydrated.scenarioDocument.scenarios[0];
+    const clip = scenario.tracks[0].clips[0];
+
+    expect(clip.durationMs).toBe(1_500);
+    expect(clip.easing).toBe("linear");
+    expect(scenario.durationMs).toBe(1_500);
+    expect(scenario.playback.loop.endMs).toBe(1_500);
   });
 });
