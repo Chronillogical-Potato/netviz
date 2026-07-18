@@ -35,6 +35,7 @@ type TargetListener = (frame: TargetFrame) => void;
 type TransportListener = (snapshot: TransportSnapshot) => void;
 
 export class ScenarioRuntime {
+  private static readonly TRANSPORT_FRAME_INTERVAL_MS = 50;
   private readonly clock: ScenarioClock;
   private readonly tracksByTarget = new Map<string, ScenarioTrackV1[]>();
   private readonly targetListeners = new Map<string, Set<TargetListener>>();
@@ -46,6 +47,8 @@ export class ScenarioRuntime {
   private projectionEnabled = false;
   private destroyed = false;
   private clockSnapshot: ClockSnapshot;
+  private lastTransportNotification: TransportSnapshot | null = null;
+  private forceNextTransportNotification = false;
 
   constructor(scheduler?: AnimationFrameScheduler) {
     this.clock = new ScenarioClock(scheduler);
@@ -62,8 +65,15 @@ export class ScenarioRuntime {
   subscribeTransport = (listener: TransportListener) => {
     this.assertAlive();
     this.transportListeners.add(listener);
-    listener(this.getTransportSnapshot());
-    return () => this.transportListeners.delete(listener);
+    const snapshot = this.getTransportSnapshot();
+    listener(snapshot);
+    this.lastTransportNotification = snapshot;
+    return () => {
+      this.transportListeners.delete(listener);
+      if (this.transportListeners.size === 0) {
+        this.lastTransportNotification = null;
+      }
+    };
   };
 
   subscribeTarget = (targetId: string, listener: TargetListener) => {
@@ -77,7 +87,10 @@ export class ScenarioRuntime {
 
     return () => {
       listeners.delete(listener);
-      if (listeners.size === 0) this.targetListeners.delete(targetId);
+      if (listeners.size === 0) {
+        this.targetListeners.delete(targetId);
+        this.activeTargets.delete(targetId);
+      }
     };
   };
 
@@ -87,6 +100,7 @@ export class ScenarioRuntime {
     this.pageId = pageId;
     this.scenario = scenario;
     this.projectionEnabled = false;
+    this.forceNextTransportNotification = true;
     this.indexTracks(scenario);
     this.clock.configure(
       scenario
@@ -107,11 +121,13 @@ export class ScenarioRuntime {
     this.assertAlive();
     if (!this.scenario) return;
     this.projectionEnabled = true;
+    this.forceNextTransportNotification = true;
     this.clock.play();
   };
 
   pause = () => {
     this.assertAlive();
+    this.forceNextTransportNotification = true;
     this.clock.pause();
   };
 
@@ -119,6 +135,7 @@ export class ScenarioRuntime {
     this.assertAlive();
     if (!this.scenario) return;
     this.projectionEnabled = true;
+    this.forceNextTransportNotification = true;
     this.clock.restart();
   };
 
@@ -126,21 +143,25 @@ export class ScenarioRuntime {
     this.assertAlive();
     if (!this.scenario) return;
     this.projectionEnabled = true;
+    this.forceNextTransportNotification = true;
     this.clock.seek(timeMs);
   };
 
   setPlaybackRate = (rate: number) => {
     this.assertAlive();
+    this.forceNextTransportNotification = true;
     this.clock.setPlaybackRate(rate);
   };
 
   setDirection = (direction: TransportDirection) => {
     this.assertAlive();
+    this.forceNextTransportNotification = true;
     this.clock.setDirection(direction);
   };
 
   setLoop = (enabled: boolean) => {
     this.assertAlive();
+    this.forceNextTransportNotification = true;
     const authoredLoop = this.scenario?.playback.loop;
     this.clock.setLoop(
       enabled
@@ -161,6 +182,7 @@ export class ScenarioRuntime {
   stop = () => {
     this.assertAlive();
     this.projectionEnabled = false;
+    this.forceNextTransportNotification = true;
     this.clock.stop();
   };
 
@@ -177,13 +199,36 @@ export class ScenarioRuntime {
   };
 
   private onClockUpdate = (snapshot: ClockSnapshot) => {
+    const previous = this.clockSnapshot;
     this.clockSnapshot = snapshot;
-    this.notifyTransport();
+    const controlsChanged =
+      previous.isPlaying !== snapshot.isPlaying ||
+      previous.durationMs !== snapshot.durationMs ||
+      previous.playbackRate !== snapshot.playbackRate ||
+      previous.direction !== snapshot.direction ||
+      previous.loop !== snapshot.loop ||
+      previous.loopRegion.startMs !== snapshot.loopRegion.startMs ||
+      previous.loopRegion.endMs !== snapshot.loopRegion.endMs;
+    this.notifyTransport(
+      controlsChanged || this.forceNextTransportNotification
+    );
+    this.forceNextTransportNotification = false;
     this.evaluateTargets(snapshot.currentTimeMs);
   };
 
-  private notifyTransport() {
+  private notifyTransport(force: boolean) {
+    if (this.transportListeners.size === 0) return;
     const snapshot = this.getTransportSnapshot();
+    const previous = this.lastTransportNotification;
+    if (
+      !force &&
+      previous !== null &&
+      Math.abs(snapshot.currentTimeMs - previous.currentTimeMs) <
+        ScenarioRuntime.TRANSPORT_FRAME_INTERVAL_MS
+    ) {
+      return;
+    }
+    this.lastTransportNotification = snapshot;
     for (const listener of this.transportListeners) listener(snapshot);
   }
 
@@ -194,7 +239,7 @@ export class ScenarioRuntime {
     }
 
     const nextActiveTargets = new Set<string>();
-    for (const targetId of this.tracksByTarget.keys()) {
+    for (const targetId of this.targetListeners.keys()) {
       const frame = this.createTargetFrame(targetId, timeMs);
       if (frame.clips.length === 0) continue;
       nextActiveTargets.add(targetId);

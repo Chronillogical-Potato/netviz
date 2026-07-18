@@ -142,6 +142,59 @@ describe("scenario runtime", () => {
     expect(times).toEqual([0, 0, 50, 100]);
   });
 
+  test("throttles frame-time transport notifications but flushes controls", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+    const states: Array<{ time: number; playing: boolean }> = [];
+
+    runtime.activate("page-1", scenario());
+    runtime.subscribeTransport((snapshot) => {
+      states.push({ time: snapshot.currentTimeMs, playing: snapshot.isPlaying });
+    });
+    runtime.play();
+    for (let index = 0; index < 5; index += 1) scheduler.frame(10);
+    runtime.pause();
+    runtime.seek(17);
+
+    expect(states).toEqual([
+      { time: 0, playing: false },
+      { time: 0, playing: true },
+      { time: 50, playing: true },
+      { time: 50, playing: false },
+      { time: 17, playing: false },
+    ]);
+  });
+
+  test("does not evaluate authored targets without mounted subscribers", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+    const unobservedClip = effectClip("unobserved", 0, 500);
+    unobservedClip.effect.params = Object.defineProperty({}, "direction", {
+      enumerable: true,
+      get() {
+        throw new Error("unobserved target was evaluated");
+      },
+    });
+    const withUnobserved: ScenarioV1 = {
+      ...scenario(),
+      tracks: [
+        ...scenario().tracks,
+        {
+          id: "unobserved-track",
+          target: { type: "edge", id: "edge-unobserved" },
+          property: "connection-effect",
+          enabled: true,
+          clips: [unobservedClip],
+        },
+      ],
+    };
+
+    runtime.activate("page-1", withUnobserved);
+    runtime.subscribeTarget("edge-a", () => undefined);
+    runtime.play();
+    expect(() => scheduler.frame(50)).not.toThrow();
+  });
+
   test("reconfigures clock controls through the runtime facade", () => {
     const scheduler = new ManualScheduler();
     const runtime = new ScenarioRuntime(scheduler);
