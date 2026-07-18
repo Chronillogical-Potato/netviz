@@ -205,17 +205,34 @@ describe("animation target lifecycle", () => {
     expect(Math.min(...state.nodes.map((item) => item.position.x))).toBe(120);
     expect(Math.min(...state.nodes.map((item) => item.position.y))).toBe(240);
     expect(state.scenarioDocument.scenarios.map((scenario) => scenario.name)).toEqual([
+      "Load-balanced requests",
       "Request via Server A",
       "Request via Server B",
     ]);
     expect(
-      state.scenarioDocument.scenarios.map(
+      state.scenarioDocument.scenarios.slice(1).map(
         (scenario) =>
           scenario.tracks.filter(
             (track) => track.property === "connection-effect"
           ).length
       )
     ).toEqual([3, 3]);
+
+    const defaultScenario = state.scenarioDocument.scenarios.find(
+      (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
+    );
+    const serverA = state.nodes.find((item) => item.data.label === "Server A");
+    const serverB = state.nodes.find((item) => item.data.label === "Server B");
+    const edgeToA = state.edges.find((item) => item.target === serverA?.id);
+    const edgeToB = state.edges.find((item) => item.target === serverB?.id);
+    const startsAt = (edgeId?: string) =>
+      defaultScenario?.tracks.find(
+        (track) => "id" in track.target && track.target.id === edgeId
+      )?.clips[0]?.startMs;
+
+    expect(defaultScenario?.name).toBe("Load-balanced requests");
+    expect(startsAt(edgeToA?.id)).toBeNumber();
+    expect(startsAt(edgeToB?.id)).toBeGreaterThan(startsAt(edgeToA?.id) ?? 0);
   });
 
   test("animates every connection with one short gradient beam", () => {
@@ -791,6 +808,34 @@ describe("document replacement", () => {
 
     expect(hydrated.edges[0].animated).toBe(false);
     expect(hydrated.pageContents["page-2"].edges[0].animated).toBe(false);
+  });
+
+  test("upgrades an existing load balancer template to balanced preview", () => {
+    useFlowStore.getState().insertTemplate("load-balanced-web-app", {
+      x: 0,
+      y: 0,
+    });
+    const current = useFlowStore.getState();
+    const legacyScenarios = current.scenarioDocument.scenarios.filter(
+      (scenario) => scenario.name !== "Load-balanced requests"
+    );
+    const legacyDocument = {
+      ...current.scenarioDocument,
+      scenarios: legacyScenarios,
+      defaultScenarioId: legacyScenarios[0]?.id ?? null,
+    };
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!merge) throw new Error("Expected persisted-state merge");
+
+    const hydrated = merge(
+      { scenarioDocument: legacyDocument },
+      current
+    ) as typeof current;
+    const active = hydrated.scenarioDocument.scenarios.find(
+      (scenario) => scenario.id === hydrated.scenarioDocument.defaultScenarioId
+    );
+
+    expect(active?.name).toBe("Load-balanced requests");
   });
 
   test("updates the previous five-second beam default on hydration", () => {

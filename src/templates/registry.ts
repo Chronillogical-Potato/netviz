@@ -24,6 +24,7 @@ export type TemplateDefinition = {
   id: string;
   name: string;
   description: string;
+  previewName?: string;
   width: number;
   height: number;
   nodes: TemplateNode[];
@@ -36,6 +37,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     id: "load-balanced-web-app",
     name: "Load-balanced web app",
     description: "Client, load balancer, two servers, database, and two request paths.",
+    previewName: "Load-balanced requests",
     width: 1_060,
     height: 360,
     nodes: [

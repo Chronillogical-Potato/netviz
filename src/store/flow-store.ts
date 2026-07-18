@@ -63,7 +63,7 @@ import {
   buildRequestFlow,
   buildSelectedRequestFlow,
 } from "@/animation/request-flow";
-import { findTemplate } from "@/templates/registry";
+import { findTemplate, TEMPLATES } from "@/templates/registry";
 
 export type InfraVariant = "row" | "card";
 export type IconPosition = "left" | "right" | "top" | "bottom";
@@ -506,6 +506,70 @@ function buildAnimationPathScenario(input: {
     });
   });
   return document.scenarios[0] ?? null;
+}
+
+function buildSequentialPreviewScenario(
+  name: string,
+  scenarios: readonly ScenarioV1[]
+): ScenarioV1 | null {
+  if (scenarios.length < 2) return null;
+  const gapMs = 400;
+  let offsetMs = 0;
+  const tracks = scenarios.flatMap((scenario, index) => {
+    const shifted = scenario.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => ({
+        ...clip,
+        startMs: clip.startMs + offsetMs,
+      })),
+    }));
+    offsetMs += scenario.durationMs;
+    if (index < scenarios.length - 1) offsetMs += gapMs;
+    return shifted;
+  });
+  const base = createDefaultScenarioDocument({ name }).scenarios[0];
+  if (!base) return null;
+  return {
+    ...base,
+    durationMs: offsetMs,
+    playback: {
+      ...base.playback,
+      loop: { mode: "repeat", startMs: 0, endMs: offsetMs },
+    },
+    tracks,
+  };
+}
+
+function ensureTemplatePreviewScenarios(
+  document: PageScenarioDocumentV1
+): PageScenarioDocumentV1 {
+  let next = document;
+  for (const template of TEMPLATES) {
+    if (
+      !template.previewName ||
+      next.scenarios.some((scenario) => scenario.name === template.previewName)
+    ) {
+      continue;
+    }
+    const paths = template.animations.map((animation) =>
+      next.scenarios.find((scenario) => scenario.name === animation.name)
+    );
+    if (paths.some((scenario) => !scenario)) continue;
+    const preview = buildSequentialPreviewScenario(
+      template.previewName,
+      paths as ScenarioV1[]
+    );
+    if (!preview) continue;
+    const replacesDefault = paths.some(
+      (scenario) => scenario?.id === next.defaultScenarioId
+    );
+    next = {
+      ...next,
+      scenarios: [preview, ...next.scenarios],
+      defaultScenarioId: replacesDefault ? preview.id : next.defaultScenarioId,
+    };
+  }
+  return next;
 }
 
 function activateScenarioForEdges(
@@ -955,14 +1019,25 @@ export const useFlowStore = create<FlowState>()(
         });
         return scenario ? [scenario] : [];
       });
+      const previewScenario = template.previewName
+        ? buildSequentialPreviewScenario(template.previewName, scenarios)
+        : null;
+      const templateScenarios = previewScenario
+        ? [previewScenario, ...scenarios]
+        : scenarios;
       return {
         nodes: [...s.nodes, ...templateNodes],
         edges: [...s.edges, ...templateEdges],
         scenarioDocument: {
           ...s.scenarioDocument,
-          scenarios: [...s.scenarioDocument.scenarios, ...scenarios],
+          scenarios: [
+            ...s.scenarioDocument.scenarios,
+            ...templateScenarios,
+          ],
           defaultScenarioId:
-            scenarios[0]?.id ?? s.scenarioDocument.defaultScenarioId,
+            previewScenario?.id ??
+            scenarios[0]?.id ??
+            s.scenarioDocument.defaultScenarioId,
         },
       };
     }),
@@ -2047,8 +2122,20 @@ export const useFlowStore = create<FlowState>()(
         groups: snapshot.groups,
         pages: snapshot.pages,
         activePageId: snapshot.activePageId,
-        pageContents: snapshot.pageContents,
-        scenarioDocument: snapshot.scenarioDocument,
+        pageContents: Object.fromEntries(
+          Object.entries(snapshot.pageContents).map(([pageId, content]) => [
+            pageId,
+            {
+              ...content,
+              scenarioDocument: ensureTemplatePreviewScenarios(
+                content.scenarioDocument
+              ),
+            },
+          ])
+        ),
+        scenarioDocument: ensureTemplatePreviewScenarios(
+          snapshot.scenarioDocument
+        ),
         turbo: snapshot.turbo,
         turboColors: snapshot.turboColors,
         animationPathDraft: null,
@@ -2180,8 +2267,10 @@ export const useFlowStore = create<FlowState>()(
                   nodes: strip(c.nodes) ?? c.nodes,
                   edges: clearLegacyAnimatedFlags(c.edges),
                   scenarioDocument:
-                    normalizeGradientBeamDefaults(
-                      c.scenarioDocument ?? createEmptyScenarioDocument()
+                    ensureTemplatePreviewScenarios(
+                      normalizeGradientBeamDefaults(
+                        c.scenarioDocument ?? createEmptyScenarioDocument()
+                      )
                     ),
                 },
               ])
@@ -2193,10 +2282,11 @@ export const useFlowStore = create<FlowState>()(
           nodes,
           edges,
           pageContents,
-          scenarioDocument:
+          scenarioDocument: ensureTemplatePreviewScenarios(
             normalizeGradientBeamDefaults(
               p.scenarioDocument ?? createEmptyScenarioDocument()
-            ),
+            )
+          ),
           motionPreference: p.motionPreference ?? "system",
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
           workMode: p.workMode === "animation" ? "animation" : "design",
