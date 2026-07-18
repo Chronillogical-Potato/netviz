@@ -105,10 +105,30 @@ describe("clip timing", () => {
       progresses: [0.25, 0.75],
       travelDirection: "forward",
     });
-    expect(evaluateClipTiming(clip("ping-pong"), 400)).toMatchObject({
+    expect(evaluateClipTiming(clip("ping-pong"), 500)).toMatchObject({
       iteration: 1,
-      progress: 0.75,
-      progresses: [0.75],
+      progress: 0.5,
+      progresses: [0.5],
+      travelDirection: "reverse",
+    });
+  });
+
+  test("returns a UI-created ping-pong clip without requiring repeats", () => {
+    const authored = clip("ping-pong", {
+      startMs: 0,
+      durationMs: 1_200,
+      repeatCount: 0,
+      repeatDelayMs: 0,
+    });
+
+    expect(evaluateClipTiming(authored, 300)).toMatchObject({
+      iteration: 0,
+      progress: 0.5,
+      travelDirection: "forward",
+    });
+    expect(evaluateClipTiming(authored, 900)).toMatchObject({
+      iteration: 0,
+      progress: 0.5,
       travelDirection: "reverse",
     });
   });

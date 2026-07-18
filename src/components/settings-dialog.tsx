@@ -137,6 +137,8 @@ export function SettingsDialog({
   const showSmartGuides = useFlowStore((s) => s.showSmartGuides);
   const toggleControls = useFlowStore((s) => s.toggleControls);
   const toggleSmartGuides = useFlowStore((s) => s.toggleSmartGuides);
+  const motionPreference = useFlowStore((s) => s.motionPreference);
+  const setMotionPreference = useFlowStore((s) => s.setMotionPreference);
 
   // Close the modal before kicking off flows that open other UI.
   const run = (fn: () => void) => () => {
@@ -195,6 +197,21 @@ export function SettingsDialog({
                         { value: "light", label: "Light" },
                         { value: "dark", label: "Dark" },
                         { value: "system", label: "System" },
+                      ]}
+                    />
+                  </SettingsRow>
+                  <SettingsRow
+                    label="Motion"
+                    description="System respects your device setting; Full is the authoring override."
+                  >
+                    <Segmented
+                      className="w-52"
+                      value={motionPreference}
+                      onChange={setMotionPreference}
+                      options={[
+                        { value: "system", label: "System" },
+                        { value: "full", label: "Full" },
+                        { value: "reduced", label: "Reduced" },
                       ]}
                     />
                   </SettingsRow>

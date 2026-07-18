@@ -52,6 +52,7 @@ import { Input } from "@/ui/input";
 import { Segmented } from "@/ui/segmented";
 import { Slider } from "@/ui/slider";
 import { CanvasOptions, PageOptions } from "./canvas-options";
+import { AnimationOptions } from "./animation-options";
 import { cn } from "@/lib/utils";
 import {
   deriveLegacyLineEndpoints,
@@ -90,6 +91,7 @@ const NODE_TYPE_LABEL: Record<string, string> = {
 };
 
 export function Inspector() {
+  const workMode = useFlowStore((s) => s.workMode);
   const selectedProjection = useFlowStore(
     useShallow((s) => {
       const n = s.nodes.find((x) => x.selected);
@@ -104,6 +106,28 @@ export function Inspector() {
   const hasSelectedEdge = useFlowStore((s) =>
     s.edges.some((e) => e.selected)
   );
+
+  if (workMode === "animation") {
+    return (
+      <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-background">
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-xs font-semibold text-foreground">Animation</p>
+          <p className="pt-0.5 text-[10px] text-muted-foreground">
+            {hasSelectedEdge
+              ? "Connection effect"
+              : "Select one or more connections"}
+          </p>
+        </div>
+        {hasSelectedEdge ? (
+          <AnimationOptions />
+        ) : (
+          <div className="px-4 py-5 text-xs leading-5 text-muted-foreground">
+            Select an edge on the canvas to add a motion preset and timing.
+          </div>
+        )}
+      </aside>
+    );
+  }
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-background">

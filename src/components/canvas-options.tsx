@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Activity, Sparkles, X } from "@/ui/icons";
+import { Sparkles, X } from "@/ui/icons";
 import type { AppIcon } from "@/ui/icons";
 import { useFlowStore, type EdgeLineStyle } from "@/store/flow-store";
 import { COLOR_PRESETS } from "@/blocks/registry";
@@ -85,10 +85,7 @@ export function PageOptions() {
 
 export function CanvasOptions() {
   const turboColors = useFlowStore((s) => s.turboColors);
-  const animationSpeed = useFlowStore((s) => s.animationSpeed);
   const toggleTurbo = useFlowStore((s) => s.toggleTurbo);
-  const toggleAnimateEdges = useFlowStore((s) => s.toggleAnimateEdges);
-  const setAnimationSpeed = useFlowStore((s) => s.setAnimationSpeed);
   const setTurboColor = useFlowStore((s) => s.setTurboColor);
   const setEdgeColor = useFlowStore((s) => s.setEdgeColor);
   const setEdgeLineStyle = useFlowStore((s) => s.setEdgeLineStyle);
@@ -142,12 +139,6 @@ export function CanvasOptions() {
       ? first
       : undefined;
   });
-  const animateActive = useFlowStore((s) => {
-    const sel = s.edges.filter((e) => e.selected);
-    if (sel.length === 0 && !s.nodes.some((n) => n.selected))
-      return s.animateEdges;
-    return sel.length > 0 && sel.every((e) => e.animated);
-  });
   const turboActive = useFlowStore((s) => {
     const edgeSel = s.edges.filter((e) => e.selected);
     const nodeSel = s.nodes.filter((n) => n.selected);
@@ -163,33 +154,6 @@ export function CanvasOptions() {
         Edges
       </p>
       <div className="flex flex-col gap-1.5">
-        <ModeToggle
-          icon={Activity}
-          label="Animate edges"
-          active={animateActive}
-          onToggle={toggleAnimateEdges}
-        />
-        {animateActive && (
-          <div className="flex items-center gap-2 px-2 py-1">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Speed
-            </span>
-            <Slider
-              min={0.05}
-              max={3}
-              step={0.05}
-              value={3.05 - animationSpeed}
-              onChange={(e) =>
-                setAnimationSpeed(3.05 - Number(e.target.value))
-              }
-              className="min-w-0 flex-1"
-              aria-label="Animation speed"
-            />
-            <span className="w-8 text-right text-[10px] tabular-nums text-muted-foreground">
-              {animationSpeed.toFixed(2)}s
-            </span>
-          </div>
-        )}
         <div
           className={cn(
             "px-2 pt-2",
@@ -235,22 +199,14 @@ export function CanvasOptions() {
           <div className="flex items-center rounded-lg bg-muted p-0.5">
             {(["solid", "dashed", "dotted"] as EdgeLineStyle[]).map((k) => {
               const active = edgeLineStyle === k;
-              const disabled = k === "solid" && animateActive;
               return (
                 <button
                   key={k}
                   type="button"
-                  onClick={() => !disabled && setEdgeLineStyle(k)}
-                  disabled={disabled}
-                  title={
-                    disabled
-                      ? "Solid unavailable while Animate edges is on"
-                      : undefined
-                  }
+                  onClick={() => setEdgeLineStyle(k)}
                   className={cn(
                     "flex-1 rounded-md px-2 py-1.5 text-[11px] capitalize transition-colors",
-                    disabled && "cursor-not-allowed opacity-40",
-                    !disabled && active
+                    active
                       ? "bg-accent text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}

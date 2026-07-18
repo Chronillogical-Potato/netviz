@@ -53,7 +53,6 @@ const applyEasing = (progress: number, easing: string) => {
 
 const projectProgress = (
   direction: MotionDirection,
-  iteration: number,
   rawProgress: number
 ): Pick<ClipTimingResult, "progress" | "progresses" | "travelDirection"> => {
   const progress = clamp01(rawProgress);
@@ -71,11 +70,15 @@ const projectProgress = (
       travelDirection: "forward",
     };
   }
-  if (direction === "ping-pong" && iteration % 2 === 1) {
+  if (direction === "ping-pong") {
+    const returning = progress > 0.5;
+    const pingPongProgress = returning
+      ? (1 - progress) * 2
+      : progress * 2;
     return {
-      progress: 1 - progress,
-      progresses: [1 - progress],
-      travelDirection: "reverse",
+      progress: pingPongProgress,
+      progresses: [pingPongProgress],
+      travelDirection: returning ? "reverse" : "forward",
     };
   }
   return {
@@ -99,7 +102,6 @@ const result = (
   localTimeMs,
   ...projectProgress(
     getDirection(clip),
-    iteration,
     applyEasing(rawProgress, clip.easing)
   ),
 });
