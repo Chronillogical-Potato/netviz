@@ -67,6 +67,7 @@ describe("AnimationOptions", () => {
     expect(markup).toContain('aria-label="Path start color"');
     expect(markup).toContain('aria-label="Path end color"');
     expect(markup).toContain('aria-label="Path animation width"');
+    expect(markup).toContain('aria-label="Path beam length"');
     expect(markup).toContain('aria-label="Path animation opacity"');
     expect(markup).toContain('aria-label="Path animation glow"');
     expect(markup).toContain("Save &amp; play");

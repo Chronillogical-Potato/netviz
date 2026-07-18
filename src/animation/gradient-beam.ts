@@ -40,6 +40,7 @@ export function createGradientBeamEffect(): ScenarioEffectV1 {
       widthPx: 2,
       opacity: 1,
       trailLength: 0.1,
+      beamLengthPx: 48,
       glowBlurPx: 0,
     },
   };

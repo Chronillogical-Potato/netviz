@@ -399,6 +399,7 @@ describe("animation target lifecycle", () => {
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         widthPx: 2,
+        beamLengthPx: 48,
         opacity: 1,
         glowBlurPx: 0,
       },
@@ -466,6 +467,7 @@ describe("animation target lifecycle", () => {
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         widthPx: 2,
+        beamLengthPx: 48,
         opacity: 1,
         glowBlurPx: 0,
       },
@@ -524,6 +526,7 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().setAnimationPathAppearance({
       colors: ["#22d3ee", "#2563eb"],
       widthPx: 7,
+      beamLengthPx: 72,
       opacity: 0.65,
       glowBlurPx: 8,
     });
@@ -537,6 +540,7 @@ describe("animation target lifecycle", () => {
     expect(edgeClip?.effect.params).toMatchObject({
       colors: ["#22d3ee", "#2563eb"],
       widthPx: 7,
+      beamLengthPx: 72,
       opacity: 0.65,
       glowBlurPx: 8,
     });
@@ -553,6 +557,7 @@ describe("animation target lifecycle", () => {
     expect(useFlowStore.getState().animationPathDraft?.appearance).toEqual({
       colors: ["#22d3ee", "#2563eb"],
       widthPx: 7,
+      beamLengthPx: 72,
       opacity: 0.65,
       glowBlurPx: 8,
     });

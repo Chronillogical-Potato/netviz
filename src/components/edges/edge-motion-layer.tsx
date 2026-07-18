@@ -108,7 +108,8 @@ const boundedPhases = (
 
 export function createEdgeMotionPrimitives(
   projection: Extract<EdgeEffectProjection, { supported: true }>,
-  gradientIds: readonly string[]
+  gradientIds: readonly string[],
+  beamTrailLengthRatio?: number
 ): MotionPrimitive[] {
   const colors = projection.colors;
   const phases = boundedPhases(projection);
@@ -125,7 +126,9 @@ export function createEdgeMotionPrimitives(
         linecap: "round",
       }));
 
-    case "gradient-beam":
+    case "gradient-beam": {
+      const trailLengthRatio =
+        beamTrailLengthRatio ?? projection.trailLengthRatio;
       return [
         {
           role: "gradient-beam-base",
@@ -141,16 +144,16 @@ export function createEdgeMotionPrimitives(
               projection.travelDirection === "reverse") ||
             (projection.direction === "bidirectional" && index === 1);
           const trailStart = reversed
-            ? Math.max(0, phase - projection.trailLengthRatio)
+            ? Math.max(0, phase - trailLengthRatio)
             : phase;
           return {
             role: "gradient-beam" as const,
             stroke: `url(#${gradientIds[index + 1]})`,
             strokeWidth: projection.widthPx,
             opacity: projection.opacity,
-            dasharray: `${projection.trailLengthRatio} ${
-              1 - projection.trailLengthRatio
-            }`,
+            dasharray: `${trailLengthRatio} ${Number(
+              (1 - trailLengthRatio).toFixed(6)
+            )}`,
             dashoffset: Number((1 - trailStart).toFixed(6)),
             linecap: "round" as const,
             gradientPhase: phase,
@@ -158,6 +161,7 @@ export function createEdgeMotionPrimitives(
           };
         }),
       ];
+    }
 
     case "packet": {
       const coreLength = projection.packetLengthRatio;
@@ -300,6 +304,24 @@ const pathBeamGradientVector = (
   return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
 };
 
+const measuredBeamTrailLengthRatio = (
+  projection: Extract<
+    EdgeEffectProjection,
+    { supported: true; preset: "gradient-beam" }
+  >,
+  path: SvgAttributeTarget | null
+) => {
+  const pathLength = path?.getTotalLength?.();
+  if (!pathLength || !Number.isFinite(pathLength)) {
+    return projection.trailLengthRatio;
+  }
+  return Number(
+    Math.min(0.95, Math.max(0.02, projection.beamLengthPx / pathLength)).toFixed(
+      6
+    )
+  );
+};
+
 const gradientStops = (colors: [string, string]) =>
   [
     ["0", colors[0], 0],
@@ -342,18 +364,18 @@ const applyProjectionToSlot = (
     (_, primitiveIndex) =>
       gradientIdFor(edgeId, projection.effectId, slotIndex, primitiveIndex)
   );
-  const primitives = createEdgeMotionPrimitives(projection, gradientIds).slice(
-    0,
-    MAX_EDGE_PRIMITIVES_PER_SLOT
-  );
+  const beamSpan =
+    projection.preset === "gradient-beam"
+      ? measuredBeamTrailLengthRatio(projection, slot.paths[1])
+      : 0.1;
+  const primitives = createEdgeMotionPrimitives(
+    projection,
+    gradientIds,
+    beamSpan
+  ).slice(0, MAX_EDGE_PRIMITIVES_PER_SLOT);
   const colors = projection.colors;
   const glowBlurPx = projection.glowBlurPx;
   const glowColor = projection.glowColor;
-  const beamSpan =
-    projection.preset === "gradient-beam"
-      ? projection.trailLengthRatio
-      : 0.1;
-
   writeAttribute(slot.group, "display", undefined);
   writeAttribute(slot.group, "data-effect-id", projection.effectId);
   writeAttribute(slot.group, "data-effect-type", projection.effectType);

@@ -61,8 +61,12 @@ class FakeSvgNode {
 }
 
 class FakeMeasuredPath extends FakeSvgNode {
+  constructor(private readonly length = 100) {
+    super();
+  }
+
   getTotalLength() {
-    return 100;
+    return this.length;
   }
 
   getPointAtLength(length: number) {
@@ -200,10 +204,39 @@ describe("EdgeMotionLayer", () => {
 
     runtime.listener?.(targetFrame([clip("edge.gradient-beam")]));
 
-    expect(slot.gradients[1]?.getAttribute("x1")).toBe("35");
-    expect(slot.gradients[1]?.getAttribute("y1")).toBe("70");
+    expect(slot.gradients[1]?.getAttribute("x1")).toBe("73");
+    expect(slot.gradients[1]?.getAttribute("y1")).toBe("146");
     expect(slot.gradients[1]?.getAttribute("x2")).toBe("25");
     expect(slot.gradients[1]?.getAttribute("y2")).toBe("50");
+  });
+
+  test("keeps an authored beam length consistent across different edge lengths", () => {
+    const shortRuntime = new FakeTargetRuntime();
+    const shortSlot = fakeSlot();
+    shortSlot.paths[1] = new FakeMeasuredPath(100);
+    subscribeEdgeMotionTarget(shortRuntime, "edge-short", [shortSlot], () => ({
+      motionState: "playing",
+      gradientVector: { x1: 0, y1: 0, x2: 100, y2: 0 },
+    }));
+
+    const longRuntime = new FakeTargetRuntime();
+    const longSlot = fakeSlot();
+    longSlot.paths[1] = new FakeMeasuredPath(200);
+    subscribeEdgeMotionTarget(longRuntime, "edge-long", [longSlot], () => ({
+      motionState: "playing",
+      gradientVector: { x1: 0, y1: 0, x2: 200, y2: 0 },
+    }));
+
+    const authored = clip("edge.gradient-beam", { beamLengthPx: 40 });
+    shortRuntime.listener?.(targetFrame([authored]));
+    longRuntime.listener?.(targetFrame([authored]));
+
+    expect(shortSlot.paths[1]?.getAttribute("stroke-dasharray")).toBe(
+      "0.4 0.6"
+    );
+    expect(longSlot.paths[1]?.getAttribute("stroke-dasharray")).toBe(
+      "0.2 0.8"
+    );
   });
 
   test("reuses the exact base edge path for every motion primitive", () => {

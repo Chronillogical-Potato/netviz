@@ -438,6 +438,7 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   appearance: {
     colors: ["#ffaa40", "#9c40ff"] as [string, string],
     widthPx: 2,
+    beamLengthPx: 48,
     opacity: 1,
     glowBlurPx: 0,
   },
@@ -848,6 +849,18 @@ export function AnimationPathBuilder() {
             disabled={false}
             onChange={(widthPx) =>
               setAnimationPathAppearance({ widthPx })
+            }
+          />
+          <ValueRow
+            label="Length"
+            ariaLabel="Path beam length"
+            state={{ status: "uniform", value: draft.appearance.beamLengthPx }}
+            min={8}
+            max={240}
+            step={1}
+            disabled={false}
+            onChange={(beamLengthPx) =>
+              setAnimationPathAppearance({ beamLengthPx })
             }
           />
           <ValueRow

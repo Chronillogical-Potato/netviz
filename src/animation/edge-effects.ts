@@ -41,6 +41,7 @@ export type SupportedEdgeEffectProjection =
       effectType: "edge.gradient-beam";
       preset: "gradient-beam";
       trailLengthRatio: number;
+      beamLengthPx: number;
     })
   | (CommonEdgeEffectProjection & {
       effectType: "edge.packet";
@@ -214,6 +215,13 @@ export function projectEdgeEffect(
           0.1,
           0.02,
           0.95
+        ),
+        beamLengthPx: numberParamAliases(
+          clip,
+          ["beamLengthPx"],
+          48,
+          8,
+          240
         ),
       };
 

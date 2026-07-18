@@ -252,6 +252,7 @@ export type MotionPreference = "system" | "full" | "reduced";
 export type AnimationPathAppearance = {
   colors: [string, string];
   widthPx: number;
+  beamLengthPx: number;
   opacity: number;
   glowBlurPx: number;
 };
@@ -421,6 +422,7 @@ const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
 const defaultAnimationPathAppearance = (): AnimationPathAppearance => ({
   colors: ["#ffaa40", "#9c40ff"],
   widthPx: 2,
+  beamLengthPx: 48,
   opacity: 1,
   glowBlurPx: 0,
 });
@@ -454,6 +456,10 @@ function animationPathAppearance(
         : defaults.colors,
     widthPx:
       typeof params.widthPx === "number" ? params.widthPx : defaults.widthPx,
+    beamLengthPx:
+      typeof params.beamLengthPx === "number"
+        ? params.beamLengthPx
+        : defaults.beamLengthPx,
     opacity:
       typeof params.opacity === "number" ? params.opacity : defaults.opacity,
     glowBlurPx:
@@ -476,6 +482,7 @@ function buildAnimationPathScenario(input: {
     ...edgeEffect.params,
     colors: [...input.appearance.colors],
     widthPx: input.appearance.widthPx,
+    beamLengthPx: input.appearance.beamLengthPx,
     opacity: input.appearance.opacity,
     glowBlurPx: input.appearance.glowBlurPx,
   };
@@ -1614,6 +1621,10 @@ export const useFlowStore = create<FlowState>()(
           appearance: {
             ...appearance,
             widthPx: Math.min(24, Math.max(0.5, appearance.widthPx)),
+            beamLengthPx: Math.min(
+              240,
+              Math.max(8, appearance.beamLengthPx)
+            ),
             opacity: Math.min(1, Math.max(0, appearance.opacity)),
             glowBlurPx: Math.min(32, Math.max(0, appearance.glowBlurPx)),
           },

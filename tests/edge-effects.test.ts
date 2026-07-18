@@ -117,6 +117,7 @@ describe("edge effect projection", () => {
       opacity: 1,
       glowBlurPx: 0,
       trailLengthRatio: 0.1,
+      beamLengthPx: 48,
     });
   });
 
