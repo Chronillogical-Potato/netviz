@@ -1,27 +1,49 @@
-import type { BlockDef } from "@/blocks/registry";
 import type {
-  AppNode,
-  Group,
-  LabeledEdge,
-  Page,
-  PageContent,
-} from "@/store/flow-store";
+  FlowSnapshotV1,
+  FlowSnapshotV2,
+} from "@/animation/snapshot-migrations";
+import {
+  migrateFlowSnapshotV1,
+  normalizeFlowSnapshotV2,
+} from "@/animation/snapshot-migrations";
 
-export type FlowSnapshot = {
-  version: 1;
-  projectName?: string;
-  nodes: AppNode[];
-  edges: LabeledEdge[];
-  customBlocks: BlockDef[];
-  groups?: Group[];
-  pages?: Page[];
-  activePageId?: string;
-  pageContents?: Record<string, PageContent>;
-  turbo?: boolean;
-  animateEdges?: boolean;
-  animationSpeed?: number;
-  turboColors?: [string, string];
-};
+export type FlowSnapshot = FlowSnapshotV2;
+
+export { type FlowSnapshotV1, type FlowSnapshotV2 } from "@/animation/snapshot-migrations";
+
+export function parseFlowSnapshot(input: string | unknown): FlowSnapshotV2 {
+  const data = typeof input === "string" ? JSON.parse(input) : input;
+  if (!data || typeof data !== "object") throw new Error("Invalid snapshot shape");
+  const version = (data as { version?: unknown }).version;
+  if (version === 1) {
+    const legacy = data as FlowSnapshotV1;
+    if (!Array.isArray(legacy.nodes) || !Array.isArray(legacy.edges)) {
+      throw new Error("Invalid snapshot shape");
+    }
+    return migrateFlowSnapshotV1(legacy);
+  }
+  if (version === 2) return normalizeFlowSnapshotV2(data);
+  throw new Error("Unsupported file version");
+}
+
+export function createFlowSnapshot(
+  source: Omit<FlowSnapshotV2, "version">
+): FlowSnapshotV2 {
+  return {
+    version: 2,
+    projectName: source.projectName,
+    nodes: source.nodes,
+    edges: source.edges,
+    customBlocks: source.customBlocks,
+    groups: source.groups,
+    pages: source.pages,
+    activePageId: source.activePageId,
+    pageContents: source.pageContents,
+    scenarioDocument: source.scenarioDocument,
+    turbo: source.turbo,
+    turboColors: source.turboColors,
+  };
+}
 
 export function downloadSnapshot(snapshot: FlowSnapshot, filename?: string) {
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
@@ -43,12 +65,7 @@ export function readSnapshotFromFile(file: File): Promise<FlowSnapshot> {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(String(reader.result)) as FlowSnapshot;
-        if (data.version !== 1) throw new Error("Unsupported file version");
-        if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
-          throw new Error("Invalid snapshot shape");
-        }
-        resolve(data);
+        resolve(parseFlowSnapshot(String(reader.result)));
       } catch (e) {
         reject(e);
       }
