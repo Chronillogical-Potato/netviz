@@ -396,6 +396,34 @@ const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
     : "left";
 };
 
+function activateScenarioForEdges(
+  document: PageScenarioDocumentV1,
+  edgeIds: readonly string[]
+): PageScenarioDocumentV1 {
+  if (edgeIds.length === 0) return document;
+  const containsEveryEdge = (
+    scenario: PageScenarioDocumentV1["scenarios"][number]
+  ) =>
+    edgeIds.every((edgeId) =>
+      scenario.tracks.some(
+        (track) =>
+          track.enabled &&
+          track.property === "connection-effect" &&
+          track.target.type === "edge" &&
+          "id" in track.target &&
+          track.target.id === edgeId
+      )
+    );
+  const current = document.scenarios.find(
+    (scenario) => scenario.id === document.defaultScenarioId
+  );
+  if (current && containsEveryEdge(current)) return document;
+  const matching = document.scenarios.find(containsEveryEdge);
+  return matching
+    ? { ...document, defaultScenarioId: matching.id }
+    : document;
+}
+
 const createEmptyPageContent = (): PageContent => ({
   nodes: [],
   edges: [],
@@ -646,7 +674,17 @@ export const useFlowStore = create<FlowState>()(
         .filter((change) => change.type === "remove")
         .map((change) => change.id);
       if (removedEdgeIds.length === 0) {
-        return { edges: applyEdgeChanges(changes, s.edges) };
+        const edges = applyEdgeChanges(changes, s.edges);
+        const selectedEdgeIds = changes.flatMap((change) =>
+          change.type === "select" && change.selected ? [change.id] : []
+        );
+        return {
+          edges,
+          scenarioDocument: activateScenarioForEdges(
+            s.scenarioDocument,
+            selectedEdgeIds
+          ),
+        };
       }
       const retainedChanges = changes.filter(
         (change) => change.type !== "remove"

@@ -420,6 +420,44 @@ describe("animation target lifecycle", () => {
     ).toEqual(["proxy-server"]);
   });
 
+  test("activates the saved path that contains a selected edge", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("firewall"), node("proxy"), node("server")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("proxy-server", "proxy", "server"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().setAnimationPathName("Login");
+    useFlowStore.getState().appendAnimationPathNode("firewall");
+    useFlowStore.getState().animateDraftPath();
+    const loginScenarioId =
+      useFlowStore.getState().scenarioDocument.defaultScenarioId;
+
+    useFlowStore.getState().beginAnimationPath("proxy");
+    useFlowStore.getState().setAnimationPathName("Checkout");
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+    const checkoutScenarioId =
+      useFlowStore.getState().scenarioDocument.defaultScenarioId;
+
+    useFlowStore.setState((state) => ({
+      scenarioDocument: {
+        ...state.scenarioDocument,
+        defaultScenarioId: loginScenarioId,
+      },
+    }));
+    useFlowStore.getState().onEdgesChange([
+      { type: "select", id: "proxy-server", selected: true },
+    ]);
+
+    expect(useFlowStore.getState().scenarioDocument.defaultScenarioId).toBe(
+      checkoutScenarioId
+    );
+  });
+
   test("duplicates internal edge tracks with fresh target, track, and clip IDs", () => {
     useFlowStore.setState({
       nodes: [node("a", true), node("b", true)],
