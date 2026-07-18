@@ -27,11 +27,13 @@ function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
   const accent = ACCENT_CLASSES[accentKey];
   const isCircle = data.shape === "circle";
   const borderStyle = data.borderStyle ?? "dashed";
+  const radius =
+    !isCircle && typeof data.borderRadius === "number" ? data.borderRadius : 12;
 
   return (
     <div
       className={cn(
-        "shape-card relative h-full w-full select-none border-2",
+        "shape-card pointer-events-none relative h-full w-full select-none border-2",
         BORDER_STYLE_CLASS[borderStyle],
         !data.bgColor && accent.tile,
         !data.borderColor && accent.border,
@@ -45,12 +47,41 @@ function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
           : {}),
       }}
     >
+      {/* Transparent SVG hit target clipped to the shape geometry: the
+          whole interior is clickable, but a circle's transparent square
+          corners fall through to whatever is beneath. Rendered first so
+          the resize handles below stay on top and clickable. */}
+      <svg
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        preserveAspectRatio="none"
+      >
+        {isCircle ? (
+          <ellipse
+            cx="50%"
+            cy="50%"
+            rx="50%"
+            ry="50%"
+            fill="transparent"
+            style={{ pointerEvents: "all" }}
+          />
+        ) : (
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            rx={radius}
+            ry={radius}
+            fill="transparent"
+            style={{ pointerEvents: "all" }}
+          />
+        )}
+      </svg>
       <NodeResizer
         isVisible={selected}
-
         keepAspectRatio={isCircle}
-        lineClassName="!border-ring/40"
-        handleClassName="!h-2 !w-2 !rounded-sm !border !border-ring !bg-background"
+        lineClassName="!border-ring/70"
+        handleClassName="!h-2.5 !w-2.5 !rounded-[3px] !border !border-ring !bg-white !shadow-sm"
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />

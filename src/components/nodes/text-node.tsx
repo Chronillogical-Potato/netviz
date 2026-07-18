@@ -11,7 +11,7 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Left, key: "left" },
 ];
 
-function TextNodeComponent({ data }: NodeProps<TextNode>) {
+function TextNodeComponent({ data, selected }: NodeProps<TextNode>) {
   const accentKey = data.accent ?? "slate";
   const accent = ACCENT_CLASSES[accentKey];
 
@@ -36,7 +36,8 @@ function TextNodeComponent({ data }: NodeProps<TextNode>) {
         "text-card relative inline-flex w-max items-center rounded-md font-medium leading-tight",
         !hasFontSize && "max-w-[360px] px-2.5 py-1 text-sm",
         !data.bgColor && accent.tile,
-        !data.titleColor && accent.icon
+        !data.titleColor && accent.icon,
+        selected && "ring-1 ring-ring"
       )}
       style={style}
     >

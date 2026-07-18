@@ -1,5 +1,6 @@
-import * as LucideIcons from "lucide-react";
-import { Box, type LucideIcon } from "lucide-react";
+import * as ReIcons from "reicon-react";
+import type { IconComponent } from "reicon-react";
+import { filled, type AppIcon } from "@/ui/icons";
 
 export type IconName = string;
 
@@ -11,17 +12,19 @@ function toPascal(name: string): string {
     .join("");
 }
 
+// Maps legacy block ids and previously-saved lucide icon names to their
+// reicon equivalents so existing diagrams keep their icons.
 const LEGACY_MAP: Record<string, string> = {
   server: "Server",
   database: "Database",
   firewall: "Shield",
-  container: "Container",
+  container: "Package",
   loadbalancer: "Scale",
-  proxy: "TrendingUpDown",
+  proxy: "Route",
   cloud: "Cloud",
   globe: "Globe",
   laptop: "Laptop",
-  smartphone: "Smartphone",
+  smartphone: "Mobile",
   cpu: "Cpu",
   disk: "HardDrive",
   wifi: "Wifi",
@@ -29,37 +32,72 @@ const LEGACY_MAP: Record<string, string> = {
   users: "Users",
   box: "Box",
   layers: "Layers",
-  zap: "Zap",
-  key: "KeyRound",
+  zap: "Bolt",
+  key: "Key",
+  // lucide names that differ in reicon
+  Zap: "Bolt",
+  Container: "Package",
+  TrendingUpDown: "Route",
+  KeyRound: "Key",
+  Smartphone: "Mobile",
+  Trash2: "Trash",
+  Code2: "Code",
+  Type: "Text",
+  Hash: "Hashtag",
+  Square: "Stop",
+  Circle: "Record",
+  MousePointer2: "Cursor",
+  PenLine: "Pen",
+  Pencil: "Pen2",
+  Activity: "Activity2",
+  MoreVertical: "More2",
 };
 
-function isIconComponent(v: unknown): v is LucideIcon {
+function isIconComponent(v: unknown): v is IconComponent {
   return (
+    (typeof v === "object" || typeof v === "function") &&
     v !== null &&
-    typeof v === "object" &&
-    "$$typeof" in (v as object) &&
-    "render" in (v as object)
+    "$$typeof" in (v as object)
   );
 }
 
-export function resolveIcon(name: string | undefined): LucideIcon {
-  if (!name) return Box;
-  const lib = LucideIcons as Record<string, unknown>;
-  const direct = lib[name];
-  if (isIconComponent(direct)) return direct;
-  const legacy = LEGACY_MAP[name];
-  if (legacy && isIconComponent(lib[legacy])) return lib[legacy] as LucideIcon;
-  const pascal = toPascal(name);
-  if (isIconComponent(lib[pascal])) return lib[pascal] as LucideIcon;
-  return Box;
+const lib = ReIcons as unknown as Record<string, unknown>;
+const filledCache = new Map<string, AppIcon>();
+
+function filledByName(name: string): AppIcon | undefined {
+  const cached = filledCache.get(name);
+  if (cached) return cached;
+  const raw = lib[name];
+  if (!isIconComponent(raw)) return undefined;
+  const wrapped = filled(raw);
+  filledCache.set(name, wrapped);
+  return wrapped;
 }
 
-export const LUCIDE_ICON_NAMES: string[] = Object.keys(LucideIcons)
-  .filter((k) => {
-    if (!/^[A-Z]/.test(k) || k.endsWith("Icon")) return false;
-    const v = (LucideIcons as Record<string, unknown>)[k];
-    if (!isIconComponent(v)) return false;
-    const display = (v as { displayName?: string }).displayName;
-    return !display || display === k;
-  })
+const FALLBACK = filledByName("Box")!;
+
+// Resolve a stored icon name (possibly a legacy/lowercase alias) to its
+// canonical catalog export name, or "" if unknown.
+export function canonicalIconName(name: string | undefined): string {
+  if (!name) return "";
+  if (isIconComponent(lib[name])) return name;
+  const legacy = LEGACY_MAP[name];
+  if (legacy && isIconComponent(lib[legacy])) return legacy;
+  const pascal = toPascal(name);
+  if (isIconComponent(lib[pascal])) return pascal;
+  return "";
+}
+
+export function resolveIcon(name: string | undefined): AppIcon {
+  if (!name) return FALLBACK;
+  return (
+    filledByName(name) ??
+    filledByName(LEGACY_MAP[name] ?? "") ??
+    filledByName(toPascal(name)) ??
+    FALLBACK
+  );
+}
+
+export const ICON_NAMES: string[] = Object.keys(ReIcons)
+  .filter((k) => /^[A-Z]/.test(k) && isIconComponent(lib[k]))
   .sort();

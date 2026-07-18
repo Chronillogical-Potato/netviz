@@ -6,7 +6,7 @@ import {
   Search,
   Upload,
   X,
-} from "lucide-react";
+} from "@/ui/icons";
 import { useFlowStore } from "@/store/flow-store";
 import {
   ACCENT_CLASSES,
@@ -15,7 +15,7 @@ import {
   type IconPositionDef,
   type TextAlignDef,
 } from "@/blocks/registry";
-import { LUCIDE_ICON_NAMES, resolveIcon, type IconName } from "@/blocks/icons";
+import { ICON_NAMES, resolveIcon, type IconName } from "@/blocks/icons";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import {
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Segmented } from "@/ui/segmented";
 import { cn } from "@/lib/utils";
 
 const ACCENTS: Accent[] = [
@@ -83,14 +84,14 @@ function ColorsSection({ targets }: { targets: ColorTarget[] }) {
               type="button"
               onClick={() => setActiveKey(t.key)}
               className={cn(
-                "flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs transition-colors",
+                "flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
                 selected
-                  ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-accent text-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
               )}
             >
               <span
-                className="h-3 w-3 rounded-sm border border-border"
+                className="h-3 w-3 rounded-sm ring-1 ring-inset ring-border"
                 style={t.value ? { backgroundColor: t.value } : undefined}
               />
               {t.label}
@@ -110,8 +111,9 @@ function ColorsSection({ targets }: { targets: ColorTarget[] }) {
               title={p.label}
               aria-label={p.label}
               className={cn(
-                "flex h-6 w-6 items-center justify-center rounded-md border border-border transition-colors",
-                selected && "ring-1 ring-ring"
+                "flex h-6 w-6 items-center justify-center rounded-md transition-shadow",
+                isNone && "bg-muted",
+                selected && "ring-2 ring-ring ring-offset-1 ring-offset-background"
               )}
               style={isNone ? undefined : { backgroundColor: p.hex ?? undefined }}
             >
@@ -146,11 +148,16 @@ export function CustomBlockDialog({
   const [customIcon, setCustomIcon] = useState<string | undefined>(undefined);
   const iconInputRef = useRef<HTMLInputElement>(null);
 
+  const MAX_VISIBLE_ICONS = 240;
   const filteredIcons = useMemo(() => {
     const q = iconQuery.trim().toLowerCase();
-    if (!q) return LUCIDE_ICON_NAMES;
-    return LUCIDE_ICON_NAMES.filter((n) => n.toLowerCase().includes(q));
+    if (!q) return ICON_NAMES;
+    return ICON_NAMES.filter((n) => n.toLowerCase().includes(q));
   }, [iconQuery]);
+  const shownIcons =
+    filteredIcons.length > MAX_VISIBLE_ICONS
+      ? filteredIcons.slice(0, MAX_VISIBLE_ICONS)
+      : filteredIcons;
 
   const reset = () => {
     setLabel("");
@@ -242,19 +249,19 @@ export function CustomBlockDialog({
                 className="h-8 pl-7 text-xs"
               />
             </div>
-            <div className="grid max-h-44 grid-cols-10 gap-1 overflow-y-auto rounded-md border border-border bg-background/40 p-1.5">
+            <div className="grid max-h-44 grid-cols-10 gap-1 overflow-y-auto rounded-lg bg-muted/60 p-1.5">
               <button
                 type="button"
                 onClick={() => setIconName("")}
                 title="None"
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                  iconName === "" && "bg-accent text-foreground ring-1 ring-ring"
+                  iconName === "" && "bg-accent text-foreground"
                 )}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              {filteredIcons.map((name) => {
+              {shownIcons.map((name) => {
                 const Ic = resolveIcon(name);
                 return (
                   <button
@@ -264,21 +271,26 @@ export function CustomBlockDialog({
                     title={name}
                     className={cn(
                       "flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                      iconName === name &&
-                        "bg-accent text-foreground ring-1 ring-ring"
+                      iconName === name && "bg-accent text-foreground"
                     )}
                   >
                     <Ic className="h-3.5 w-3.5" />
                   </button>
                 );
               })}
+              {filteredIcons.length > shownIcons.length && (
+                <p className="col-span-10 px-2 py-1.5 text-center text-[10px] text-muted-foreground/70">
+                  +{filteredIcons.length - shownIcons.length} more — search to
+                  narrow
+                </p>
+              )}
             </div>
           </div>
 
           <div className="grid gap-2">
             <Label>Custom icon (optional)</Label>
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background/40">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                 {customIcon ? (
                   <img src={customIcon} alt="" className="h-full w-full object-cover" />
                 ) : (
@@ -298,7 +310,7 @@ export function CustomBlockDialog({
                 <button
                   type="button"
                   onClick={() => setCustomIcon(undefined)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   aria-label="Remove"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -329,9 +341,9 @@ export function CustomBlockDialog({
                     type="button"
                     onClick={() => setAccent(a)}
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-md border border-border transition-colors",
+                      "flex h-8 w-8 items-center justify-center rounded-md transition-shadow",
                       c.tile,
-                      accent === a && "ring-1 ring-ring"
+                      accent === a && "ring-2 ring-ring ring-offset-1 ring-offset-background"
                     )}
                     aria-label={a}
                   >
@@ -344,48 +356,27 @@ export function CustomBlockDialog({
 
           <div className="grid gap-2">
             <Label>Icon position</Label>
-            <div className="flex gap-1">
-              {ICON_POSITIONS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setIconPosition(p.id)}
-                  className={cn(
-                    "flex-1 rounded-md border border-border px-2 py-1 text-xs capitalize transition-colors",
-                    iconPosition === p.id
-                      ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              value={iconPosition}
+              onChange={setIconPosition}
+              options={ICON_POSITIONS.map((p) => ({
+                value: p.id,
+                label: p.label,
+              }))}
+            />
           </div>
 
           <div className="grid gap-2">
             <Label>Text align</Label>
-            <div className="flex gap-1">
-              {TEXT_ALIGNS.map((a) => {
-                const Ic = a.icon;
-                return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setTextAlign(a.id)}
-                    className={cn(
-                      "flex h-8 flex-1 items-center justify-center rounded-md border border-border transition-colors",
-                      textAlign === a.id
-                        ? "bg-accent text-accent-foreground ring-1 ring-ring"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={a.id}
-                  >
-                    <Ic className="h-4 w-4" />
-                  </button>
-                );
-              })}
-            </div>
+            <Segmented
+              value={textAlign}
+              onChange={setTextAlign}
+              options={TEXT_ALIGNS.map((a) => ({
+                value: a.id,
+                icon: a.icon,
+                title: a.id,
+              }))}
+            />
           </div>
 
           <ColorsSection

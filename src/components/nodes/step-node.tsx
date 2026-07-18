@@ -39,8 +39,8 @@ function StepNodeComponent({ data, selected }: NodeProps<StepNode>) {
         isVisible={selected}
 
         keepAspectRatio
-        lineClassName="!border-ring/40"
-        handleClassName="!h-2 !w-2 !rounded-sm !border !border-ring !bg-background"
+        lineClassName="!border-ring/70"
+        handleClassName="!h-2.5 !w-2.5 !rounded-[3px] !border !border-ring !bg-white !shadow-sm"
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />
