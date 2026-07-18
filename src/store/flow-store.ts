@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
+import {
+  persist,
+  type PersistStorage,
+  type StorageValue,
+} from "zustand/middleware";
 import { temporal } from "zundo";
 import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
 import {
@@ -323,12 +327,48 @@ function descendantGroupIds(groups: Group[], rootId: string): Set<string> {
   return result;
 }
 
-const idbStorage: StateStorage = {
-  getItem: async (name) => ((await idbGet(name)) as string | undefined) ?? null,
-  setItem: async (name, value) => {
-    await idbSet(name, value);
+// Persisting on every set() would JSON.stringify the whole workspace
+// (all pages, base64 images) 60×/s during drags. Debounce writes and only
+// serialize when the timer fires.
+type PersistedFlowState = Record<string, unknown>;
+const PERSIST_DEBOUNCE_MS = 400;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWrite: {
+  name: string;
+  value: StorageValue<PersistedFlowState>;
+} | null = null;
+
+function flushPersist() {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  const w = pendingWrite;
+  pendingWrite = null;
+  if (w) void idbSet(w.name, JSON.stringify(w.value));
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", flushPersist);
+}
+
+const idbStorage: PersistStorage<PersistedFlowState> = {
+  getItem: async (name) => {
+    const raw = (await idbGet(name)) as string | undefined;
+    return raw ? (JSON.parse(raw) as StorageValue<PersistedFlowState>) : null;
+  },
+  setItem: (name, value) => {
+    pendingWrite = { name, value };
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
   },
   removeItem: async (name) => {
+    // Cancel any pending write so it can't resurrect cleared data.
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    pendingWrite = null;
     await idbDel(name);
   },
 };
@@ -1107,7 +1147,7 @@ export const useFlowStore = create<FlowState>()(
     ),
     {
       name: "netviz-store-v1",
-      storage: createJSONStorage(() => idbStorage),
+      storage: idbStorage,
       partialize: (s) => ({
         nodes: s.nodes,
         edges: s.edges,
