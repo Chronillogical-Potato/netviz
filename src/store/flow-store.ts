@@ -57,9 +57,7 @@ import {
   REQUEST_FLOW_HOP_DELAY_MS,
   type NodeBorderEntrySide,
 } from "@/animation/gradient-beam";
-import {
-  findAuthoredCustomPaths,
-} from "@/animation/custom-path";
+import { findAuthoredCustomPaths } from "@/animation/custom-path";
 import {
   buildRequestFlow,
   buildSelectedRequestFlow,
@@ -247,9 +245,16 @@ type Snapshot = {
 
 export type WorkMode = "design" | "animation" | "preview";
 export type MotionPreference = "system" | "full" | "reduced";
+export type AnimationPathAppearance = {
+  colors: [string, string];
+  widthPx: number;
+  opacity: number;
+  glowBlurPx: number;
+};
 export type AnimationPathDraft = {
   scenarioId: string | null;
   name: string;
+  appearance: AnimationPathAppearance;
   nodeIds: string[];
   edgeIds: string[];
   error: string | null;
@@ -359,6 +364,9 @@ type FlowState = Snapshot & {
   animateSelectedPath: () => void;
   beginAnimationPath: (startNodeId?: string) => void;
   setAnimationPathName: (name: string) => void;
+  setAnimationPathAppearance: (
+    patch: Partial<AnimationPathAppearance>
+  ) => void;
   appendAnimationPathNode: (nodeId: string) => void;
   undoAnimationPathNode: () => void;
   cancelAnimationPath: () => void;
@@ -395,6 +403,51 @@ const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
     ? side
     : "left";
 };
+
+const defaultAnimationPathAppearance = (): AnimationPathAppearance => ({
+  colors: ["#ffaa40", "#9c40ff"],
+  widthPx: 2,
+  opacity: 1,
+  glowBlurPx: 0,
+});
+
+function animationPathAppearance(
+  document: PageScenarioDocumentV1,
+  scenarioId: string
+): AnimationPathAppearance {
+  const defaults = defaultAnimationPathAppearance();
+  const clip = document.scenarios
+    .find((scenario) => scenario.id === scenarioId)
+    ?.tracks.find(
+      (track) =>
+        track.property === "connection-effect" &&
+        track.clips.some(
+          (candidate) => candidate.effect.type === "edge.gradient-beam"
+        )
+    )
+    ?.clips.find(
+      (candidate) => candidate.effect.type === "edge.gradient-beam"
+    );
+  if (!clip) return defaults;
+  const params = clip.effect.params;
+  const colors = params.colors;
+  return {
+    colors:
+      Array.isArray(colors) &&
+      typeof colors[0] === "string" &&
+      typeof colors[1] === "string"
+        ? [colors[0], colors[1]]
+        : defaults.colors,
+    widthPx:
+      typeof params.widthPx === "number" ? params.widthPx : defaults.widthPx,
+    opacity:
+      typeof params.opacity === "number" ? params.opacity : defaults.opacity,
+    glowBlurPx:
+      typeof params.glowBlurPx === "number"
+        ? params.glowBlurPx
+        : defaults.glowBlurPx,
+  };
+}
 
 function activateScenarioForEdges(
   document: PageScenarioDocumentV1,
@@ -1279,6 +1332,8 @@ export const useFlowStore = create<FlowState>()(
         animationPathDraft: {
           scenarioId: existingDraft?.scenarioId ?? null,
           name: existingDraft?.name ?? `Custom path ${pathNumber}`,
+          appearance:
+            existingDraft?.appearance ?? defaultAnimationPathAppearance(),
           nodeIds: hasStart ? [startNodeId] : [],
           edgeIds: [],
           error: null,
@@ -1299,6 +1354,30 @@ export const useFlowStore = create<FlowState>()(
         ? { animationPathDraft: { ...s.animationPathDraft, name } }
         : s
     ),
+
+  setAnimationPathAppearance: (patch) =>
+    set((s) => {
+      const draft = s.animationPathDraft;
+      if (!draft) return s;
+      const appearance = {
+        ...draft.appearance,
+        ...patch,
+        colors: patch.colors
+          ? ([...patch.colors] as [string, string])
+          : draft.appearance.colors,
+      };
+      return {
+        animationPathDraft: {
+          ...draft,
+          appearance: {
+            ...appearance,
+            widthPx: Math.min(24, Math.max(0.5, appearance.widthPx)),
+            opacity: Math.min(1, Math.max(0, appearance.opacity)),
+            glowBlurPx: Math.min(32, Math.max(0, appearance.glowBlurPx)),
+          },
+        },
+      };
+    }),
 
   appendAnimationPathNode: (nodeId) =>
     set((s) => {
@@ -1325,7 +1404,6 @@ export const useFlowStore = create<FlowState>()(
           },
         };
       }
-
       const edge = s.edges.find(
         (candidate) =>
           candidate.source === lastNodeId && candidate.target === nodeId
@@ -1381,6 +1459,10 @@ export const useFlowStore = create<FlowState>()(
           ...path,
           name:
             path.name === "Default scenario" ? "Custom path" : path.name,
+          appearance: animationPathAppearance(
+            s.scenarioDocument,
+            path.scenarioId
+          ),
           error: null,
         },
         nodes: s.nodes.map((node) =>
@@ -1416,6 +1498,15 @@ export const useFlowStore = create<FlowState>()(
       const name =
         draft?.name.trim() ||
         `Custom path ${findAuthoredCustomPaths(s.scenarioDocument, s.edges).length + 1}`;
+      const appearance = draft?.appearance ?? defaultAnimationPathAppearance();
+      const edgeEffect = createGradientBeamEffect();
+      edgeEffect.params = {
+        ...edgeEffect.params,
+        colors: [...appearance.colors],
+        widthPx: appearance.widthPx,
+        opacity: appearance.opacity,
+        glowBlurPx: appearance.glowBlurPx,
+      };
 
       let scenarioDocument = createDefaultScenarioDocument({
         id: draft?.scenarioId ?? undefined,
@@ -1424,7 +1515,7 @@ export const useFlowStore = create<FlowState>()(
       edgeIds.forEach((edgeId, index) => {
         scenarioDocument = applyEdgeEffect(scenarioDocument, {
           edgeIds: [edgeId],
-          effect: createGradientBeamEffect(),
+          effect: edgeEffect,
           clip: createGradientBeamClip(
             REQUEST_FLOW_EDGE_DELAY_MS +
               index * REQUEST_FLOW_HOP_DELAY_MS
@@ -1436,9 +1527,16 @@ export const useFlowStore = create<FlowState>()(
           index === 0
             ? undefined
             : s.edges.find((edge) => edge.id === edgeIds[index - 1]);
+        const nodeEffect = createNodeBorderEffect(
+          nodeEntrySide(incomingEdge)
+        );
+        nodeEffect.params = {
+          ...nodeEffect.params,
+          colors: [...appearance.colors],
+        };
         scenarioDocument = applyNodeEffect(scenarioDocument, {
           nodeIds: [nodeId],
-          effect: createNodeBorderEffect(nodeEntrySide(incomingEdge)),
+          effect: nodeEffect,
           clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
         });
       });

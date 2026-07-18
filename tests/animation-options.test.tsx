@@ -62,6 +62,12 @@ describe("AnimationOptions", () => {
     expect(markup).toContain("Click the first block on the canvas");
     expect(markup).toContain("Path name");
     expect(markup).toContain('aria-label="Path name"');
+    expect(markup).toContain("Appearance");
+    expect(markup).toContain('aria-label="Path start color"');
+    expect(markup).toContain('aria-label="Path end color"');
+    expect(markup).toContain('aria-label="Path animation width"');
+    expect(markup).toContain('aria-label="Path animation opacity"');
+    expect(markup).toContain('aria-label="Path animation glow"');
     expect(markup).toContain("Save &amp; play");
     expect(markup).toContain("Undo last");
   });

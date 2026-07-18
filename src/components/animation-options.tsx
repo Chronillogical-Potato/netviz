@@ -434,6 +434,12 @@ function playAllAnimations() {
 const EMPTY_ANIMATION_PATH_DRAFT = {
   scenarioId: null,
   name: "",
+  appearance: {
+    colors: ["#ffaa40", "#9c40ff"] as [string, string],
+    widthPx: 2,
+    opacity: 1,
+    glowBlurPx: 0,
+  },
   nodeIds: [],
   edgeIds: [],
   error: null,
@@ -506,10 +512,28 @@ export function ExistingAnimationPath() {
             .map((id) => nodes.find((node) => node.id === id))
             .filter((node) => node !== undefined)
             .map(getNodeDisplayName);
+          const colors = document.scenarios
+            .find((scenario) => scenario.id === path.scenarioId)
+            ?.tracks.find(
+              (track) =>
+                track.property === "connection-effect" &&
+                track.clips[0]?.effect.type === "edge.gradient-beam"
+            )?.clips[0]?.effect.params.colors;
+          const gradientColors =
+            Array.isArray(colors) &&
+            typeof colors[0] === "string" &&
+            typeof colors[1] === "string"
+              ? [colors[0], colors[1]]
+              : ["#ffaa40", "#9c40ff"];
           return (
             <div key={path.scenarioId} className="rounded-lg bg-input p-2.5">
               <div className="flex items-center gap-2">
-                <span className="h-[2px] w-5 shrink-0 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+                <span
+                  className="h-[2px] w-5 shrink-0 rounded-full"
+                  style={{
+                    backgroundImage: `linear-gradient(to right, ${gradientColors[0]}, ${gradientColors[1]})`,
+                  }}
+                />
                 <span className="truncate text-[11px] font-medium text-foreground">
                   {path.name === "Default scenario" ? "Custom path" : path.name}
                 </span>
@@ -625,6 +649,9 @@ export function AnimationPathBuilder() {
   const setAnimationPathName = useFlowStore(
     (state) => state.setAnimationPathName
   );
+  const setAnimationPathAppearance = useFlowStore(
+    (state) => state.setAnimationPathAppearance
+  );
   const animateDraftPath = useFlowStore((state) => state.animateDraftPath);
 
   const pathNodes = draft.nodeIds
@@ -700,6 +727,74 @@ export function AnimationPathBuilder() {
           >
             Start over
           </Button>
+        </div>
+      </div>
+
+      <div className="border-b border-border px-4 py-3.5">
+        <p className="pb-2.5 text-xs font-semibold text-foreground">
+          Appearance
+        </p>
+        <div className="flex flex-col gap-2">
+          <Row label="Start">
+            <ColorField
+              label="Path start color"
+              value={draft.appearance.colors[0]}
+              disabled={false}
+              onChange={(color) =>
+                setAnimationPathAppearance({
+                  colors: [color, draft.appearance.colors[1]],
+                })
+              }
+            />
+          </Row>
+          <Row label="End">
+            <ColorField
+              label="Path end color"
+              value={draft.appearance.colors[1]}
+              disabled={false}
+              onChange={(color) =>
+                setAnimationPathAppearance({
+                  colors: [draft.appearance.colors[0], color],
+                })
+              }
+            />
+          </Row>
+          <ValueRow
+            label="Width"
+            ariaLabel="Path animation width"
+            state={{ status: "uniform", value: draft.appearance.widthPx }}
+            min={0.5}
+            max={24}
+            step={0.5}
+            disabled={false}
+            onChange={(widthPx) =>
+              setAnimationPathAppearance({ widthPx })
+            }
+          />
+          <ValueRow
+            label="Opacity"
+            ariaLabel="Path animation opacity"
+            state={{ status: "uniform", value: draft.appearance.opacity }}
+            min={0}
+            max={1}
+            step={0.05}
+            disabled={false}
+            onChange={(opacity) =>
+              setAnimationPathAppearance({ opacity })
+            }
+          />
+          <ValueRow
+            label="Glow"
+            ariaLabel="Path animation glow"
+            state={{ status: "uniform", value: draft.appearance.glowBlurPx }}
+            min={0}
+            max={32}
+            step={1}
+            disabled={false}
+            onChange={(glowBlurPx) =>
+              setAnimationPathAppearance({ glowBlurPx })
+            }
+          />
         </div>
       </div>
 

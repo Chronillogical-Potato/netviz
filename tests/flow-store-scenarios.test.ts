@@ -306,6 +306,12 @@ describe("animation target lifecycle", () => {
     expect(useFlowStore.getState().animationPathDraft).toEqual({
       scenarioId: null,
       name: "Custom path 1",
+      appearance: {
+        colors: ["#ffaa40", "#9c40ff"],
+        widthPx: 2,
+        opacity: 1,
+        glowBlurPx: 0,
+      },
       nodeIds: ["user", "firewall"],
       edgeIds: ["user-firewall"],
       error: "Choose a directly connected outgoing block.",
@@ -367,9 +373,59 @@ describe("animation target lifecycle", () => {
     expect(useFlowStore.getState().animationPathDraft).toEqual({
       scenarioId: scenario.id,
       name: "Custom path 1",
+      appearance: {
+        colors: ["#ffaa40", "#9c40ff"],
+        widthPx: 2,
+        opacity: 1,
+        glowBlurPx: 0,
+      },
       nodeIds: ["user", "firewall", "proxy"],
       edgeIds: ["user-firewall", "firewall-proxy"],
       error: null,
+    });
+  });
+
+  test("saves and reloads custom path appearance", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("server")],
+      edges: [edge("user-server", "user", "server")],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().setAnimationPathAppearance({
+      colors: ["#22d3ee", "#2563eb"],
+      widthPx: 7,
+      opacity: 0.65,
+      glowBlurPx: 8,
+    });
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const edgeClip = scenario.tracks.find(
+      (track) => track.property === "connection-effect"
+    )?.clips[0];
+    expect(edgeClip?.effect.params).toMatchObject({
+      colors: ["#22d3ee", "#2563eb"],
+      widthPx: 7,
+      opacity: 0.65,
+      glowBlurPx: 8,
+    });
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "node-effect")
+        .map((track) => track.clips[0].effect.params.colors)
+    ).toEqual([
+      ["#22d3ee", "#2563eb"],
+      ["#22d3ee", "#2563eb"],
+    ]);
+
+    useFlowStore.getState().editAnimationPath(scenario.id);
+    expect(useFlowStore.getState().animationPathDraft?.appearance).toEqual({
+      colors: ["#22d3ee", "#2563eb"],
+      widthPx: 7,
+      opacity: 0.65,
+      glowBlurPx: 8,
     });
   });
 
