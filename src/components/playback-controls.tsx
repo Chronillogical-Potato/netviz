@@ -9,6 +9,7 @@ import {
   scenarioRuntime,
 } from "@/animation/runtime-instance";
 import type { TransportSnapshot } from "@/animation/runtime";
+import { normalizeGradientBeamDefaults } from "@/animation/gradient-beam";
 import { cn } from "@/lib/utils";
 import {
   useFlowStore,
@@ -89,10 +90,26 @@ function useTransportSnapshot(): TransportSnapshot {
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
 
-function playAllConnections() {
+function prepareAllConnections() {
+  const state = useFlowStore.getState();
+  const scenarioDocument = normalizeGradientBeamDefaults(
+    state.scenarioDocument
+  );
+  if (scenarioDocument !== state.scenarioDocument) {
+    useFlowStore.setState({ scenarioDocument });
+  }
   scenarioRuntime.setTargetScope(null);
   scenarioRuntime.setLoop(true);
+}
+
+function playAllConnections() {
+  prepareAllConnections();
   scenarioRuntime.play();
+}
+
+function restartAllConnections() {
+  prepareAllConnections();
+  scenarioRuntime.restart();
 }
 
 export function PlaybackControls({
@@ -131,9 +148,7 @@ export function PlaybackControls({
 
       event.preventDefault();
       if (shortcut === "restart") {
-        scenarioRuntime.setTargetScope(null);
-        scenarioRuntime.setLoop(true);
-        scenarioRuntime.restart();
+        restartAllConnections();
         return;
       }
 
@@ -215,11 +230,7 @@ export function PlaybackControls({
           aria-label="Restart animation"
           aria-keyshortcuts="Home"
           disabled={!hasScenario}
-          onClick={() => {
-            scenarioRuntime.setTargetScope(null);
-            scenarioRuntime.setLoop(true);
-            scenarioRuntime.restart();
-          }}
+          onClick={restartAllConnections}
         >
           <Restart className="h-3.5 w-3.5" />
         </Button>

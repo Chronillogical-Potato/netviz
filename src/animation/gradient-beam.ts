@@ -2,7 +2,11 @@ import {
   fitScenarioToClips,
   type ScenarioClipPatchV1,
 } from "./scenario-document";
-import type { PageScenarioDocumentV1, ScenarioEffectV1 } from "./model";
+import type {
+  PageScenarioDocumentV1,
+  ScenarioEffectV1,
+  ScenarioV1,
+} from "./model";
 
 export const GRADIENT_BEAM_DURATION_MS = 1_500;
 export const NODE_BORDER_DURATION_MS = 800;
@@ -53,6 +57,76 @@ export function createNodeBorderClip(startMs = 0): ScenarioClipPatchV1 {
   };
 }
 
+const uniqueStarts = (
+  scenario: ScenarioV1,
+  property: string,
+  effectType: string
+) =>
+  [
+    ...new Set(
+      scenario.tracks
+        .filter((track) => track.property === property)
+        .flatMap((track) =>
+          track.clips
+            .filter((clip) => clip.effect.type === effectType)
+            .map((clip) => clip.startMs)
+        )
+    ),
+  ].sort((left, right) => left - right);
+
+const repairOverlappingRequestFlow = (scenario: ScenarioV1): ScenarioV1 => {
+  const edgeStarts = uniqueStarts(
+    scenario,
+    "connection-effect",
+    "edge.gradient-beam"
+  );
+  const nodeStarts = uniqueStarts(
+    scenario,
+    "node-effect",
+    "node.border-beam"
+  );
+  const nodeStartSet = new Set(nodeStarts);
+  if (
+    edgeStarts.length === 0 ||
+    nodeStarts.length !== edgeStarts.length + 1 ||
+    !edgeStarts.every((startMs) => nodeStartSet.has(startMs))
+  ) {
+    return scenario;
+  }
+
+  const edgeSchedule = new Map(
+    edgeStarts.map((startMs, index) => [
+      startMs,
+      REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS,
+    ])
+  );
+  const nodeSchedule = new Map(
+    nodeStarts.map((startMs, index) => [
+      startMs,
+      index * REQUEST_FLOW_HOP_DELAY_MS,
+    ])
+  );
+  const tracks = scenario.tracks.map((track) => ({
+    ...track,
+    clips: track.clips.map((clip) => {
+      const schedule =
+        track.property === "connection-effect" &&
+        clip.effect.type === "edge.gradient-beam"
+          ? edgeSchedule
+          : track.property === "node-effect" &&
+              clip.effect.type === "node.border-beam"
+            ? nodeSchedule
+            : null;
+      const startMs = schedule?.get(clip.startMs);
+      return startMs === undefined || startMs === clip.startMs
+        ? clip
+        : { ...clip, startMs };
+    }),
+  }));
+
+  return fitScenarioToClips({ ...scenario, tracks });
+};
+
 export function normalizeGradientBeamDefaults(
   document: PageScenarioDocumentV1
 ): PageScenarioDocumentV1 {
@@ -76,7 +150,10 @@ export function normalizeGradientBeamDefaults(
         };
       }),
     }));
-    return fitScenarioToClips({ ...scenario, tracks });
+    const normalized = fitScenarioToClips({ ...scenario, tracks });
+    const repaired = repairOverlappingRequestFlow(normalized);
+    if (repaired !== normalized) changed = true;
+    return repaired;
   });
   return changed ? { ...document, scenarios } : document;
 }

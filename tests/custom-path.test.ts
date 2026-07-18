@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { PageScenarioDocumentV1, ScenarioTrackV1 } from "../src/animation/model";
 import { findAuthoredCustomPath } from "../src/animation/custom-path";
+import { normalizeGradientBeamDefaults } from "../src/animation/gradient-beam";
 
 const track = (edgeId: string, startMs: number): ScenarioTrackV1 => ({
   id: `track-${edgeId}`,
@@ -16,6 +17,21 @@ const track = (edgeId: string, startMs: number): ScenarioTrackV1 => ({
       repeatCount: 0,
       repeatDelayMs: 0,
       effect: { type: "edge.gradient-beam", params: {} },
+    },
+  ],
+});
+
+const nodeTrack = (nodeId: string, startMs: number): ScenarioTrackV1 => ({
+  ...track(nodeId, startMs),
+  id: `track-${nodeId}`,
+  target: { type: "node", id: nodeId },
+  property: "node-effect",
+  clips: [
+    {
+      ...track(nodeId, startMs).clips[0],
+      id: `clip-${nodeId}`,
+      durationMs: 800,
+      effect: { type: "node.border-beam", params: {} },
     },
   ],
 });
@@ -74,5 +90,30 @@ describe("authored custom paths", () => {
         edges
       )
     ).toBeNull();
+  });
+
+  test("repairs persisted paths whose edges overlap their block shimmer", () => {
+    const normalized = normalizeGradientBeamDefaults(
+      document([
+        track("user-firewall", 0),
+        track("firewall-proxy", 1_500),
+        nodeTrack("user", 0),
+        nodeTrack("firewall", 1_500),
+        nodeTrack("proxy", 3_000),
+      ])
+    );
+    const scenario = normalized.scenarios[0];
+
+    expect(
+      scenario.tracks
+        .filter((item) => item.property === "connection-effect")
+        .map((item) => item.clips[0].startMs)
+    ).toEqual([800, 3_100]);
+    expect(
+      scenario.tracks
+        .filter((item) => item.property === "node-effect")
+        .map((item) => item.clips[0].startMs)
+    ).toEqual([0, 2_300, 4_600]);
+    expect(scenario.durationMs).toBe(5_400);
   });
 });
