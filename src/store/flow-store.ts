@@ -381,6 +381,10 @@ type FlowState = Snapshot & {
   cancelAnimationPath: () => void;
   editAnimationPath: (scenarioId?: string) => void;
   activateAnimationPath: (scenarioId: string) => void;
+  reorderAnimationPath: (
+    scenarioId: string,
+    beforeScenarioId: string | null
+  ) => void;
   animateDraftPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
@@ -1725,6 +1729,46 @@ export const useFlowStore = create<FlowState>()(
           }
         : s
     ),
+
+  reorderAnimationPath: (scenarioId, beforeScenarioId) =>
+    set((s) => {
+      const pathIds = findAuthoredCustomPaths(
+        s.scenarioDocument,
+        s.edges
+      ).map((path) => path.scenarioId);
+      if (
+        !pathIds.includes(scenarioId) ||
+        scenarioId === beforeScenarioId
+      ) {
+        return s;
+      }
+      const reordered = pathIds.filter((id) => id !== scenarioId);
+      const beforeIndex = beforeScenarioId
+        ? reordered.indexOf(beforeScenarioId)
+        : reordered.length;
+      reordered.splice(
+        beforeIndex < 0 ? reordered.length : beforeIndex,
+        0,
+        scenarioId
+      );
+      if (reordered.every((id, index) => id === pathIds[index])) return s;
+
+      const scenariosById = new Map(
+        s.scenarioDocument.scenarios.map((scenario) => [scenario.id, scenario])
+      );
+      const pathIdSet = new Set(pathIds);
+      let pathIndex = 0;
+      return {
+        scenarioDocument: {
+          ...s.scenarioDocument,
+          scenarios: s.scenarioDocument.scenarios.map((scenario) =>
+            pathIdSet.has(scenario.id)
+              ? scenariosById.get(reordered[pathIndex++]) ?? scenario
+              : scenario
+          ),
+        },
+      };
+    }),
 
   animateDraftPath: () =>
     set((s) => {

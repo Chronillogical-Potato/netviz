@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import { scenarioRuntime } from "../src/animation/runtime-instance";
+import { findAuthoredCustomPaths } from "../src/animation/custom-path";
 import type { FlowSnapshotV2 } from "../src/animation/snapshot-migrations";
 import {
   DEFAULT_TURBO_COLORS,
@@ -233,6 +234,32 @@ describe("animation target lifecycle", () => {
     expect(defaultScenario?.name).toBe("Load-balanced requests");
     expect(startsAt(edgeToA?.id)).toBeNumber();
     expect(startsAt(edgeToB?.id)).toBeGreaterThan(startsAt(edgeToA?.id) ?? 0);
+  });
+
+  test("reorders custom paths without moving the template preview scenario", () => {
+    useFlowStore.getState().insertTemplate("load-balanced-web-app", {
+      x: 0,
+      y: 0,
+    });
+    const state = useFlowStore.getState();
+    const paths = findAuthoredCustomPaths(
+      state.scenarioDocument,
+      state.edges
+    );
+
+    useFlowStore
+      .getState()
+      .reorderAnimationPath(paths[1].scenarioId, paths[0].scenarioId);
+
+    expect(
+      useFlowStore
+        .getState()
+        .scenarioDocument.scenarios.map((scenario) => scenario.name)
+    ).toEqual([
+      "Load-balanced requests",
+      "Request via Server B",
+      "Request via Server A",
+    ]);
   });
 
   test("animates every connection with one short gradient beam", () => {

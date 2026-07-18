@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -445,6 +446,25 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   error: null,
 };
 
+const ANIMATION_PATH_DRAG_MIME = "application/x-netviz-animation-path";
+
+export function AnimationPathDragHandle({ name }: { name: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={`Drag ${name} to reorder`}
+      title="Drag to reorder"
+      className="flex h-5 w-3 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 active:cursor-grabbing"
+    >
+      <svg viewBox="0 0 8 14" className="h-3.5 w-2" aria-hidden="true">
+        {[2, 7, 12].flatMap((y) => [2, 6].map((x) => (
+          <circle key={`${x}-${y}`} cx={x} cy={y} r="1" fill="currentColor" />
+        )))}
+      </svg>
+    </span>
+  );
+}
+
 export function AnimationOverview() {
   const edgeCount = useFlowStore((state) => state.edges.length);
   const animateAllEdges = useFlowStore((state) => state.animateAllEdges);
@@ -494,11 +514,37 @@ export function ExistingAnimationPath() {
   const activateAnimationPath = useFlowStore(
     (state) => state.activateAnimationPath
   );
+  const reorderAnimationPath = useFlowStore(
+    (state) => state.reorderAnimationPath
+  );
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropBeforeId, setDropBeforeId] = useState<
+    string | null | undefined
+  >(undefined);
   const paths = useMemo(
     () => findAuthoredCustomPaths(document, edges),
     [document, edges]
   );
   if (paths.length === 0) return null;
+
+  const clearDrag = () => {
+    setDraggingId(null);
+    setDropBeforeId(undefined);
+  };
+
+  const updateDropTarget = (
+    event: DragEvent<HTMLDivElement>,
+    index: number
+  ) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setDropBeforeId(
+      event.clientY < bounds.top + bounds.height / 2
+        ? paths[index].scenarioId
+        : paths[index + 1]?.scenarioId ?? null
+    );
+  };
 
   return (
     <div
@@ -507,7 +553,7 @@ export function ExistingAnimationPath() {
     >
       <p className="text-xs font-semibold text-foreground">Animations</p>
       <div className="mt-2 space-y-2">
-        {paths.map((path) => {
+        {paths.map((path, index) => {
           const names = path.nodeIds
             .map((id) => nodes.find((node) => node.id === id))
             .filter((node) => node !== undefined)
@@ -526,8 +572,41 @@ export function ExistingAnimationPath() {
               ? [colors[0], colors[1]]
               : ["#ffaa40", "#9c40ff"];
           return (
-            <div key={path.scenarioId} className="rounded-lg bg-input p-2.5">
+            <div
+              key={path.scenarioId}
+              draggable
+              data-animation-path-card={path.scenarioId}
+              onDragStart={(event) => {
+                event.dataTransfer.setData(
+                  ANIMATION_PATH_DRAG_MIME,
+                  path.scenarioId
+                );
+                event.dataTransfer.effectAllowed = "move";
+                setDraggingId(path.scenarioId);
+              }}
+              onDragOver={(event) => updateDropTarget(event, index)}
+              onDrop={(event) => {
+                event.preventDefault();
+                const dragged =
+                  event.dataTransfer.getData(ANIMATION_PATH_DRAG_MIME) ||
+                  draggingId;
+                if (dragged) reorderAnimationPath(dragged, dropBeforeId ?? null);
+                clearDrag();
+              }}
+              onDragEnd={clearDrag}
+              className={cn(
+                "relative rounded-lg bg-input p-2.5 transition-opacity",
+                draggingId === path.scenarioId && "opacity-45"
+              )}
+            >
+              {dropBeforeId === path.scenarioId ? (
+                <span className="pointer-events-none absolute -top-[5px] left-1 right-1 h-0.5 rounded-full bg-primary" />
+              ) : null}
+              {index === paths.length - 1 && dropBeforeId === null ? (
+                <span className="pointer-events-none absolute -bottom-[5px] left-1 right-1 h-0.5 rounded-full bg-primary" />
+              ) : null}
               <div className="flex items-center gap-2">
+                <AnimationPathDragHandle name={path.name} />
                 <span
                   className="h-[2px] w-5 shrink-0 rounded-full"
                   style={{

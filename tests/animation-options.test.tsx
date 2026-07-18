@@ -5,6 +5,7 @@ import {
   AnimationOverview,
   AnimationOptions,
   AnimationPathBuilder,
+  AnimationPathDragHandle,
   RequestFlowOptions,
   createAnimationColorPatch,
   createAnimationWidthPatch,
@@ -70,6 +71,14 @@ describe("AnimationOptions", () => {
     expect(markup).toContain('aria-label="Path animation glow"');
     expect(markup).toContain("Save &amp; play");
     expect(markup).toContain("Undo last");
+  });
+
+  test("renders custom paths as draggable animation cards", () => {
+    const markup = renderToStaticMarkup(
+      <AnimationPathDragHandle name="Login flow" />
+    );
+    expect(markup).toContain('aria-label="Drag Login flow to reorder"');
+    expect(markup).toContain("Drag to reorder");
   });
 
   test("offers only the gradient beam on an unanimated edge", () => {
