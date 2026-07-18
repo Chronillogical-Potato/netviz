@@ -215,6 +215,32 @@ describe("scenario runtime", () => {
     });
   });
 
+  test("reconciles same-scenario edits without changing transport time or play state", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+    const edited = scenario();
+    edited.durationMs = 2_000;
+    edited.playback.loop.endMs = 2_000;
+    edited.tracks[0] = {
+      ...edited.tracks[0],
+      clips: [{ ...edited.tracks[0].clips[0], durationMs: 800 }],
+    };
+
+    runtime.activate("page-1", scenario());
+    runtime.seek(400);
+    runtime.play();
+    scheduler.frame(50);
+    runtime.reconcile("page-1", edited);
+
+    expect(runtime.getTransportSnapshot()).toMatchObject({
+      pageId: "page-1",
+      scenarioId: "scenario-1",
+      currentTimeMs: 450,
+      durationMs: 2_000,
+      isPlaying: true,
+    });
+  });
+
   test("stop resets transport and clears projection when leaving playback modes", () => {
     const scheduler = new ManualScheduler();
     const runtime = new ScenarioRuntime(scheduler);

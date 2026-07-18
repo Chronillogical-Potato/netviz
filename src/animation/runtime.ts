@@ -117,6 +117,54 @@ export class ScenarioRuntime {
     );
   };
 
+  reconcile = (pageId: string, scenario: ScenarioV1 | null) => {
+    this.assertAlive();
+    if (
+      pageId !== this.pageId ||
+      scenario?.id !== this.scenario?.id ||
+      scenario === null
+    ) {
+      this.activate(pageId, scenario);
+      return;
+    }
+
+    const previous = this.clockSnapshot;
+    const projectionEnabled = this.projectionEnabled;
+    this.clearActiveTargets();
+    this.projectionEnabled = false;
+    this.scenario = scenario;
+    this.indexTracks(scenario);
+    this.forceNextTransportNotification = true;
+    this.clock.configure({
+      durationMs: scenario.durationMs,
+      playbackRate: scenario.playback.rate,
+      loop: {
+        enabled: scenario.playback.loop.mode === "repeat",
+        startMs: scenario.playback.loop.startMs,
+        endMs: scenario.playback.loop.endMs,
+      },
+    });
+    this.clock.setPlaybackRate(previous.playbackRate);
+    this.clock.setDirection(previous.direction);
+    this.clock.setLoop(
+      previous.loop
+        ? {
+            enabled: true,
+            startMs: scenario.playback.loop.startMs,
+            endMs: scenario.playback.loop.endMs,
+          }
+        : false
+    );
+    const currentTimeMs = Math.min(previous.currentTimeMs, scenario.durationMs);
+    this.clock.seek(currentTimeMs);
+    this.projectionEnabled = projectionEnabled;
+    if (previous.isPlaying) {
+      this.clock.play();
+    } else if (projectionEnabled) {
+      this.clock.seek(currentTimeMs);
+    }
+  };
+
   play = () => {
     this.assertAlive();
     if (!this.scenario) return;
