@@ -338,7 +338,7 @@ export function summarizeEdgeEffectField<T>(
     const clip = track?.clips[0];
     return clip === undefined ? undefined : select(clip);
   });
-  return summarizeField(values);
+  return summarizeField(values, structuredEqual);
 }
 
 function resolveEditableScenario(
@@ -433,10 +433,7 @@ function patchClip(
       params:
         effectPatch.params === undefined
           ? clip.effect.params
-          : {
-              ...cloneJsonObject(clip.effect.params),
-              ...cloneJsonObject(effectPatch.params),
-            },
+          : mergeJsonObjects(clip.effect.params, effectPatch.params),
     },
   };
 }
@@ -489,6 +486,52 @@ function cloneJsonValue(value: JsonValue): JsonValue {
   return value;
 }
 
+function mergeJsonObjects(base: JsonObject, patch: JsonObject): JsonObject {
+  const merged = cloneJsonObject(base);
+  for (const [key, patchValue] of Object.entries(patch)) {
+    const baseValue = merged[key];
+    merged[key] =
+      isJsonObject(baseValue) && isJsonObject(patchValue)
+        ? mergeJsonObjects(baseValue, patchValue)
+        : cloneJsonValue(patchValue);
+  }
+  return merged;
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return value !== undefined && !Array.isArray(value) && value !== null && typeof value === "object";
+}
+
+function structuredEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((value, index) => structuredEqual(value, right[index]))
+    );
+  }
+  if (
+    left !== null &&
+    right !== null &&
+    typeof left === "object" &&
+    typeof right === "object" &&
+    !Array.isArray(left) &&
+    !Array.isArray(right)
+  ) {
+    const leftEntries = Object.entries(left);
+    const rightRecord = right as Record<string, unknown>;
+    return (
+      leftEntries.length === Object.keys(rightRecord).length &&
+      leftEntries.every(
+        ([key, value]) =>
+          Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+          structuredEqual(value, rightRecord[key])
+      )
+    );
+  }
+  return false;
+}
+
 function uniqueValues(values: readonly string[]): string[] {
-  return [...new Set(values)];
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
 }

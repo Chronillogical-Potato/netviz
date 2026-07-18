@@ -205,6 +205,45 @@ describe("scenario document edits", () => {
     ).toBe(original);
   });
 
+  test("does not create a scenario for blank edge IDs", () => {
+    const original = createEmptyScenarioDocument();
+    expect(
+      applyEdgeEffect(original, {
+        edgeIds: ["", "   "],
+        effect: { type: "edge.packet", params: {} },
+      })
+    ).toBe(original);
+  });
+
+  test("deep-merges nested parameters without deleting unknown siblings", () => {
+    const original = applyEdgeEffect(createEmptyScenarioDocument(), {
+      edgeIds: ["edge-a"],
+      effect: {
+        type: "edge.gradient-beam",
+        params: {
+          appearance: {
+            color: "#38bdf8",
+            futureGlowModel: { kind: "vendor", strength: 0.7 },
+          },
+        },
+      },
+      idFactory: ids("scenario-1", "track-a", "clip-a"),
+    });
+    const updated = patchEdgeEffects(original, {
+      edgeIds: ["edge-a"],
+      patch: {
+        effect: { params: { appearance: { color: "#f8fafc" } } },
+      },
+    });
+
+    expect(
+      updated.scenarios[0].tracks[0].clips[0].effect.params.appearance
+    ).toEqual({
+      color: "#f8fafc",
+      futureGlowModel: { kind: "vendor", strength: 0.7 },
+    });
+  });
+
   test("removes only the selected edge effect tracks", () => {
     const scenario = createScenario({ id: "scenario-1" });
     const withEffects = applyEdgeEffect(scenarioDocument(scenario), {
@@ -362,5 +401,31 @@ describe("mixed field summaries", () => {
         clip.effect.type
       )
     ).toEqual({ status: "none" });
+  });
+
+  test("treats independently cloned structured appearance values as uniform", () => {
+    const document = applyEdgeEffect(createEmptyScenarioDocument(), {
+      edgeIds: ["edge-a", "edge-b"],
+      effect: {
+        type: "edge.gradient-beam",
+        params: { colors: ["#38bdf8", "#818cf8"] },
+      },
+      idFactory: ids(
+        "scenario-1",
+        "track-a",
+        "clip-a",
+        "track-b",
+        "clip-b"
+      ),
+    });
+
+    expect(
+      summarizeEdgeEffectField(document, ["edge-a", "edge-b"], (clip) =>
+        clip.effect.params.colors
+      )
+    ).toEqual({
+      status: "uniform",
+      value: ["#38bdf8", "#818cf8"],
+    });
   });
 });
