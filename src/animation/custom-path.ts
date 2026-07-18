@@ -5,17 +5,32 @@ export type AnimationPathPreset =
   | "single-line"
   | "bidirectional"
   | "multiple-inputs"
-  | "multiple-outputs";
+  | "multiple-outputs"
+  | "request-response"
+  | "scatter-gather"
+  | "round-robin"
+  | "staggered-outputs"
+  | "failover"
+  | "cascade"
+  | "loop";
 
 const PATH_PRESETS = new Set<AnimationPathPreset>([
   "single-line",
   "bidirectional",
   "multiple-inputs",
   "multiple-outputs",
+  "request-response",
+  "scatter-gather",
+  "round-robin",
+  "staggered-outputs",
+  "failover",
+  "cascade",
+  "loop",
 ]);
 
 export interface AuthoredCustomPath {
   preset: AnimationPathPreset;
+  staggerMs?: number;
   nodeIds: string[];
   edgeIds: string[];
 }
@@ -87,6 +102,8 @@ function findPathInScenario(
       edgeId: "id" in track.target ? track.target.id : "",
       startMs: track.clips[0]?.startMs ?? 0,
       preset: track.clips[0]?.effect.params.pathPreset,
+      phase: track.clips[0]?.effect.params.pathPhase,
+      staggerMs: track.clips[0]?.effect.params.staggerMs,
     }));
   if (authored.length === 0) return null;
   const authoredPreset = authored[0]?.preset;
@@ -104,7 +121,11 @@ function findPathInScenario(
     return null;
   }
 
-  if (preset !== "single-line") {
+  const linearPreset =
+    preset === "single-line" ||
+    preset === "request-response" ||
+    preset === "loop";
+  if (!linearPreset) {
     const orderedEdges = authored.map((item) =>
       edges.find((edge) => edge.id === item.edgeId)
     );
@@ -128,13 +149,63 @@ function findPathInScenario(
         nodeIds: [hubId, ...resolved.map((edge) => edge.source)],
       };
     }
+    if (preset === "scatter-gather") {
+      const scatter = resolved.filter(
+        (_, index) => authored[index]?.phase === "scatter"
+      );
+      const gather = resolved.filter(
+        (_, index) => authored[index]?.phase === "gather"
+      );
+      const sourceId = scatter[0]?.source;
+      const resultId = gather[0]?.target;
+      const workers = scatter.map((edge) => edge.target);
+      if (
+        !sourceId ||
+        !resultId ||
+        workers.length < 2 ||
+        scatter.some((edge) => edge.source !== sourceId) ||
+        gather.length !== workers.length ||
+        gather.some(
+          (edge) => edge.target !== resultId || !workers.includes(edge.source)
+        )
+      ) {
+        return null;
+      }
+      return {
+        preset,
+        edgeIds: [...scatter, ...gather].map((edge) => edge.id),
+        nodeIds: [sourceId, ...workers, resultId],
+      };
+    }
+    if (preset === "cascade") {
+      const targets = new Set(resolved.map((edge) => edge.target));
+      const rootId = resolved.find((edge) => !targets.has(edge.source))?.source;
+      if (!rootId) return null;
+      const included = new Set([rootId]);
+      const nodeIds = [rootId];
+      for (const edge of resolved) {
+        if (!included.has(edge.source) || included.has(edge.target)) return null;
+        included.add(edge.target);
+        nodeIds.push(edge.target);
+      }
+      return {
+        preset,
+        edgeIds: resolved.map((edge) => edge.id),
+        nodeIds,
+      };
+    }
     const hubId = resolved[0]?.source;
     if (!hubId || resolved.some((edge) => edge.source !== hubId)) return null;
-    return {
+    const result: AuthoredCustomPath = {
       preset,
       edgeIds: resolved.map((edge) => edge.id),
       nodeIds: [hubId, ...resolved.map((edge) => edge.target)],
     };
+    const staggerMs = authored[0]?.staggerMs;
+    if (preset === "staggered-outputs" && typeof staggerMs === "number") {
+      result.staggerMs = staggerMs;
+    }
+    return result;
   }
 
   authored.sort((left, right) => left.startMs - right.startMs);
@@ -159,10 +230,14 @@ function findPathInScenario(
 
   const first = orderedEdges[0];
   if (!first) return null;
+  const nodeIds = [first.source, ...orderedEdges.map((edge) => edge!.target)];
+  if (preset === "loop" && nodeIds[0] !== nodeIds[nodeIds.length - 1]) {
+    return null;
+  }
   return {
     preset,
     edgeIds: orderedEdges.map((edge) => edge!.id),
-    nodeIds: [first.source, ...orderedEdges.map((edge) => edge!.target)],
+    nodeIds,
   };
 }
 

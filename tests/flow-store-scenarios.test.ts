@@ -397,8 +397,10 @@ describe("animation target lifecycle", () => {
       scenarioId: null,
       name: "Custom path 1",
       preset: "single-line",
+      staggerMs: 300,
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
+        responseColors: ["#38bdf8", "#818cf8"],
         widthPx: 2,
         beamLengthPx: 48,
         opacity: 1,
@@ -467,8 +469,10 @@ describe("animation target lifecycle", () => {
       scenarioId: scenario.id,
       name: "Custom path 1",
       preset: "single-line",
+      staggerMs: 300,
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
+        responseColors: ["#38bdf8", "#818cf8"],
         widthPx: 2,
         beamLengthPx: 48,
         opacity: 1,
@@ -612,6 +616,246 @@ describe("animation target lifecycle", () => {
     ]);
   });
 
+  test("plays a request forward and returns the response along the same path", () => {
+    useFlowStore.setState({
+      nodes: [node("client"), node("api"), node("database")],
+      edges: [
+        edge("client-api", "client", "api"),
+        edge("api-database", "api", "database"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("request-response");
+    useFlowStore.getState().setAnimationPathAppearance({
+      responseColors: ["#22d3ee", "#2563eb"],
+    });
+    useFlowStore.getState().appendAnimationPathNode("client");
+    useFlowStore.getState().appendAnimationPathNode("api");
+    useFlowStore.getState().appendAnimationPathNode("database");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips.map((clip) => [
+            clip.startMs,
+            clip.effect.params.direction,
+          ]),
+        ])
+    ).toEqual([
+      [
+        "client-api",
+        [
+          [800, "forward"],
+          [7_100, "reverse"],
+        ],
+      ],
+      [
+        "api-database",
+        [
+          [2_900, "forward"],
+          [5_000, "reverse"],
+        ],
+      ],
+    ]);
+    expect(scenario.durationMs).toBe(9_200);
+    expect(
+      scenario.tracks
+        .flatMap((track) => track.clips)
+        .filter((clip) => clip.effect.params.direction === "reverse")
+        .map((clip) => clip.effect.params.colors)
+    ).toEqual([
+      ["#22d3ee", "#2563eb"],
+      ["#22d3ee", "#2563eb"],
+    ]);
+
+    useFlowStore.getState().editAnimationPath(scenario.id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "request-response",
+      nodeIds: ["client", "api", "database"],
+      edgeIds: ["client-api", "api-database"],
+      appearance: { responseColors: ["#22d3ee", "#2563eb"] },
+    });
+  });
+
+  test("scatters to workers and gathers their responses", () => {
+    useFlowStore.setState({
+      nodes: [node("source"), node("a"), node("b"), node("result")],
+      edges: [
+        edge("source-a", "source", "a"),
+        edge("source-b", "source", "b"),
+        edge("a-result", "a", "result"),
+        edge("b-result", "b", "result"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("scatter-gather");
+    useFlowStore.getState().appendAnimationPathNode("source");
+    useFlowStore.getState().appendAnimationPathNode("a");
+    useFlowStore.getState().appendAnimationPathNode("b");
+    useFlowStore.getState().appendAnimationPathNode("result");
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      nodeIds: ["source", "a", "b", "result"],
+      edgeIds: ["source-a", "source-b", "a-result", "b-result"],
+    });
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+          track.clips[0].effect.params.pathPhase,
+        ])
+    ).toEqual([
+      ["source-a", 800, "scatter"],
+      ["source-b", 800, "scatter"],
+      ["a-result", 2_900, "gather"],
+      ["b-result", 2_900, "gather"],
+    ]);
+
+    useFlowStore.getState().editAnimationPath(scenario.id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "scatter-gather",
+      nodeIds: ["source", "a", "b", "result"],
+      edgeIds: ["source-a", "source-b", "a-result", "b-result"],
+    });
+  });
+
+  test("supports round-robin, staggered output, and failover schedules", () => {
+    const graph = {
+      nodes: [node("router"), node("a"), node("b")],
+      edges: [
+        edge("router-a", "router", "a"),
+        edge("router-b", "router", "b"),
+      ],
+    };
+    useFlowStore.setState(graph);
+
+    const buildOutputs = (
+      preset: "round-robin" | "staggered-outputs" | "failover"
+    ) => {
+      useFlowStore.getState().beginAnimationPath();
+      useFlowStore.getState().setAnimationPathPreset(preset);
+      useFlowStore.getState().appendAnimationPathNode("router");
+      useFlowStore.getState().appendAnimationPathNode("a");
+      useFlowStore.getState().appendAnimationPathNode("b");
+    };
+
+    buildOutputs("round-robin");
+    useFlowStore.getState().animateDraftPath();
+    buildOutputs("staggered-outputs");
+    useFlowStore.getState().setAnimationPathStaggerMs(400);
+    useFlowStore.getState().animateDraftPath();
+    buildOutputs("failover");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenarios = useFlowStore.getState().scenarioDocument.scenarios;
+    const edgeStarts = (index: number) =>
+      scenarios[index].tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => track.clips[0].startMs);
+    expect(edgeStarts(0)).toEqual([800, 2_900]);
+    expect(edgeStarts(1)).toEqual([800, 1_200]);
+    expect(edgeStarts(2)).toEqual([800, 2_900]);
+    expect(
+      scenarios[1].tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => track.clips[0].effect.params.staggerMs)
+    ).toEqual([400, 400]);
+    expect(
+      scenarios[2].tracks
+        .find(
+          (track) =>
+            track.property === "node-effect" &&
+            "id" in track.target &&
+            track.target.id === "a"
+        )
+        ?.clips[0].effect.params.colors
+    ).toEqual(["#fb7185", "#ef4444"]);
+
+    useFlowStore.getState().editAnimationPath(scenarios[1].id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "staggered-outputs",
+      staggerMs: 400,
+      nodeIds: ["router", "a", "b"],
+    });
+  });
+
+  test("builds cascading trees and closed loops", () => {
+    useFlowStore.setState({
+      nodes: [node("root"), node("a"), node("b"), node("c")],
+      edges: [
+        edge("root-a", "root", "a"),
+        edge("root-b", "root", "b"),
+        edge("a-c", "a", "c"),
+        edge("c-root", "c", "root"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("cascade");
+    useFlowStore.getState().appendAnimationPathNode("root");
+    useFlowStore.getState().appendAnimationPathNode("a");
+    useFlowStore.getState().appendAnimationPathNode("b");
+    useFlowStore.getState().appendAnimationPathNode("c");
+    useFlowStore.getState().animateDraftPath();
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("loop");
+    useFlowStore.getState().appendAnimationPathNode("root");
+    useFlowStore.getState().appendAnimationPathNode("a");
+    useFlowStore.getState().appendAnimationPathNode("c");
+    useFlowStore.getState().appendAnimationPathNode("root");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenarios = useFlowStore.getState().scenarioDocument.scenarios;
+    expect(
+      scenarios[0].tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+        ])
+    ).toEqual([
+      ["root-a", 800],
+      ["root-b", 800],
+      ["a-c", 2_900],
+    ]);
+    expect(
+      scenarios[1].tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+        ])
+    ).toEqual([
+      ["root-a", 800],
+      ["a-c", 2_900],
+      ["c-root", 5_000],
+    ]);
+
+    useFlowStore.getState().editAnimationPath(scenarios[0].id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "cascade",
+      nodeIds: ["root", "a", "b", "c"],
+      edgeIds: ["root-a", "root-b", "a-c"],
+    });
+
+    useFlowStore.getState().editAnimationPath(scenarios[1].id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "loop",
+      nodeIds: ["root", "a", "c", "root"],
+    });
+  });
+
   test("saves and reloads custom path appearance", () => {
     useFlowStore.setState({
       nodes: [node("user"), node("server")],
@@ -652,6 +896,7 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().editAnimationPath(scenario.id);
     expect(useFlowStore.getState().animationPathDraft?.appearance).toEqual({
       colors: ["#22d3ee", "#2563eb"],
+      responseColors: ["#38bdf8", "#818cf8"],
       widthPx: 7,
       beamLengthPx: 72,
       opacity: 0.65,

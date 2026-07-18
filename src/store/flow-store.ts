@@ -54,6 +54,7 @@ import {
   createNodeBorderEffect,
   GRADIENT_BEAM_DURATION_MS,
   normalizeGradientBeamDefaults,
+  REQUEST_FLOW_ARRIVAL_LEAD_MS,
   REQUEST_FLOW_EDGE_DELAY_MS,
   REQUEST_FLOW_HOP_DELAY_MS,
   type NodeBorderEntrySide,
@@ -254,6 +255,7 @@ export const isAnimationCanvasMode = (mode: WorkMode) => mode !== "design";
 export type MotionPreference = "system" | "full" | "reduced";
 export type AnimationPathAppearance = {
   colors: [string, string];
+  responseColors: [string, string];
   widthPx: number;
   beamLengthPx: number;
   opacity: number;
@@ -264,6 +266,7 @@ export type AnimationPathDraft = {
   scenarioId: string | null;
   name: string;
   preset: AnimationPathPreset;
+  staggerMs: number;
   appearance: AnimationPathAppearance;
   nodeIds: string[];
   edgeIds: string[];
@@ -380,6 +383,7 @@ type FlowState = Snapshot & {
   beginAnimationPath: (startNodeId?: string) => void;
   setAnimationPathName: (name: string) => void;
   setAnimationPathPreset: (preset: AnimationPathPreset) => void;
+  setAnimationPathStaggerMs: (staggerMs: number) => void;
   setAnimationPathAppearance: (
     patch: Partial<AnimationPathAppearance>
   ) => void;
@@ -415,8 +419,11 @@ const nextBlockId = () => `custom-${Math.random().toString(36).slice(2, 10)}`;
 const nextPageId = () =>
   `p${Date.now().toString(36)}${(nodeSeq++).toString(36)}`;
 
-const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
-  const side = edge?.targetHandle;
+const nodeEntrySide = (
+  edge?: LabeledEdge,
+  direction: "forward" | "reverse" = "forward"
+): NodeBorderEntrySide => {
+  const side = direction === "reverse" ? edge?.sourceHandle : edge?.targetHandle;
   return side === "top" ||
     side === "right" ||
     side === "bottom" ||
@@ -427,6 +434,7 @@ const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
 
 const defaultAnimationPathAppearance = (): AnimationPathAppearance => ({
   colors: ["#ffaa40", "#9c40ff"],
+  responseColors: ["#38bdf8", "#818cf8"],
   widthPx: 2,
   beamLengthPx: 48,
   opacity: 1,
@@ -442,19 +450,23 @@ function animationPathAppearance(
   const scenario = document.scenarios.find(
     (candidate) => candidate.id === scenarioId
   );
-  const clip = scenario?.tracks.find(
-      (track) =>
-        track.property === "connection-effect" &&
-        track.clips.some(
+  const clips =
+    scenario?.tracks
+      .filter((track) => track.property === "connection-effect")
+      .flatMap((track) =>
+        track.clips.filter(
           (candidate) => candidate.effect.type === "edge.gradient-beam"
         )
-    )
-    ?.clips.find(
-      (candidate) => candidate.effect.type === "edge.gradient-beam"
-    );
+      ) ?? [];
+  const clip = clips.find(
+    (candidate) => candidate.effect.params.direction !== "reverse"
+  ) ?? clips[0];
   if (!clip) return defaults;
   const params = clip.effect.params;
   const colors = params.colors;
+  const responseColors = clips.find(
+    (candidate) => candidate.effect.params.direction === "reverse"
+  )?.effect.params.colors;
   return {
     colors:
       Array.isArray(colors) &&
@@ -462,6 +474,12 @@ function animationPathAppearance(
       typeof colors[1] === "string"
         ? [colors[0], colors[1]]
         : defaults.colors,
+    responseColors:
+      Array.isArray(responseColors) &&
+      typeof responseColors[0] === "string" &&
+      typeof responseColors[1] === "string"
+        ? [responseColors[0], responseColors[1]]
+        : defaults.responseColors,
     widthPx:
       typeof params.widthPx === "number" ? params.widthPx : defaults.widthPx,
     beamLengthPx:
@@ -493,82 +511,263 @@ function buildAnimationPathScenario(input: {
   edges: readonly LabeledEdge[];
   appearance: AnimationPathAppearance;
   preset?: AnimationPathPreset;
+  staggerMs?: number;
 }): ScenarioV1 | null {
   const preset = input.preset ?? "single-line";
-  if (
-    (preset === "bidirectional" && input.edgeIds.length !== 1) ||
-    ((preset === "multiple-inputs" || preset === "multiple-outputs") &&
-      input.edgeIds.length < 2)
-  ) {
-    return null;
-  }
-  const edgeEffect = createGradientBeamEffect();
-  edgeEffect.params = {
-    ...edgeEffect.params,
-    colors: [...input.appearance.colors],
-    widthPx: input.appearance.widthPx,
-    beamLengthPx: input.appearance.beamLengthPx,
-    opacity: input.appearance.opacity,
-    glowBlurPx: input.appearance.glowBlurPx,
-    pathPreset: preset,
-    direction: preset === "bidirectional" ? "bidirectional" : "forward",
-  };
+  const edgeCount = input.edgeIds.length;
+  const workerCount = input.nodeIds.length - 2;
+  const valid =
+    preset === "bidirectional"
+      ? edgeCount === 1
+      : preset === "failover"
+        ? edgeCount === 2
+        : preset === "scatter-gather"
+          ? workerCount >= 2 && edgeCount === workerCount * 2
+          : preset === "loop"
+            ? edgeCount >= 2 &&
+              input.nodeIds[0] === input.nodeIds[input.nodeIds.length - 1]
+            : preset === "multiple-inputs" ||
+                preset === "multiple-outputs" ||
+                preset === "round-robin" ||
+                preset === "staggered-outputs" ||
+                preset === "cascade"
+              ? edgeCount >= 2
+              : edgeCount >= 1;
+  if (!valid) return null;
+
   let document = createDefaultScenarioDocument({
     id: input.id,
     name: input.name,
   });
-  input.edgeIds.forEach((edgeId, index) => {
+
+  const edgeById = (edgeId: string) =>
+    input.edges.find((edge) => edge.id === edgeId);
+  const addEdge = (
+    edgeId: string,
+    startMs: number,
+    options: {
+      direction?: "forward" | "reverse" | "bidirectional";
+      colors?: [string, string];
+      phase?: string;
+      append?: boolean;
+    } = {}
+  ) => {
+    const effect = createGradientBeamEffect();
+    effect.params = {
+      ...effect.params,
+      colors: [...(options.colors ?? input.appearance.colors)],
+      widthPx: input.appearance.widthPx,
+      beamLengthPx: input.appearance.beamLengthPx,
+      opacity: input.appearance.opacity,
+      glowBlurPx: input.appearance.glowBlurPx,
+      pathPreset: preset,
+      direction: options.direction ?? "forward",
+      ...(options.phase ? { pathPhase: options.phase } : {}),
+      ...(preset === "staggered-outputs"
+        ? { staggerMs: input.staggerMs ?? 300 }
+        : {}),
+    };
     document = applyEdgeEffect(document, {
       edgeIds: [edgeId],
-      effect: edgeEffect,
-      clip: createGradientBeamClip(
+      effect,
+      append: options.append,
+      clip: createGradientBeamClip(startMs),
+    });
+  };
+  const addShimmer = (
+    nodeId: string | undefined,
+    startMs: number,
+    edge?: LabeledEdge,
+    colors: [string, string] = input.appearance.colors,
+    direction: "forward" | "reverse" = "forward"
+  ) => {
+    if (!input.appearance.shimmer || !nodeId) return;
+    const effect = createNodeBorderEffect(nodeEntrySide(edge, direction));
+    effect.params = { ...effect.params, colors: [...colors] };
+    document = applyNodeEffect(document, {
+      nodeIds: [nodeId],
+      effect,
+      append: true,
+      clip: createNodeBorderClip(startMs),
+    });
+  };
+  const edgeStart = (index: number) =>
+    input.appearance.shimmer
+      ? REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS
+      : index * GRADIENT_BEAM_DURATION_MS;
+
+  if (preset === "single-line" || preset === "loop") {
+    input.edgeIds.forEach((edgeId, index) => addEdge(edgeId, edgeStart(index)));
+    input.nodeIds.forEach((nodeId, index) =>
+      addShimmer(
+        nodeId,
+        index * REQUEST_FLOW_HOP_DELAY_MS,
+        index === 0 ? undefined : edgeById(input.edgeIds[index - 1])
+      )
+    );
+  } else if (preset === "request-response") {
+    input.edgeIds.forEach((edgeId, index) => addEdge(edgeId, edgeStart(index)));
+    input.nodeIds.forEach((nodeId, index) =>
+      addShimmer(
+        nodeId,
+        index * REQUEST_FLOW_HOP_DELAY_MS,
+        index === 0 ? undefined : edgeById(input.edgeIds[index - 1])
+      )
+    );
+    const responseStart = input.appearance.shimmer
+      ? edgeCount * REQUEST_FLOW_HOP_DELAY_MS + REQUEST_FLOW_EDGE_DELAY_MS
+      : edgeCount * GRADIENT_BEAM_DURATION_MS;
+    [...input.edgeIds].reverse().forEach((edgeId, index) => {
+      const startMs = responseStart + index * REQUEST_FLOW_HOP_DELAY_MS;
+      const edge = edgeById(edgeId);
+      addEdge(edgeId, startMs, {
+        direction: "reverse",
+        colors: input.appearance.responseColors,
+        phase: "response",
+        append: true,
+      });
+      addShimmer(
+        edge?.source,
+        startMs + GRADIENT_BEAM_DURATION_MS - REQUEST_FLOW_ARRIVAL_LEAD_MS,
+        edge,
+        input.appearance.responseColors,
+        "reverse"
+      );
+    });
+  } else if (preset === "bidirectional") {
+    addEdge(
+      input.edgeIds[0],
+      input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0,
+      {
+        direction: "bidirectional",
+      }
+    );
+    input.nodeIds.forEach((nodeId) => addShimmer(nodeId, 0));
+  } else if (preset === "multiple-inputs") {
+    input.edgeIds.forEach((edgeId) =>
+      addEdge(
+        edgeId,
+        input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0
+      )
+    );
+    addShimmer(
+      input.nodeIds[0],
+      REQUEST_FLOW_HOP_DELAY_MS,
+      edgeById(input.edgeIds[0])
+    );
+    input.nodeIds.slice(1).forEach((nodeId) => addShimmer(nodeId, 0));
+  } else if (preset === "multiple-outputs") {
+    input.edgeIds.forEach((edgeId) =>
+      addEdge(
+        edgeId,
+        input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0
+      )
+    );
+    addShimmer(input.nodeIds[0], 0);
+    input.nodeIds.slice(1).forEach((nodeId, index) =>
+      addShimmer(
+        nodeId,
+        REQUEST_FLOW_HOP_DELAY_MS,
+        edgeById(input.edgeIds[index])
+      )
+    );
+  } else if (preset === "scatter-gather") {
+    const scatterEdges = input.edgeIds.slice(0, workerCount);
+    const gatherEdges = input.edgeIds.slice(workerCount);
+    scatterEdges.forEach((edgeId) =>
+      addEdge(
+        edgeId,
+        input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0,
+        { phase: "scatter" }
+      )
+    );
+    gatherEdges.forEach((edgeId) =>
+      addEdge(
+        edgeId,
+        input.appearance.shimmer
+          ? REQUEST_FLOW_EDGE_DELAY_MS + REQUEST_FLOW_HOP_DELAY_MS
+          : GRADIENT_BEAM_DURATION_MS,
+        { phase: "gather" }
+      )
+    );
+    addShimmer(input.nodeIds[0], 0);
+    input.nodeIds.slice(1, -1).forEach((nodeId, index) =>
+      addShimmer(
+        nodeId,
+        REQUEST_FLOW_HOP_DELAY_MS,
+        edgeById(scatterEdges[index])
+      )
+    );
+    addShimmer(
+      input.nodeIds[input.nodeIds.length - 1],
+      REQUEST_FLOW_HOP_DELAY_MS * 2,
+      edgeById(gatherEdges[0])
+    );
+  } else if (preset === "round-robin") {
+    addShimmer(input.nodeIds[0], 0);
+    input.edgeIds.forEach((edgeId, index) => {
+      const startMs = edgeStart(index);
+      addEdge(edgeId, startMs);
+      addShimmer(
+        input.nodeIds[index + 1],
+        startMs + GRADIENT_BEAM_DURATION_MS - REQUEST_FLOW_ARRIVAL_LEAD_MS,
+        edgeById(edgeId)
+      );
+    });
+  } else if (preset === "staggered-outputs") {
+    const staggerMs = input.staggerMs ?? 300;
+    addShimmer(input.nodeIds[0], 0);
+    input.edgeIds.forEach((edgeId, index) => {
+      const startMs =
+        (input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0) +
+        index * staggerMs;
+      addEdge(edgeId, startMs);
+      addShimmer(
+        input.nodeIds[index + 1],
+        startMs + GRADIENT_BEAM_DURATION_MS - REQUEST_FLOW_ARRIVAL_LEAD_MS,
+        edgeById(edgeId)
+      );
+    });
+  } else if (preset === "failover") {
+    const starts = input.appearance.shimmer
+      ? [
+          REQUEST_FLOW_EDGE_DELAY_MS,
+          REQUEST_FLOW_EDGE_DELAY_MS + REQUEST_FLOW_HOP_DELAY_MS,
+        ]
+      : [0, GRADIENT_BEAM_DURATION_MS];
+    addShimmer(input.nodeIds[0], 0);
+    input.edgeIds.forEach((edgeId, index) => addEdge(edgeId, starts[index]));
+    addShimmer(
+      input.nodeIds[1],
+      REQUEST_FLOW_HOP_DELAY_MS,
+      edgeById(input.edgeIds[0]),
+      ["#fb7185", "#ef4444"]
+    );
+    addShimmer(
+      input.nodeIds[2],
+      REQUEST_FLOW_HOP_DELAY_MS * 2,
+      edgeById(input.edgeIds[1])
+    );
+  } else if (preset === "cascade") {
+    const hops = new Map<string, number>([[input.nodeIds[0] ?? "", 0]]);
+    addShimmer(input.nodeIds[0], 0);
+    input.edgeIds.forEach((edgeId) => {
+      const edge = edgeById(edgeId);
+      if (!edge) return;
+      const sourceHop = hops.get(edge.source) ?? 0;
+      const targetHop = sourceHop + 1;
+      hops.set(edge.target, targetHop);
+      addEdge(
+        edgeId,
         input.appearance.shimmer
           ? REQUEST_FLOW_EDGE_DELAY_MS +
-              (preset === "single-line" ? index * REQUEST_FLOW_HOP_DELAY_MS : 0)
-          : preset === "single-line"
-            ? index * GRADIENT_BEAM_DURATION_MS
-            : 0
-      ),
-    });
-  });
-  if (input.appearance.shimmer) {
-    input.nodeIds.forEach((nodeId, index) => {
-      const incomingEdgeId =
-        preset === "multiple-inputs"
-          ? index === 0
-            ? input.edgeIds[0]
-            : undefined
-          : index === 0
-            ? undefined
-            : input.edgeIds[index - 1];
-      const incomingEdge = input.edges.find(
-        (edge) => edge.id === incomingEdgeId
+            sourceHop * REQUEST_FLOW_HOP_DELAY_MS
+          : sourceHop * GRADIENT_BEAM_DURATION_MS
       );
-      const startMs =
-        preset === "single-line"
-          ? index * REQUEST_FLOW_HOP_DELAY_MS
-          : preset === "multiple-inputs"
-            ? index === 0
-              ? REQUEST_FLOW_HOP_DELAY_MS
-              : 0
-            : preset === "multiple-outputs"
-              ? index === 0
-                ? 0
-                : REQUEST_FLOW_HOP_DELAY_MS
-              : 0;
-      const nodeEffect = createNodeBorderEffect(nodeEntrySide(incomingEdge));
-      nodeEffect.params = {
-        ...nodeEffect.params,
-        colors: [...input.appearance.colors],
-      };
-      document = applyNodeEffect(document, {
-        nodeIds: [nodeId],
-        effect: nodeEffect,
-        append: true,
-        clip: createNodeBorderClip(startMs),
-      });
+      addShimmer(edge.target, targetHop * REQUEST_FLOW_HOP_DELAY_MS, edge);
     });
   }
+
   return document.scenarios[0] ?? null;
 }
 
@@ -1635,6 +1834,7 @@ export const useFlowStore = create<FlowState>()(
           scenarioId: existingDraft?.scenarioId ?? null,
           name: existingDraft?.name ?? `Custom path ${pathNumber}`,
           preset: existingDraft?.preset ?? "single-line",
+          staggerMs: existingDraft?.staggerMs ?? 300,
           appearance:
             existingDraft?.appearance ?? defaultAnimationPathAppearance(),
           nodeIds: hasStart ? [startNodeId] : [],
@@ -1673,6 +1873,18 @@ export const useFlowStore = create<FlowState>()(
         : s
     ),
 
+  setAnimationPathStaggerMs: (staggerMs) =>
+    set((s) =>
+      s.animationPathDraft
+        ? {
+            animationPathDraft: {
+              ...s.animationPathDraft,
+              staggerMs: Math.min(2_000, Math.max(100, staggerMs)),
+            },
+          }
+        : s
+    ),
+
   setAnimationPathAppearance: (patch) =>
     set((s) => {
       const draft = s.animationPathDraft;
@@ -1683,6 +1895,9 @@ export const useFlowStore = create<FlowState>()(
         colors: patch.colors
           ? ([...patch.colors] as [string, string])
           : draft.appearance.colors,
+        responseColors: patch.responseColors
+          ? ([...patch.responseColors] as [string, string])
+          : draft.appearance.responseColors,
       };
       return {
         animationPathDraft: {
@@ -1717,21 +1932,111 @@ export const useFlowStore = create<FlowState>()(
       }
 
       const lastNodeId = draft.nodeIds[draft.nodeIds.length - 1];
+      const hubId = draft.nodeIds[0];
+      const fail = (error: string) => ({
+        animationPathDraft: { ...draft, error },
+      });
       if (draft.preset === "bidirectional" && draft.edgeIds.length > 0) {
+        return fail("Bi-directional paths use two connected blocks.");
+      }
+      if (draft.preset === "failover" && draft.edgeIds.length >= 2) {
+        return fail("Failover paths use a primary and one fallback block.");
+      }
+      if (
+        draft.preset === "loop" &&
+        draft.edgeIds.length > 0 &&
+        lastNodeId === hubId
+      ) {
+        return fail("This loop is already closed.");
+      }
+
+      if (draft.preset === "scatter-gather") {
+        const finalizedWorkerCount = draft.nodeIds.length - 2;
+        const finalized =
+          finalizedWorkerCount >= 2 &&
+          draft.edgeIds.length === finalizedWorkerCount * 2;
+        if (finalized) return fail("This scatter and gather path is complete.");
+
+        const workerIds = draft.nodeIds.slice(1);
+        const gatherEdges = workerIds.map((workerId) =>
+          s.edges.find(
+            (edge) => edge.source === workerId && edge.target === nodeId
+          )
+        );
+        if (
+          workerIds.length >= 2 &&
+          gatherEdges.every(
+            (edge) => edge && !draft.edgeIds.includes(edge.id)
+          )
+        ) {
+          return {
+            animationPathDraft: {
+              ...draft,
+              nodeIds: [...draft.nodeIds, nodeId],
+              edgeIds: [
+                ...draft.edgeIds,
+                ...gatherEdges.map((edge) => edge!.id),
+              ],
+              error: null,
+            },
+          };
+        }
+
+        const scatterEdge = s.edges.find(
+          (edge) => edge.source === hubId && edge.target === nodeId
+        );
+        if (!scatterEdge) {
+          return fail(
+            workerIds.length < 2
+              ? "Choose at least two workers connected from the source block."
+              : "Choose another worker, or a result block connected from every worker."
+          );
+        }
+        if (draft.edgeIds.includes(scatterEdge.id)) {
+          return fail("That connection is already in this path.");
+        }
         return {
           animationPathDraft: {
             ...draft,
-            error: "Bi-directional paths use two connected blocks.",
+            nodeIds: [...draft.nodeIds, nodeId],
+            edgeIds: [...draft.edgeIds, scatterEdge.id],
+            error: null,
           },
         };
       }
-      const hubId = draft.nodeIds[0];
+
+      if (
+        draft.preset === "cascade" &&
+        draft.nodeIds.includes(nodeId)
+      ) {
+        return fail("That block is already in this cascade.");
+      }
+      if (
+        draft.preset === "loop" &&
+        draft.nodeIds.includes(nodeId) &&
+        nodeId !== hubId
+      ) {
+        return fail("Close the loop by clicking its first block.");
+      }
+
+      const outputPreset =
+        draft.preset === "multiple-outputs" ||
+        draft.preset === "round-robin" ||
+        draft.preset === "staggered-outputs" ||
+        draft.preset === "failover";
       const edge = s.edges.find((candidate) => {
         if (draft.preset === "multiple-inputs") {
           return candidate.source === nodeId && candidate.target === hubId;
         }
-        if (draft.preset === "multiple-outputs") {
+        if (outputPreset) {
           return candidate.source === hubId && candidate.target === nodeId;
+        }
+        if (draft.preset === "cascade") {
+          return (
+            draft.nodeIds.includes(candidate.source) &&
+            candidate.target === nodeId &&
+            !draft.edgeIds.includes(candidate.id)
+          );
         }
         if (draft.preset === "bidirectional") {
           return (
@@ -1745,25 +2050,17 @@ export const useFlowStore = create<FlowState>()(
         const error =
           draft.preset === "multiple-inputs"
             ? "Choose a block with a connection into the receiving block."
-            : draft.preset === "multiple-outputs"
+            : outputPreset
               ? "Choose a block connected from the source block."
+              : draft.preset === "cascade"
+                ? "Choose a new block connected from the current cascade."
               : draft.preset === "bidirectional"
                 ? "Choose a directly connected block."
                 : "Choose a directly connected outgoing block.";
-        return {
-          animationPathDraft: {
-            ...draft,
-            error,
-          },
-        };
+        return fail(error);
       }
       if (draft.edgeIds.includes(edge.id)) {
-        return {
-          animationPathDraft: {
-            ...draft,
-            error: "That connection is already in this path.",
-          },
-        };
+        return fail("That connection is already in this path.");
       }
 
       return {
@@ -1780,11 +2077,18 @@ export const useFlowStore = create<FlowState>()(
     set((s) => {
       const draft = s.animationPathDraft;
       if (!draft || draft.nodeIds.length === 0) return s;
+      const scatterWorkerCount = draft.nodeIds.length - 2;
+      const undoGather =
+        draft.preset === "scatter-gather" &&
+        scatterWorkerCount >= 2 &&
+        draft.edgeIds.length === scatterWorkerCount * 2;
       return {
         animationPathDraft: {
           ...draft,
           nodeIds: draft.nodeIds.slice(0, -1),
-          edgeIds: draft.edgeIds.slice(0, -1),
+          edgeIds: undoGather
+            ? draft.edgeIds.slice(0, scatterWorkerCount)
+            : draft.edgeIds.slice(0, -1),
           error: null,
         },
       };
@@ -1806,6 +2110,7 @@ export const useFlowStore = create<FlowState>()(
       return {
         animationPathDraft: {
           ...path,
+          staggerMs: path.staggerMs ?? 300,
           name:
             path.name === "Default scenario" ? "Custom path" : path.name,
           appearance: animationPathAppearance(
@@ -1896,6 +2201,7 @@ export const useFlowStore = create<FlowState>()(
         edges: s.edges,
         appearance,
         preset: draft?.preset ?? "single-line",
+        staggerMs: draft?.staggerMs ?? 300,
       });
       if (!savedScenario) return s;
       const existingIndex = s.scenarioDocument.scenarios.findIndex(

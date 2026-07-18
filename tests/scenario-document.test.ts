@@ -186,6 +186,37 @@ describe("scenario document edits", () => {
     ]);
   });
 
+  test("appends another clip to an existing edge effect track", () => {
+    const original = applyEdgeEffect(createEmptyScenarioDocument(), {
+      edgeIds: ["edge-a"],
+      effect: { type: "edge.gradient-beam", params: { direction: "forward" } },
+      clip: { startMs: 800 },
+      idFactory: ids("scenario-1", "track-a", "clip-a"),
+    });
+
+    const updated = applyEdgeEffect(original, {
+      edgeIds: ["edge-a"],
+      effect: { type: "edge.gradient-beam", params: { direction: "reverse" } },
+      clip: { startMs: 5_000 },
+      append: true,
+      idFactory: ids("clip-b"),
+    });
+
+    expect(updated.scenarios[0]?.tracks).toHaveLength(1);
+    expect(updated.scenarios[0]?.tracks[0]?.clips).toEqual([
+      expect.objectContaining({
+        id: "clip-a",
+        startMs: 800,
+        effect: expect.objectContaining({ params: { direction: "forward" } }),
+      }),
+      expect.objectContaining({
+        id: "clip-b",
+        startMs: 5_000,
+        effect: expect.objectContaining({ params: { direction: "reverse" } }),
+      }),
+    ]);
+  });
+
   test("preserves unknown effects and parameters while patching existing clips only", () => {
     const original = applyEdgeEffect(createEmptyScenarioDocument(), {
       edgeIds: ["edge-a"],
