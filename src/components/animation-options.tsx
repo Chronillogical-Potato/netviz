@@ -435,6 +435,7 @@ function playAllAnimations() {
 const EMPTY_ANIMATION_PATH_DRAFT = {
   scenarioId: null,
   name: "",
+  preset: "single-line" as const,
   appearance: {
     colors: ["#ffaa40", "#9c40ff"] as [string, string],
     widthPx: 2,
@@ -447,6 +448,24 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   edgeIds: [],
   error: null,
 };
+
+const PATH_PRESETS = [
+  { value: "single-line", label: "Single line" },
+  { value: "bidirectional", label: "Bi-directional" },
+  { value: "multiple-inputs", label: "Multiple inputs" },
+  { value: "multiple-outputs", label: "Multiple outputs" },
+] as const;
+
+const PATH_PRESET_HELP = {
+  "single-line":
+    "Click connected blocks in order. Each click adds the next request hop.",
+  bidirectional:
+    "Click two connected blocks. Beams travel both ways at the same time.",
+  "multiple-inputs":
+    "Click the receiving block first, then each block that sends into it.",
+  "multiple-outputs":
+    "Click the source block first, then each block that receives from it.",
+} as const;
 
 const ANIMATION_PATH_DRAG_MIME = "application/x-netviz-animation-path";
 
@@ -560,6 +579,14 @@ export function ExistingAnimationPath() {
             .map((id) => nodes.find((node) => node.id === id))
             .filter((node) => node !== undefined)
             .map(getNodeDisplayName);
+          const route =
+            path.preset === "bidirectional"
+              ? names.join(" ↔ ")
+              : path.preset === "multiple-inputs"
+                ? `${names.slice(1).join(" + ")} → ${names[0] ?? ""}`
+                : path.preset === "multiple-outputs"
+                  ? `${names[0] ?? ""} → ${names.slice(1).join(" + ")}`
+                  : names.join(" → ");
           const colors = document.scenarios
             .find((scenario) => scenario.id === path.scenarioId)
             ?.tracks.find(
@@ -623,7 +650,7 @@ export function ExistingAnimationPath() {
                 </span>
               </div>
               <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
-                {names.join(" → ")}
+                {route}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <Button
@@ -730,6 +757,9 @@ export function AnimationPathBuilder() {
   const setAnimationPathName = useFlowStore(
     (state) => state.setAnimationPathName
   );
+  const setAnimationPathPreset = useFlowStore(
+    (state) => state.setAnimationPathPreset
+  );
   const setAnimationPathAppearance = useFlowStore(
     (state) => state.setAnimationPathAppearance
   );
@@ -738,14 +768,19 @@ export function AnimationPathBuilder() {
   const pathNodes = draft.nodeIds
     .map((id) => nodes.find((node) => node.id === id))
     .filter((node) => node !== undefined);
+  const canSave =
+    draft.preset === "multiple-inputs" || draft.preset === "multiple-outputs"
+      ? draft.edgeIds.length >= 2
+      : draft.preset === "bidirectional"
+        ? draft.edgeIds.length === 1
+        : draft.edgeIds.length >= 1;
 
   return (
     <div className="flex-1 overflow-y-auto pb-4" data-animation-path-builder>
       <div className="border-b border-border px-4 py-3.5">
         <p className="text-xs font-semibold text-foreground">Custom path</p>
         <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
-          Click connected blocks in order. Each click adds the next request
-          hop. A block can appear again when a return connection exists.
+          {PATH_PRESET_HELP[draft.preset]}
         </p>
 
         <label className="mb-3 block text-[10px] text-muted-foreground">
@@ -759,9 +794,37 @@ export function AnimationPathBuilder() {
           />
         </label>
 
+        <div className="mb-3">
+          <p className="mb-1.5 text-[10px] text-muted-foreground">
+            Path preset
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {PATH_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                aria-pressed={draft.preset === preset.value}
+                onClick={() => setAnimationPathPreset(preset.value)}
+                className={cn(
+                  "h-8 rounded-md border px-2 text-[10px] transition-colors",
+                  draft.preset === preset.value
+                    ? "border-primary/50 bg-primary/10 text-foreground"
+                    : "border-border bg-input text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {pathNodes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[10px] text-muted-foreground">
-            Click the first block on the canvas
+            {draft.preset === "multiple-inputs"
+              ? "Click the receiving block on the canvas"
+              : draft.preset === "multiple-outputs"
+                ? "Click the source block on the canvas"
+                : "Click the first block on the canvas"}
           </div>
         ) : (
           <div className="max-h-60 overflow-y-auto rounded-lg bg-input p-1.5">
@@ -931,7 +994,7 @@ export function AnimationPathBuilder() {
           type="button"
           size="sm"
           className="h-7 rounded-md text-xs"
-          disabled={draft.edgeIds.length === 0}
+          disabled={!canSave}
           onClick={() => {
             animateDraftPath();
             playAllAnimations();
