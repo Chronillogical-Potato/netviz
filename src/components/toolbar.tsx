@@ -36,7 +36,6 @@ import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
   { id: "design", label: "Design", icon: PenLine },
   { id: "animation", label: "Animation", icon: Activity },
-  { id: "preview", label: "Preview", icon: Eye },
 ];
 
 // Centered file name, Figma-style: double-click to rename in place.
@@ -504,27 +503,6 @@ export function Toolbar() {
     }
   };
 
-  if (workMode === "preview") {
-    return (
-      <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-2.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setWorkMode("design")}
-          aria-label="Exit preview"
-        >
-          Exit preview
-        </Button>
-        <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-xs font-semibold text-foreground">
-          <Logo className="h-4 w-4" />
-          Preview
-        </div>
-        <span className="text-[10px] text-muted-foreground">Esc to exit</span>
-      </header>
-    );
-  }
-
   return (
     <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-background px-2.5">
       <ProjectTitle />
@@ -554,6 +532,17 @@ export function Toolbar() {
         }}
       />
       <div className="ml-auto flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setWorkMode("preview")}
+          disabled={!hasNodes}
+          title="Hide the editor for screenshots or recording"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          Preview
+        </Button>
         <Button variant="ghost" size="sm" onClick={save}>
           Save
         </Button>

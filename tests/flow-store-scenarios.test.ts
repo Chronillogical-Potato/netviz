@@ -50,6 +50,7 @@ function resetStore() {
     showSmartGuides: true,
     motionPreference: "system",
     workMode: "design",
+    previewReturnMode: "design",
     animationPathDraft: null,
   });
   temporal.clear();
@@ -59,6 +60,19 @@ function resetStore() {
 beforeEach(resetStore);
 
 describe("page-owned animation state", () => {
+  test("returns clean preview to the editor mode it entered from", () => {
+    useFlowStore.getState().setWorkMode("animation");
+    useFlowStore.getState().setWorkMode("preview");
+
+    expect(useFlowStore.getState()).toMatchObject({
+      workMode: "preview",
+      previewReturnMode: "animation",
+    });
+
+    useFlowStore.getState().exitPreview();
+    expect(useFlowStore.getState().workMode).toBe("animation");
+  });
+
   test("swaps scenario documents with the active page", () => {
     useFlowStore.setState({ edges: [edge("edge-a", "a", "b", true)] });
     useFlowStore.getState().applySelectedEdgeEffect({

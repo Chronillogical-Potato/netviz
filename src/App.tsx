@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 export default function App() {
   const workMode = useFlowStore((s) => s.workMode);
-  const setWorkMode = useFlowStore((s) => s.setWorkMode);
+  const exitPreview = useFlowStore((s) => s.exitPreview);
   const motionPreference = useFlowStore((s) => s.motionPreference);
   const isPreview = workMode === "preview";
   const [systemReduced, setSystemReduced] = useState(false);
@@ -39,11 +39,11 @@ export default function App() {
       ) {
         return;
       }
-      setWorkMode("design");
+      exitPreview();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [isPreview, setWorkMode]);
+  }, [isPreview, exitPreview]);
 
   const clipboardRef = useRef<{ ids: string[]; pasteCount: number }>({
     ids: [],
@@ -96,7 +96,7 @@ export default function App() {
         )}
         data-motion={reducedMotion ? "reduced" : "full"}
       >
-        <Toolbar />
+        {!isPreview && <Toolbar />}
         <div className="flex flex-1 overflow-hidden">
           {!isPreview && <Sidebar />}
           <div className="relative flex flex-1 overflow-hidden">

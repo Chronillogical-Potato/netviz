@@ -244,6 +244,7 @@ type Snapshot = {
 };
 
 export type WorkMode = "design" | "animation" | "preview";
+export type EditorMode = Exclude<WorkMode, "preview">;
 export type MotionPreference = "system" | "full" | "reduced";
 export type AnimationPathAppearance = {
   colors: [string, string];
@@ -269,6 +270,7 @@ type NodeDataPatch = Partial<InfraNodeData> &
   Partial<ImageNodeData>;
 
 type FlowState = Snapshot & {
+  previewReturnMode: EditorMode;
   animationPathDraft: AnimationPathDraft | null;
   onNodesChange: OnNodesChange<AppNode>;
   onEdgesChange: OnEdgesChange<LabeledEdge>;
@@ -380,6 +382,7 @@ type FlowState = Snapshot & {
   toggleSmartGuides: () => void;
   setMotionPreference: (preference: MotionPreference) => void;
   setWorkMode: (mode: WorkMode) => void;
+  exitPreview: () => void;
 };
 
 let nodeSeq = 0;
@@ -699,6 +702,7 @@ export const useFlowStore = create<FlowState>()(
   showSmartGuides: true,
   motionPreference: "system" as MotionPreference,
   workMode: "design" as WorkMode,
+  previewReturnMode: "design" as EditorMode,
   animationPathDraft: null,
 
   onNodesChange: (changes) =>
@@ -1923,7 +1927,6 @@ export const useFlowStore = create<FlowState>()(
         scenarioDocument: snapshot.scenarioDocument,
         turbo: snapshot.turbo,
         turboColors: snapshot.turboColors,
-        workMode: "design",
         animationPathDraft: null,
       })
     ),
@@ -1956,6 +1959,10 @@ export const useFlowStore = create<FlowState>()(
       mode === "preview"
         ? {
             workMode: mode,
+            previewReturnMode:
+              state.workMode === "preview"
+                ? state.previewReturnMode
+                : state.workMode,
             animationPathDraft: null,
             nodes: state.nodes.map((node) =>
               node.selected ? { ...node, selected: false } : node
@@ -1966,9 +1973,12 @@ export const useFlowStore = create<FlowState>()(
           }
         : {
             workMode: mode,
+            previewReturnMode: mode,
             ...(mode === "animation" ? {} : { animationPathDraft: null }),
           }
     ),
+  exitPreview: () =>
+    set((state) => ({ workMode: state.previewReturnMode })),
     }),
     {
       partialize: (state) => ({
@@ -2065,6 +2075,7 @@ export const useFlowStore = create<FlowState>()(
             ),
           motionPreference: p.motionPreference ?? "system",
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
+          workMode: p.workMode === "animation" ? "animation" : "design",
         };
       },
       partialize: (s) => ({
@@ -2085,6 +2096,8 @@ export const useFlowStore = create<FlowState>()(
         showControls: s.showControls,
         showSmartGuides: s.showSmartGuides,
         motionPreference: s.motionPreference,
+        workMode:
+          s.workMode === "preview" ? s.previewReturnMode : s.workMode,
       }),
     }
   )
