@@ -134,6 +134,16 @@ describe("version 1 animation migration", () => {
     });
   });
 
+  test("keeps tiny positive legacy speeds at a valid duration", () => {
+    const migrated = migrateFlowSnapshotV1(
+      legacySnapshot({
+        edges: [legacyEdge("edge-1", true)],
+        animationSpeed: 0.0001,
+      })
+    );
+    expect(migrated.scenarioDocument.scenarios[0].durationMs).toBe(1);
+  });
+
   test("preserves base edge appearance and project turbo settings", () => {
     const edge = legacyEdge("edge-1", true);
     const migrated = migrateFlowSnapshotV1(
@@ -209,5 +219,15 @@ describe("version 2 normalization", () => {
         scenarioDocument: { schemaVersion: 2, scenarios: [] },
       })
     ).toThrow("Unsupported scenario schema version");
+  });
+
+  test("rejects empty page lists and missing active pages", () => {
+    const snapshot = migrateFlowSnapshotV1(legacySnapshot());
+    expect(() => normalizeFlowSnapshotV2({ ...snapshot, pages: [] })).toThrow(
+      "Invalid snapshot shape"
+    );
+    expect(() =>
+      normalizeFlowSnapshotV2({ ...snapshot, activePageId: "missing" })
+    ).toThrow("Invalid snapshot shape");
   });
 });

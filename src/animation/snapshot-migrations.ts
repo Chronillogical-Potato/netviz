@@ -103,11 +103,14 @@ function normalizeScenarioDocument(
 }
 
 function legacyDurationMs(animationSpeed: unknown): number {
-  return typeof animationSpeed === "number" &&
+  if (
+    typeof animationSpeed === "number" &&
     Number.isFinite(animationSpeed) &&
     animationSpeed > 0
-    ? Math.round(animationSpeed * 1_000)
-    : 800;
+  ) {
+    return Math.max(1, Math.round(animationSpeed * 1_000));
+  }
+  return 800;
 }
 
 function migratePage(
@@ -242,6 +245,21 @@ export function normalizeFlowSnapshotV2(input: unknown): FlowSnapshotV2 {
   assertCollection(input.groups);
   assertCollection(input.pages);
   if (typeof input.activePageId !== "string" || !isRecord(input.pageContents)) {
+    throw new Error("Invalid snapshot shape");
+  }
+  const pages = input.pages as unknown[];
+  if (
+    pages.length === 0 ||
+    pages.some(
+      (page) =>
+        !isRecord(page) ||
+        typeof page.id !== "string" ||
+        typeof page.name !== "string"
+    ) ||
+    !pages.some(
+      (page) => isRecord(page) && page.id === input.activePageId
+    )
+  ) {
     throw new Error("Invalid snapshot shape");
   }
 
