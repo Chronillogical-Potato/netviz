@@ -396,6 +396,7 @@ describe("animation target lifecycle", () => {
     expect(useFlowStore.getState().animationPathDraft).toEqual({
       scenarioId: null,
       name: "Custom path 1",
+      preset: "single-line",
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         widthPx: 2,
@@ -465,6 +466,7 @@ describe("animation target lifecycle", () => {
     expect(useFlowStore.getState().animationPathDraft).toEqual({
       scenarioId: scenario.id,
       name: "Custom path 1",
+      preset: "single-line",
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         widthPx: 2,
@@ -515,6 +517,98 @@ describe("animation target lifecycle", () => {
     expect(containerTrack?.clips.map((clip) => clip.startMs)).toEqual([
       2_100,
       6_300,
+    ]);
+  });
+
+  test("builds and reloads a bidirectional beam preset", () => {
+    useFlowStore.setState({
+      nodes: [node("client"), node("server")],
+      edges: [edge("client-server", "client", "server")],
+    });
+
+    useFlowStore.getState().beginAnimationPath("client");
+    useFlowStore.getState().setAnimationPathPreset("bidirectional");
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const edgeClip = scenario.tracks.find(
+      (track) => track.property === "connection-effect"
+    )?.clips[0];
+    expect(edgeClip?.effect.params).toMatchObject({
+      pathPreset: "bidirectional",
+      direction: "bidirectional",
+    });
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "node-effect")
+        .map((track) => track.clips[0].startMs)
+    ).toEqual([0, 0]);
+
+    useFlowStore.getState().editAnimationPath(scenario.id);
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "bidirectional",
+      nodeIds: ["client", "server"],
+      edgeIds: ["client-server"],
+    });
+  });
+
+  test("builds simultaneous multiple-input and multiple-output presets", () => {
+    useFlowStore.setState({
+      nodes: [node("hub"), node("a"), node("b")],
+      edges: [
+        edge("a-hub", "a", "hub"),
+        edge("b-hub", "b", "hub"),
+        edge("hub-a", "hub", "a"),
+        edge("hub-b", "hub", "b"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("multiple-inputs");
+    useFlowStore.getState().appendAnimationPathNode("hub");
+    useFlowStore.getState().appendAnimationPathNode("a");
+    useFlowStore.getState().appendAnimationPathNode("b");
+    expect(useFlowStore.getState().animationPathDraft).toMatchObject({
+      preset: "multiple-inputs",
+      nodeIds: ["hub", "a", "b"],
+      edgeIds: ["a-hub", "b-hub"],
+    });
+    useFlowStore.getState().animateDraftPath();
+
+    const inputScenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(
+      inputScenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+          track.clips[0].effect.params.pathPreset,
+        ])
+    ).toEqual([
+      ["a-hub", 800, "multiple-inputs"],
+      ["b-hub", 800, "multiple-inputs"],
+    ]);
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().setAnimationPathPreset("multiple-outputs");
+    useFlowStore.getState().appendAnimationPathNode("hub");
+    useFlowStore.getState().appendAnimationPathNode("a");
+    useFlowStore.getState().appendAnimationPathNode("b");
+    useFlowStore.getState().animateDraftPath();
+
+    const outputScenario = useFlowStore.getState().scenarioDocument.scenarios[1];
+    expect(
+      outputScenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+          track.clips[0].effect.params.pathPreset,
+        ])
+    ).toEqual([
+      ["hub-a", 800, "multiple-outputs"],
+      ["hub-b", 800, "multiple-outputs"],
     ]);
   });
 

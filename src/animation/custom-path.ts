@@ -1,7 +1,21 @@
 import type { PageScenarioDocumentV1, ScenarioV1 } from "./model";
 import type { RequestFlowEdge } from "./request-flow";
 
+export type AnimationPathPreset =
+  | "single-line"
+  | "bidirectional"
+  | "multiple-inputs"
+  | "multiple-outputs";
+
+const PATH_PRESETS = new Set<AnimationPathPreset>([
+  "single-line",
+  "bidirectional",
+  "multiple-inputs",
+  "multiple-outputs",
+]);
+
 export interface AuthoredCustomPath {
+  preset: AnimationPathPreset;
   nodeIds: string[];
   edgeIds: string[];
 }
@@ -72,9 +86,58 @@ function findPathInScenario(
     .map((track) => ({
       edgeId: "id" in track.target ? track.target.id : "",
       startMs: track.clips[0]?.startMs ?? 0,
-    }))
-    .sort((left, right) => left.startMs - right.startMs);
+      preset: track.clips[0]?.effect.params.pathPreset,
+    }));
   if (authored.length === 0) return null;
+  const authoredPreset = authored[0]?.preset;
+  const preset =
+    typeof authoredPreset === "string" &&
+    PATH_PRESETS.has(authoredPreset as AnimationPathPreset)
+      ? (authoredPreset as AnimationPathPreset)
+      : "single-line";
+  if (
+    authored.some(
+      (item) =>
+        item.preset !== undefined && item.preset !== preset
+    )
+  ) {
+    return null;
+  }
+
+  if (preset !== "single-line") {
+    const orderedEdges = authored.map((item) =>
+      edges.find((edge) => edge.id === item.edgeId)
+    );
+    if (orderedEdges.some((edge) => edge === undefined)) return null;
+    const resolved = orderedEdges as RequestFlowEdge[];
+    if (preset === "bidirectional") {
+      const edge = resolved[0];
+      if (resolved.length !== 1 || !edge) return null;
+      return {
+        preset,
+        edgeIds: [edge.id],
+        nodeIds: [edge.source, edge.target],
+      };
+    }
+    if (preset === "multiple-inputs") {
+      const hubId = resolved[0]?.target;
+      if (!hubId || resolved.some((edge) => edge.target !== hubId)) return null;
+      return {
+        preset,
+        edgeIds: resolved.map((edge) => edge.id),
+        nodeIds: [hubId, ...resolved.map((edge) => edge.source)],
+      };
+    }
+    const hubId = resolved[0]?.source;
+    if (!hubId || resolved.some((edge) => edge.source !== hubId)) return null;
+    return {
+      preset,
+      edgeIds: resolved.map((edge) => edge.id),
+      nodeIds: [hubId, ...resolved.map((edge) => edge.target)],
+    };
+  }
+
+  authored.sort((left, right) => left.startMs - right.startMs);
   if (
     authored.some(
       (item, index) =>
@@ -97,6 +160,7 @@ function findPathInScenario(
   const first = orderedEdges[0];
   if (!first) return null;
   return {
+    preset,
     edgeIds: orderedEdges.map((edge) => edge!.id),
     nodeIds: [first.source, ...orderedEdges.map((edge) => edge!.target)],
   };

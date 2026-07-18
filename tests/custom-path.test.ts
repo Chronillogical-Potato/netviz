@@ -10,7 +10,11 @@ import {
   normalizeGradientBeamDefaults,
 } from "../src/animation/gradient-beam";
 
-const track = (edgeId: string, startMs: number): ScenarioTrackV1 => ({
+const track = (
+  edgeId: string,
+  startMs: number,
+  params: ScenarioTrackV1["clips"][number]["effect"]["params"] = {}
+): ScenarioTrackV1 => ({
   id: `track-${edgeId}`,
   target: { type: "edge", id: edgeId },
   property: "connection-effect",
@@ -23,7 +27,7 @@ const track = (edgeId: string, startMs: number): ScenarioTrackV1 => ({
       easing: "linear",
       repeatCount: 0,
       repeatDelayMs: 0,
-      effect: { type: "edge.gradient-beam", params: {} },
+      effect: { type: "edge.gradient-beam", params },
     },
   ],
 });
@@ -87,12 +91,14 @@ describe("authored custom paths", () => {
       {
         scenarioId: "scenario-1",
         name: "Login",
+        preset: "single-line",
         nodeIds: ["user", "firewall"],
         edgeIds: ["user-firewall"],
       },
       {
         scenarioId: "scenario-2",
         name: "Checkout",
+        preset: "single-line",
         nodeIds: ["proxy", "server"],
         edgeIds: ["proxy-server"],
       },
@@ -151,6 +157,7 @@ describe("authored custom paths", () => {
         ]
       )
     ).toEqual({
+      preset: "single-line",
       nodeIds: ["user", "firewall", "proxy"],
       edgeIds: ["user-firewall", "firewall-proxy"],
     });
@@ -167,6 +174,75 @@ describe("authored custom paths", () => {
         edges
       )
     ).toBeNull();
+  });
+
+  test("reconstructs bidirectional and branching path presets", () => {
+    const bidirectional = {
+      ...document([
+        track("a-b", 800, {
+          pathPreset: "bidirectional",
+          direction: "bidirectional",
+        }),
+      ]).scenarios[0],
+      id: "bidirectional",
+      name: "Two way",
+    };
+    const inputs = {
+      ...document([
+        track("a-hub", 800, { pathPreset: "multiple-inputs" }),
+        track("b-hub", 800, { pathPreset: "multiple-inputs" }),
+      ]).scenarios[0],
+      id: "inputs",
+      name: "Inbound",
+    };
+    const outputs = {
+      ...document([
+        track("hub-a", 800, { pathPreset: "multiple-outputs" }),
+        track("hub-b", 800, { pathPreset: "multiple-outputs" }),
+      ]).scenarios[0],
+      id: "outputs",
+      name: "Outbound",
+    };
+    const paths = findAuthoredCustomPaths(
+      {
+        schemaVersion: 1,
+        defaultScenarioId: bidirectional.id,
+        scenarios: [bidirectional, inputs, outputs],
+      },
+      [
+        { id: "a-b", source: "a", target: "b" },
+        { id: "a-hub", source: "a", target: "hub" },
+        { id: "b-hub", source: "b", target: "hub" },
+        { id: "hub-a", source: "hub", target: "a" },
+        { id: "hub-b", source: "hub", target: "b" },
+      ]
+    );
+
+    expect(paths.map(({ scenarioId, preset, nodeIds, edgeIds }) => ({
+      scenarioId,
+      preset,
+      nodeIds,
+      edgeIds,
+    }))).toEqual([
+      {
+        scenarioId: "bidirectional",
+        preset: "bidirectional",
+        nodeIds: ["a", "b"],
+        edgeIds: ["a-b"],
+      },
+      {
+        scenarioId: "inputs",
+        preset: "multiple-inputs",
+        nodeIds: ["hub", "a", "b"],
+        edgeIds: ["a-hub", "b-hub"],
+      },
+      {
+        scenarioId: "outputs",
+        preset: "multiple-outputs",
+        nodeIds: ["hub", "a", "b"],
+        edgeIds: ["hub-a", "hub-b"],
+      },
+    ]);
   });
 
   test("repairs persisted paths whose edges overlap their block shimmer", () => {

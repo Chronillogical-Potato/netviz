@@ -58,7 +58,10 @@ import {
   REQUEST_FLOW_HOP_DELAY_MS,
   type NodeBorderEntrySide,
 } from "@/animation/gradient-beam";
-import { findAuthoredCustomPaths } from "@/animation/custom-path";
+import {
+  findAuthoredCustomPaths,
+  type AnimationPathPreset,
+} from "@/animation/custom-path";
 import {
   buildRequestFlow,
   buildSelectedRequestFlow,
@@ -260,6 +263,7 @@ export type AnimationPathAppearance = {
 export type AnimationPathDraft = {
   scenarioId: string | null;
   name: string;
+  preset: AnimationPathPreset;
   appearance: AnimationPathAppearance;
   nodeIds: string[];
   edgeIds: string[];
@@ -375,6 +379,7 @@ type FlowState = Snapshot & {
   animateSelectedPath: () => void;
   beginAnimationPath: (startNodeId?: string) => void;
   setAnimationPathName: (name: string) => void;
+  setAnimationPathPreset: (preset: AnimationPathPreset) => void;
   setAnimationPathAppearance: (
     patch: Partial<AnimationPathAppearance>
   ) => void;
@@ -487,7 +492,16 @@ function buildAnimationPathScenario(input: {
   edgeIds: readonly string[];
   edges: readonly LabeledEdge[];
   appearance: AnimationPathAppearance;
+  preset?: AnimationPathPreset;
 }): ScenarioV1 | null {
+  const preset = input.preset ?? "single-line";
+  if (
+    (preset === "bidirectional" && input.edgeIds.length !== 1) ||
+    ((preset === "multiple-inputs" || preset === "multiple-outputs") &&
+      input.edgeIds.length < 2)
+  ) {
+    return null;
+  }
   const edgeEffect = createGradientBeamEffect();
   edgeEffect.params = {
     ...edgeEffect.params,
@@ -496,6 +510,8 @@ function buildAnimationPathScenario(input: {
     beamLengthPx: input.appearance.beamLengthPx,
     opacity: input.appearance.opacity,
     glowBlurPx: input.appearance.glowBlurPx,
+    pathPreset: preset,
+    direction: preset === "bidirectional" ? "bidirectional" : "forward",
   };
   let document = createDefaultScenarioDocument({
     id: input.id,
@@ -507,17 +523,39 @@ function buildAnimationPathScenario(input: {
       effect: edgeEffect,
       clip: createGradientBeamClip(
         input.appearance.shimmer
-          ? REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS
-          : index * GRADIENT_BEAM_DURATION_MS
+          ? REQUEST_FLOW_EDGE_DELAY_MS +
+              (preset === "single-line" ? index * REQUEST_FLOW_HOP_DELAY_MS : 0)
+          : preset === "single-line"
+            ? index * GRADIENT_BEAM_DURATION_MS
+            : 0
       ),
     });
   });
   if (input.appearance.shimmer) {
     input.nodeIds.forEach((nodeId, index) => {
-      const incomingEdge =
-        index === 0
-          ? undefined
-          : input.edges.find((edge) => edge.id === input.edgeIds[index - 1]);
+      const incomingEdgeId =
+        preset === "multiple-inputs"
+          ? index === 0
+            ? input.edgeIds[0]
+            : undefined
+          : index === 0
+            ? undefined
+            : input.edgeIds[index - 1];
+      const incomingEdge = input.edges.find(
+        (edge) => edge.id === incomingEdgeId
+      );
+      const startMs =
+        preset === "single-line"
+          ? index * REQUEST_FLOW_HOP_DELAY_MS
+          : preset === "multiple-inputs"
+            ? index === 0
+              ? REQUEST_FLOW_HOP_DELAY_MS
+              : 0
+            : preset === "multiple-outputs"
+              ? index === 0
+                ? 0
+                : REQUEST_FLOW_HOP_DELAY_MS
+              : 0;
       const nodeEffect = createNodeBorderEffect(nodeEntrySide(incomingEdge));
       nodeEffect.params = {
         ...nodeEffect.params,
@@ -527,7 +565,7 @@ function buildAnimationPathScenario(input: {
         nodeIds: [nodeId],
         effect: nodeEffect,
         append: true,
-        clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+        clip: createNodeBorderClip(startMs),
       });
     });
   }
@@ -1596,6 +1634,7 @@ export const useFlowStore = create<FlowState>()(
         animationPathDraft: {
           scenarioId: existingDraft?.scenarioId ?? null,
           name: existingDraft?.name ?? `Custom path ${pathNumber}`,
+          preset: existingDraft?.preset ?? "single-line",
           appearance:
             existingDraft?.appearance ?? defaultAnimationPathAppearance(),
           nodeIds: hasStart ? [startNodeId] : [],
@@ -1616,6 +1655,21 @@ export const useFlowStore = create<FlowState>()(
     set((s) =>
       s.animationPathDraft
         ? { animationPathDraft: { ...s.animationPathDraft, name } }
+        : s
+    ),
+
+  setAnimationPathPreset: (preset) =>
+    set((s) =>
+      s.animationPathDraft
+        ? {
+            animationPathDraft: {
+              ...s.animationPathDraft,
+              preset,
+              nodeIds: s.animationPathDraft.nodeIds.slice(0, 1),
+              edgeIds: [],
+              error: null,
+            },
+          }
         : s
     ),
 
@@ -1663,15 +1717,43 @@ export const useFlowStore = create<FlowState>()(
       }
 
       const lastNodeId = draft.nodeIds[draft.nodeIds.length - 1];
-      const edge = s.edges.find(
-        (candidate) =>
-          candidate.source === lastNodeId && candidate.target === nodeId
-      );
-      if (!edge) {
+      if (draft.preset === "bidirectional" && draft.edgeIds.length > 0) {
         return {
           animationPathDraft: {
             ...draft,
-            error: "Choose a directly connected outgoing block.",
+            error: "Bi-directional paths use two connected blocks.",
+          },
+        };
+      }
+      const hubId = draft.nodeIds[0];
+      const edge = s.edges.find((candidate) => {
+        if (draft.preset === "multiple-inputs") {
+          return candidate.source === nodeId && candidate.target === hubId;
+        }
+        if (draft.preset === "multiple-outputs") {
+          return candidate.source === hubId && candidate.target === nodeId;
+        }
+        if (draft.preset === "bidirectional") {
+          return (
+            (candidate.source === lastNodeId && candidate.target === nodeId) ||
+            (candidate.source === nodeId && candidate.target === lastNodeId)
+          );
+        }
+        return candidate.source === lastNodeId && candidate.target === nodeId;
+      });
+      if (!edge) {
+        const error =
+          draft.preset === "multiple-inputs"
+            ? "Choose a block with a connection into the receiving block."
+            : draft.preset === "multiple-outputs"
+              ? "Choose a block connected from the source block."
+              : draft.preset === "bidirectional"
+                ? "Choose a directly connected block."
+                : "Choose a directly connected outgoing block.";
+        return {
+          animationPathDraft: {
+            ...draft,
+            error,
           },
         };
       }
@@ -1813,6 +1895,7 @@ export const useFlowStore = create<FlowState>()(
         edgeIds,
         edges: s.edges,
         appearance,
+        preset: draft?.preset ?? "single-line",
       });
       if (!savedScenario) return s;
       const existingIndex = s.scenarioDocument.scenarios.findIndex(
