@@ -1,23 +1,15 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
-  ChevronRight,
+  ChevronDown,
+  Eye,
   MoreVertical,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTheme } from "next-themes";
+  PenLine,
+} from "@/ui/icons";
+import type { AppIcon } from "@/ui/icons";
 import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/react";
 import { toPng, toSvg } from "html-to-image";
-import { useStore } from "zustand";
 import { useFlowStore } from "@/store/flow-store";
 import { downloadSnapshot, readSnapshotFromFile } from "@/lib/storage";
 import { cn } from "@/lib/utils";
@@ -32,38 +24,149 @@ import {
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
+import { Logo } from "@/ui/logo";
+import { SettingsDialog } from "./settings-dialog";
 
 import type { WorkMode } from "@/store/flow-store";
-const WORK_MODES: { id: WorkMode; label: string }[] = [
-  { id: "design", label: "Design" },
-  { id: "preview", label: "Preview" },
+const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
+  { id: "design", label: "Design", icon: PenLine },
+  { id: "preview", label: "Preview", icon: Eye },
 ];
 
+// Centered file name, Figma-style: double-click to rename in place.
+// Persistence is automatic — projectName lives in the store, which
+// auto-saves to IndexedDB.
+function ProjectTitle() {
+  const projectName = useFlowStore((s) => s.projectName);
+  const setProjectName = useFlowStore((s) => s.setProjectName);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(projectName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(projectName);
+  }, [projectName, editing]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    setProjectName(draft);
+    setEditing(false);
+  };
+
+  return (
+    <div className="pointer-events-none fixed left-1/2 top-0 z-40 flex h-12 -translate-x-1/2 items-center">
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setDraft(projectName);
+              setEditing(false);
+            }
+          }}
+          style={{ width: `${Math.min(Math.max(draft.length + 3, 8), 48)}ch` }}
+          className="pointer-events-auto h-7 rounded-md bg-input px-2 text-center text-[13px] font-medium text-foreground outline-none focus:ring-1 focus:ring-ring"
+          aria-label="Project name"
+        />
+      ) : (
+        <button
+          type="button"
+          onDoubleClick={() => setEditing(true)}
+          title="Double-click to rename"
+          className="pointer-events-auto max-w-72 truncate rounded-md px-2 py-1 text-[13px] font-medium text-foreground/90 transition-colors hover:bg-muted"
+        >
+          {projectName}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ModeSelector() {
+  const workMode = useFlowStore((s) => s.workMode);
+  const setWorkMode = useFlowStore((s) => s.setWorkMode);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const current = WORK_MODES.find((m) => m.id === workMode) ?? WORK_MODES[0];
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={cn(
+          "flex h-8 items-center gap-1.5 rounded-lg bg-muted pl-2.5 pr-2 transition-colors hover:bg-accent",
+          open && "bg-accent"
+        )}
+      >
+        <Logo className="h-4 w-4" />
+        <span className="text-[13px] font-semibold">{current.label}</span>
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[160px] rounded-xl border border-border/60 bg-popover p-1 shadow-xl">
+          {WORK_MODES.map((m) => {
+            const active = workMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setWorkMode(m.id);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-muted"
+              >
+                <m.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="flex-1">{m.label}</span>
+                {active && <Check className="h-3.5 w-3.5" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Toolbar() {
-  const nodes = useFlowStore((s) => s.nodes);
-  const edges = useFlowStore((s) => s.edges);
-  const customBlocks = useFlowStore((s) => s.customBlocks);
-  const groups = useFlowStore((s) => s.groups);
-  const turbo = useFlowStore((s) => s.turbo);
-  const animateEdges = useFlowStore((s) => s.animateEdges);
-  const animationSpeed = useFlowStore((s) => s.animationSpeed);
-  const turboColors = useFlowStore((s) => s.turboColors);
+  // Only subscribe to the booleans the toolbar renders with — save/export
+  // read the full workspace via getState() at call time so the toolbar
+  // doesn't re-render on every node drag frame.
+  const hasNodes = useFlowStore((s) => s.nodes.length > 0);
   const setRenderAll = useFlowStore((s) => s.setRenderAllElements);
   const replace = useFlowStore((s) => s.replace);
   const clear = useFlowStore((s) => s.clear);
   const resetWorkspace = useFlowStore((s) => s.resetWorkspace);
   const selectAll = useFlowStore((s) => s.selectAll);
-  const deleteSelected = useFlowStore((s) => s.deleteSelected);
   const addImageNode = useFlowStore((s) => s.addImageNode);
-  const { zoomIn, zoomOut, fitView, setViewport, screenToFlowPosition } =
-    useReactFlow();
-  const workMode = useFlowStore((s) => s.workMode);
-  const setWorkMode = useFlowStore((s) => s.setWorkMode);
+  const { screenToFlowPosition } = useReactFlow();
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [exportDialog, setExportDialog] = useState<{
     format: "png" | "svg";
     name: string;
@@ -72,14 +175,8 @@ export function Toolbar() {
   const [cropMode, setCropMode] = useState<{
     format: "png" | "svg";
   } | null>(null);
-
-  const canUndo = useStore(useFlowStore.temporal, (s) => s.pastStates.length > 0);
-  const canRedo = useStore(
-    useFlowStore.temporal,
-    (s) => s.futureStates.length > 0
-  );
-  const undo = () => useFlowStore.temporal.getState().undo();
-  const redo = () => useFlowStore.temporal.getState().redo();
+  const [saveDialog, setSaveDialog] = useState<{ name: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -129,14 +226,10 @@ export function Toolbar() {
     reader.readAsDataURL(f);
   };
 
-  const defaultExportName = () =>
-    `netviz-${new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace(/[:T]/g, "-")}`;
+  const defaultExportName = () => useFlowStore.getState().projectName;
 
   const openExportDialog = (format: "png" | "svg") => {
-    if (nodes.length === 0) return;
+    if (!hasNodes) return;
     setCropMode({ format });
   };
 
@@ -176,6 +269,7 @@ export function Toolbar() {
     filename: string,
     customBounds?: { x: number; y: number; width: number; height: number }
   ) => {
+    const { nodes, turboColors } = useFlowStore.getState();
     const viewport = document.querySelector(
       ".react-flow__viewport"
     ) as HTMLElement | null;
@@ -191,10 +285,13 @@ export function Toolbar() {
     const width = Math.round(bounds.width + padding * 2);
     const height = Math.round(bounds.height + padding * 2);
     const vp = getViewportForBounds(bounds, width, height, 1, 1, padding);
+    const state = useFlowStore.getState();
+    const pageBg = state.pages.find((p) => p.id === state.activePageId)
+      ?.bgColor;
     const bg = getComputedStyle(document.body)
       .getPropertyValue("--canvas-bg")
       .trim();
-    const bgColor = bg ? `hsl(${bg})` : "#ffffff";
+    const bgColor = pageBg ?? (bg ? `hsl(${bg})` : "#ffffff");
 
     const edgeSvgs = Array.from(
       viewport.querySelectorAll(".react-flow__edges svg, .react-flow__edges > svg")
@@ -365,24 +462,26 @@ export function Toolbar() {
     }
   };
 
-  const save = () => {
-    const suggested = `netviz-${new Date()
-      .toISOString()
-      .slice(0, 19)
-      .replace(/[:T]/g, "-")}`;
-    const name = window.prompt("Save as:", suggested);
-    if (name === null) return;
+  const save = () =>
+    setSaveDialog({ name: useFlowStore.getState().projectName });
+
+  const doSave = (name: string) => {
+    const s = useFlowStore.getState();
     downloadSnapshot(
       {
         version: 1,
-        nodes,
-        edges,
-        customBlocks,
-        groups,
-        turbo,
-        animateEdges,
-        animationSpeed,
-        turboColors,
+        projectName: s.projectName,
+        nodes: s.nodes,
+        edges: s.edges,
+        customBlocks: s.customBlocks,
+        groups: s.groups,
+        pages: s.pages,
+        activePageId: s.activePageId,
+        pageContents: s.pageContents,
+        turbo: s.turbo,
+        animateEdges: s.animateEdges,
+        animationSpeed: s.animationSpeed,
+        turboColors: s.turboColors,
       },
       name
     );
@@ -391,11 +490,24 @@ export function Toolbar() {
   const load = async (f: File) => {
     try {
       const snap = await readSnapshotFromFile(f);
+      const loadedPages =
+        snap.pages && snap.pages.length > 0
+          ? snap.pages
+          : [{ id: "page-1", name: "Page 1" }];
+      const loadedActive =
+        snap.activePageId &&
+        loadedPages.some((p) => p.id === snap.activePageId)
+          ? snap.activePageId
+          : loadedPages[0].id;
       replace({
+        projectName: snap.projectName ?? "Untitled",
         nodes: snap.nodes,
         edges: snap.edges,
         customBlocks: snap.customBlocks ?? [],
         groups: snap.groups ?? [],
+        pages: loadedPages,
+        activePageId: loadedActive,
+        pageContents: snap.pageContents ?? {},
         turbo: snap.turbo ?? false,
         animateEdges: snap.animateEdges ?? false,
         animationSpeed: snap.animationSpeed ?? 0.8,
@@ -408,173 +520,45 @@ export function Toolbar() {
   };
 
   return (
-    <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-card/40 px-2">
-      <div className="flex items-center justify-start gap-0.5">
-        <Menu icon={MoreVertical} label="More" align="left">
-          <MenuSubmenu label="Edit">
-            <MenuItem
-              shortcut="⌘Z"
-              disabled={!canUndo}
-              onSelect={(close) => {
-                undo();
-                close();
-              }}
-            >
-              Undo
-            </MenuItem>
-            <MenuItem
-              shortcut="⌘⇧Z"
-              disabled={!canRedo}
-              onSelect={(close) => {
-                redo();
-                close();
-              }}
-            >
-              Redo
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem
-              shortcut="⌘A"
-              onSelect={(close) => {
-                selectAll();
-                close();
-              }}
-            >
-              Select all
-            </MenuItem>
-            <MenuItem
-              shortcut="⌫"
-              onSelect={(close) => {
-                setConfirmDeleteOpen(true);
-                close();
-              }}
-            >
-              Delete selection
-            </MenuItem>
-          </MenuSubmenu>
-          <MenuSubmenu label="View">
-            <MenuItem
-              onSelect={(close) => {
-                zoomIn();
-                close();
-              }}
-            >
-              Zoom in
-            </MenuItem>
-            <MenuItem
-              onSelect={(close) => {
-                zoomOut();
-                close();
-              }}
-            >
-              Zoom out
-            </MenuItem>
-            <MenuItem
-              onSelect={(close) => {
-                fitView({ padding: 0.4 });
-                close();
-              }}
-            >
-              Fit view
-            </MenuItem>
-            <MenuItem
-              onSelect={(close) => {
-                setViewport({ x: 0, y: 0, zoom: 1 });
-                close();
-              }}
-            >
-              Reset zoom
-            </MenuItem>
-          </MenuSubmenu>
-          <MenuSubmenu label="Export">
-            <MenuItem
-              onSelect={(close) => {
-                save();
-                close();
-              }}
-            >
-              Save File
-            </MenuItem>
-            <MenuItem
-              onSelect={(close) => {
-                openExportDialog("png");
-                close();
-              }}
-            >
-              Export PNG
-            </MenuItem>
-            <MenuItem
-              onSelect={(close) => {
-                openExportDialog("svg");
-                close();
-              }}
-            >
-              Export SVG
-            </MenuItem>
-          </MenuSubmenu>
-          <MenuItem
-            onSelect={(close) => {
-              fileRef.current?.click();
-              close();
-            }}
-          >
-            Import
-          </MenuItem>
-          <MenuItem
-            onSelect={(close) => {
-              imageRef.current?.click();
-              close();
-            }}
-          >
-            Upload image
-          </MenuItem>
-          <MenuSeparator />
-          <PreferencesSubmenu />
-          <MenuSeparator />
-          <MenuItem
-            danger
-            onSelect={(close) => {
-              setConfirmClearOpen(true);
-              close();
-            }}
-          >
-            Clear canvas
-          </MenuItem>
-          <MenuItem
-            danger
-            onSelect={(close) => {
-              setConfirmResetOpen(true);
-              close();
-            }}
-          >
-            Reset workspace
-          </MenuItem>
-        </Menu>
+    <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-background px-2.5">
+      <ProjectTitle />
+      <div className="flex items-center justify-start gap-2">
+        <ModeSelector />
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          title="Settings"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
       </div>
-      <div className="pointer-events-none fixed left-1/2 top-0 z-40 flex h-12 -translate-x-1/2 items-center">
-        <div className="pointer-events-auto flex items-center rounded-md border border-border bg-card p-0.5">
-          {WORK_MODES.map((m) => {
-            const active = workMode === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setWorkMode(m.id)}
-                className={cn(
-                  "rounded px-3 py-1 text-xs font-medium transition-colors",
-                  active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        actions={{
+          onSave: save,
+          onExportPng: () => openExportDialog("png"),
+          onExportSvg: () => openExportDialog("svg"),
+          onImport: () => fileRef.current?.click(),
+          onUploadImage: () => imageRef.current?.click(),
+          onClearCanvas: () => setConfirmClearOpen(true),
+          onResetWorkspace: () => setConfirmResetOpen(true),
+        }}
+      />
+      <div className="ml-auto flex items-center gap-1.5">
+        <Button variant="ghost" size="sm" onClick={save}>
+          Save
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => openExportDialog("png")}
+          disabled={!hasNodes}
+        >
+          Export
+        </Button>
       </div>
-
-      <div className="ml-auto" />
 
       <input
         ref={fileRef}
@@ -598,26 +582,58 @@ export function Toolbar() {
           e.target.value = "";
         }}
       />
-      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <Dialog
+        open={!!saveDialog}
+        onOpenChange={(o) => {
+          if (!o) setSaveDialog(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete selection?</DialogTitle>
+            <DialogTitle>Save file</DialogTitle>
             <DialogDescription>
-              Removes selected nodes and edges. Cannot be undone.
+              Downloads the whole project as a .json file.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid gap-1.5 py-1">
+            <Label htmlFor="save-filename">File name</Label>
+            <div className="flex items-center gap-1">
+              <Input
+                id="save-filename"
+                autoFocus
+                value={saveDialog?.name ?? ""}
+                onChange={(e) =>
+                  setSaveDialog((d) =>
+                    d ? { ...d, name: e.target.value } : d
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && saveDialog) {
+                    e.preventDefault();
+                    const { name } = saveDialog;
+                    setSaveDialog(null);
+                    doSave(name);
+                  }
+                }}
+              />
+              <span className="shrink-0 text-sm text-muted-foreground">
+                .json
+              </span>
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDeleteOpen(false)}>
+            <Button variant="outline" onClick={() => setSaveDialog(null)}>
               Cancel
             </Button>
             <Button
-              variant="destructive"
               onClick={() => {
-                deleteSelected();
-                setConfirmDeleteOpen(false);
+                if (!saveDialog) return;
+                const { name } = saveDialog;
+                setSaveDialog(null);
+                doSave(name);
               }}
             >
-              Delete
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -821,8 +837,8 @@ function CropOverlay({
       )}
       {/* hint bar */}
       <div className="fixed left-1/2 top-4 z-[51] -translate-x-1/2">
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-2 shadow-lg">
-          <span className="text-sm text-foreground">
+        <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-popover px-4 py-2 shadow-xl">
+          <span className="text-[13px] text-foreground">
             Draw to select area
           </span>
           <button
@@ -832,7 +848,7 @@ function CropOverlay({
               e.stopPropagation();
               onExportAll();
             }}
-            className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent/80"
+            className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
           >
             Export all
           </button>
@@ -844,232 +860,4 @@ function CropOverlay({
     </div>,
     document.body
   );
-}
-
-function PreferencesSubmenu() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const current = mounted ? theme : undefined;
-  const showMinimap = useFlowStore((s) => s.showMinimap);
-  const showControls = useFlowStore((s) => s.showControls);
-  const showGrid = useFlowStore((s) => s.showGrid);
-  const showSmartGuides = useFlowStore((s) => s.showSmartGuides);
-  const toggleMinimap = useFlowStore((s) => s.toggleMinimap);
-  const toggleControls = useFlowStore((s) => s.toggleControls);
-  const toggleGrid = useFlowStore((s) => s.toggleGrid);
-  const toggleSmartGuides = useFlowStore((s) => s.toggleSmartGuides);
-  return (
-    <MenuSubmenu label="Preferences">
-      <MenuSubmenu label="Theme">
-        <MenuItem
-          active={current === "light"}
-          onSelect={(close) => {
-            setTheme("light");
-            close();
-          }}
-        >
-          Light
-        </MenuItem>
-        <MenuItem
-          active={current === "dark"}
-          onSelect={(close) => {
-            setTheme("dark");
-            close();
-          }}
-        >
-          Dark
-        </MenuItem>
-        <MenuItem
-          active={current === "system"}
-          onSelect={(close) => {
-            setTheme("system");
-            close();
-          }}
-        >
-          System
-        </MenuItem>
-      </MenuSubmenu>
-      <MenuItem active={showMinimap} onSelect={() => toggleMinimap()}>
-        Minimap
-      </MenuItem>
-      <MenuItem active={showControls} onSelect={() => toggleControls()}>
-        Zoom controls
-      </MenuItem>
-      <MenuItem active={showGrid} onSelect={() => toggleGrid()}>
-        Grid
-      </MenuItem>
-      <MenuItem active={showSmartGuides} onSelect={() => toggleSmartGuides()}>
-        Smart guides
-      </MenuItem>
-    </MenuSubmenu>
-  );
-}
-
-type MenuCtx = {
-  close: () => void;
-  activeSubmenu: string | null;
-  setActiveSubmenu: (id: string | null) => void;
-};
-
-const MenuContext = createContext<MenuCtx>({
-  close: () => {},
-  activeSubmenu: null,
-  setActiveSubmenu: () => {},
-});
-
-function Menu({
-  label,
-  icon: Ic,
-  align = "left",
-  children,
-}: {
-  label?: string;
-  icon?: LucideIcon;
-  align?: "left" | "right";
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open]);
-  useEffect(() => {
-    if (!open) setActiveSubmenu(null);
-  }, [open]);
-  const isIcon = !!Ic && !label;
-  const close = () => setOpen(false);
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={label}
-        className={cn(
-          "rounded-md text-sm transition-colors hover:bg-accent",
-          isIcon
-            ? "flex h-8 w-8 items-center justify-center"
-            : "flex h-8 w-8 items-center justify-center",
-          open && "bg-accent text-accent-foreground"
-        )}
-      >
-        {Ic ? <Ic className="h-4 w-4" /> : label}
-      </button>
-      {open && (
-        <div
-          className={cn(
-            "absolute top-full z-50 mt-1 min-w-[200px] rounded-md border border-border bg-card py-1 shadow-lg",
-            align === "right" ? "right-0" : "left-0"
-          )}
-        >
-          <MenuContext.Provider
-            value={{ close, activeSubmenu, setActiveSubmenu }}
-          >
-            {children}
-          </MenuContext.Provider>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MenuItem({
-  icon: Ic,
-  children,
-  onSelect,
-  active,
-  danger,
-  shortcut,
-  disabled,
-}: {
-  icon?: React.ComponentType<{ className?: string }>;
-  children: ReactNode;
-  onSelect: (close: () => void) => void;
-  active?: boolean;
-  danger?: boolean;
-  shortcut?: string;
-  disabled?: boolean;
-}) {
-  const { close, setActiveSubmenu } = useContext(MenuContext);
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onMouseEnter={() => setActiveSubmenu(null)}
-      onClick={() => !disabled && onSelect(close)}
-      className={cn(
-        "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent",
-        active && "text-foreground",
-        danger && "text-destructive hover:text-destructive",
-        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
-      )}
-    >
-      {Ic && <Ic className="h-3.5 w-3.5 shrink-0" />}
-      <span className="flex-1">{children}</span>
-      {shortcut && (
-        <span className="ml-4 text-xs text-muted-foreground">{shortcut}</span>
-      )}
-      {active !== undefined && (
-        <span className="ml-2 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-          {active && <Check className="h-3.5 w-3.5" />}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function MenuSubmenu({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  const { activeSubmenu, setActiveSubmenu, close } = useContext(MenuContext);
-  const [nestedActive, setNestedActive] = useState<string | null>(null);
-  const id = label;
-  const isOpen = activeSubmenu === id;
-  useEffect(() => {
-    if (!isOpen) setNestedActive(null);
-  }, [isOpen]);
-  return (
-    <div
-      className="relative"
-      onMouseEnter={() => setActiveSubmenu(id)}
-    >
-      <button
-        type="button"
-        className={cn(
-          "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent",
-          isOpen && "bg-accent"
-        )}
-      >
-        <span className="flex-1">{label}</span>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      </button>
-      {isOpen && (
-        <div className="absolute left-full top-0 z-50 -mt-1 ml-1 min-w-[180px] rounded-md border border-border bg-card py-1 shadow-lg">
-          <MenuContext.Provider
-            value={{
-              close,
-              activeSubmenu: nestedActive,
-              setActiveSubmenu: setNestedActive,
-            }}
-          >
-            {children}
-          </MenuContext.Provider>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MenuSeparator() {
-  return <div className="my-1 h-px bg-border" />;
 }

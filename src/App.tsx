@@ -8,7 +8,6 @@ import { useFlowStore } from "@/store/flow-store";
 import { cn } from "@/lib/utils";
 
 export default function App() {
-  const hasSelection = useFlowStore((s) => s.nodes.some((n) => n.selected));
   const workMode = useFlowStore((s) => s.workMode);
   const setWorkMode = useFlowStore((s) => s.setWorkMode);
   const isPreview = workMode === "preview";
@@ -66,18 +65,18 @@ export default function App() {
     <ReactFlowProvider>
       <div
         className={cn(
-          "flex h-screen w-screen bg-background text-foreground",
+          "flex h-screen w-screen flex-col bg-background text-foreground",
           isPreview && "preview-mode"
         )}
       >
-        {!isPreview && <Sidebar />}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {!isPreview && <Toolbar />}
+        <Toolbar />
+        <div className="flex flex-1 overflow-hidden">
+          {!isPreview && <Sidebar />}
           <div className="relative flex flex-1 overflow-hidden">
             <main className="flex-1 overflow-hidden">
               <Canvas />
             </main>
-            {!isPreview && hasSelection && <Inspector />}
+            {!isPreview && <Inspector />}
           </div>
         </div>
       </div>

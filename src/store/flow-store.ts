@@ -193,9 +193,7 @@ type Snapshot = {
   edgeColor?: string;
   edgeLineStyle: EdgeLineStyle;
   edgeDashGap: number;
-  showMinimap: boolean;
   showControls: boolean;
-  showGrid: boolean;
   showSmartGuides: boolean;
   workMode: WorkMode;
   renderAllElements: boolean;
@@ -300,9 +298,7 @@ type FlowState = Snapshot & {
   replace: (snapshot: Partial<Snapshot>) => void;
   selectAll: () => void;
   deleteSelected: () => void;
-  toggleMinimap: () => void;
   toggleControls: () => void;
-  toggleGrid: () => void;
   toggleSmartGuides: () => void;
   setWorkMode: (mode: WorkMode) => void;
 };
@@ -503,9 +499,7 @@ export const useFlowStore = create<FlowState>()(
   turboColors: DEFAULT_TURBO_COLORS,
   edgeLineStyle: "solid" as EdgeLineStyle,
   edgeDashGap: 6,
-  showMinimap: true,
   showControls: true,
-  showGrid: true,
   showSmartGuides: true,
   workMode: "design" as WorkMode,
 
@@ -1321,9 +1315,7 @@ export const useFlowStore = create<FlowState>()(
       };
     }),
 
-  toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   toggleControls: () => set((s) => ({ showControls: !s.showControls })),
-  toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
   toggleSmartGuides: () =>
     set((s) => ({ showSmartGuides: !s.showSmartGuides })),
   renderAllElements: false,
@@ -1389,9 +1381,7 @@ export const useFlowStore = create<FlowState>()(
         edgeColor: s.edgeColor,
         edgeLineStyle: s.edgeLineStyle,
         edgeDashGap: s.edgeDashGap,
-        showMinimap: s.showMinimap,
         showControls: s.showControls,
-        showGrid: s.showGrid,
         showSmartGuides: s.showSmartGuides,
       }),
     }
