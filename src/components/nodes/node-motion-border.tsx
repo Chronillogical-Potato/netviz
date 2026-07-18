@@ -51,7 +51,10 @@ export function applyNodeMotionTargetFrame(
   const progress = active.timing.progress;
   const opacity = Math.min(1, progress * 6, (1 - progress) * 6);
   element.setAttribute("data-motion-active", "true");
-  element.style.setProperty("--node-flow-angle", `${progress * 360}deg`);
+  element.style.setProperty(
+    "--node-flow-position",
+    `${120 - progress * 140}%`
+  );
   element.style.setProperty("--node-flow-opacity", String(opacity));
   element.style.setProperty("--node-flow-start", start);
   element.style.setProperty("--node-flow-end", end);

@@ -71,7 +71,8 @@ describe("NodeMotionBorder", () => {
 
     applyNodeMotionTargetFrame(element, frame(200));
     expect(element.attributes.get("data-motion-active")).toBe("true");
-    expect(element.style.values.get("--node-flow-angle")).toBe("90deg");
+    expect(element.style.values.get("--node-flow-position")).toBe("85%");
+    expect(element.style.values.has("--node-flow-angle")).toBe(false);
     expect(element.style.values.get("--node-flow-start")).toBe("#ffaa40");
     expect(element.style.values.get("--node-flow-end")).toBe("#9c40ff");
 

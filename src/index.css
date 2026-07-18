@@ -333,7 +333,7 @@
   display: none;
 }
 .nv-node-motion-border {
-  --node-flow-angle: 0deg;
+  --node-flow-position: 120%;
   --node-flow-opacity: 0;
   --node-flow-start: #ffaa40;
   --node-flow-end: #9c40ff;
@@ -342,18 +342,21 @@
   z-index: 15;
   border-radius: inherit;
   padding: 3px;
-  background: conic-gradient(
-    from var(--node-flow-angle),
-    transparent 0deg,
-    var(--node-flow-start) 18deg,
-    var(--node-flow-end) 78deg,
-    transparent 126deg
+  background: linear-gradient(
+    105deg,
+    transparent 22%,
+    color-mix(in srgb, var(--node-flow-start) 25%, transparent) 36%,
+    var(--node-flow-start) 46%,
+    var(--node-flow-end) 54%,
+    color-mix(in srgb, var(--node-flow-end) 25%, transparent) 64%,
+    transparent 78%
   );
+  background-size: 260% 100%;
+  background-position: var(--node-flow-position) 0;
+  background-repeat: no-repeat;
   opacity: var(--node-flow-opacity);
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--node-flow-start) 35%, transparent),
-    0 0 12px color-mix(in srgb, var(--node-flow-end) 28%, transparent);
-  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--node-flow-end) 55%, transparent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--node-flow-end) 18%, transparent);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--node-flow-end) 40%, transparent));
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
