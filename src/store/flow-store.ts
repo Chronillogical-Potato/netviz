@@ -236,6 +236,11 @@ type Snapshot = {
 
 export type WorkMode = "design" | "animation" | "preview";
 export type MotionPreference = "system" | "full" | "reduced";
+export type AnimationPathDraft = {
+  nodeIds: string[];
+  edgeIds: string[];
+  error: string | null;
+};
 
 type NodeDataPatch = Partial<InfraNodeData> &
   Partial<ShapeNodeData> &
@@ -246,6 +251,7 @@ type NodeDataPatch = Partial<InfraNodeData> &
   Partial<ImageNodeData>;
 
 type FlowState = Snapshot & {
+  animationPathDraft: AnimationPathDraft | null;
   onNodesChange: OnNodesChange<AppNode>;
   onEdgesChange: OnEdgesChange<LabeledEdge>;
   onConnect: OnConnect;
@@ -338,6 +344,11 @@ type FlowState = Snapshot & {
   animateAllEdges: () => void;
   animateRequestFlow: (startNodeId: string) => void;
   animateSelectedPath: () => void;
+  beginAnimationPath: (startNodeId?: string) => void;
+  appendAnimationPathNode: (nodeId: string) => void;
+  undoAnimationPathNode: () => void;
+  cancelAnimationPath: () => void;
+  animateDraftPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
   deleteSelected: () => void;
@@ -581,6 +592,7 @@ export const useFlowStore = create<FlowState>()(
   showSmartGuides: true,
   motionPreference: "system" as MotionPreference,
   workMode: "design" as WorkMode,
+  animationPathDraft: null,
 
   onNodesChange: (changes) =>
     set((s) => {
@@ -1160,6 +1172,107 @@ export const useFlowStore = create<FlowState>()(
       return { scenarioDocument };
     }),
 
+  beginAnimationPath: (startNodeId) => {
+    scenarioRuntime.pause();
+    set((s) => {
+      const hasStart =
+        !!startNodeId && s.nodes.some((node) => node.id === startNodeId);
+      return {
+        animationPathDraft: {
+          nodeIds: hasStart ? [startNodeId] : [],
+          edgeIds: [],
+          error: null,
+        },
+        nodes: s.nodes.map((node) =>
+          node.selected ? { ...node, selected: false } : node
+        ),
+        edges: s.edges.map((edge) =>
+          edge.selected ? { ...edge, selected: false } : edge
+        ),
+      };
+    });
+  },
+
+  appendAnimationPathNode: (nodeId) =>
+    set((s) => {
+      const draft = s.animationPathDraft;
+      if (!draft || !s.nodes.some((node) => node.id === nodeId)) return s;
+      if (draft.nodeIds.length === 0) {
+        return {
+          animationPathDraft: {
+            nodeIds: [nodeId],
+            edgeIds: [],
+            error: null,
+          },
+        };
+      }
+
+      const lastNodeId = draft.nodeIds[draft.nodeIds.length - 1];
+      if (lastNodeId === nodeId) return s;
+      if (draft.nodeIds.includes(nodeId)) {
+        return {
+          animationPathDraft: {
+            ...draft,
+            error: "That block is already in this path.",
+          },
+        };
+      }
+
+      const edge = s.edges.find(
+        (candidate) =>
+          candidate.source === lastNodeId && candidate.target === nodeId
+      );
+      if (!edge) {
+        return {
+          animationPathDraft: {
+            ...draft,
+            error: "Choose a directly connected outgoing block.",
+          },
+        };
+      }
+
+      return {
+        animationPathDraft: {
+          nodeIds: [...draft.nodeIds, nodeId],
+          edgeIds: [...draft.edgeIds, edge.id],
+          error: null,
+        },
+      };
+    }),
+
+  undoAnimationPathNode: () =>
+    set((s) => {
+      const draft = s.animationPathDraft;
+      if (!draft || draft.nodeIds.length === 0) return s;
+      return {
+        animationPathDraft: {
+          nodeIds: draft.nodeIds.slice(0, -1),
+          edgeIds: draft.edgeIds.slice(0, -1),
+          error: null,
+        },
+      };
+    }),
+
+  cancelAnimationPath: () => set({ animationPathDraft: null }),
+
+  animateDraftPath: () =>
+    set((s) => {
+      const edgeIds = s.animationPathDraft?.edgeIds ?? [];
+      if (edgeIds.length === 0) return s;
+
+      let scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
+        edgeIds: s.edges.map((edge) => edge.id),
+      });
+      edgeIds.forEach((edgeId, index) => {
+        scenarioDocument = applyEdgeEffect(scenarioDocument, {
+          edgeIds: [edgeId],
+          effect: createGradientBeamEffect(),
+          clip: createGradientBeamClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+        });
+      });
+      return { scenarioDocument, animationPathDraft: null };
+    }),
+
   setEdgeColor: (color) =>
     set((s) => {
       const selected = s.edges.filter((e) => e.selected);
@@ -1485,6 +1598,7 @@ export const useFlowStore = create<FlowState>()(
           edges: target.edges,
           groups: target.groups,
           scenarioDocument: target.scenarioDocument,
+          animationPathDraft: null,
         };
       })
     ),
@@ -1495,6 +1609,7 @@ export const useFlowStore = create<FlowState>()(
       edges: [],
       groups: [],
       scenarioDocument: createEmptyScenarioDocument(),
+      animationPathDraft: null,
     }),
 
   resetWorkspace: async () => {
@@ -1521,6 +1636,7 @@ export const useFlowStore = create<FlowState>()(
         turbo: snapshot.turbo,
         turboColors: snapshot.turboColors,
         workMode: "design",
+        animationPathDraft: null,
       })
     ),
 
@@ -1552,6 +1668,7 @@ export const useFlowStore = create<FlowState>()(
       mode === "preview"
         ? {
             workMode: mode,
+            animationPathDraft: null,
             nodes: state.nodes.map((node) =>
               node.selected ? { ...node, selected: false } : node
             ),
@@ -1559,7 +1676,10 @@ export const useFlowStore = create<FlowState>()(
               edge.selected ? { ...edge, selected: false } : edge
             ),
           }
-        : { workMode: mode }
+        : {
+            workMode: mode,
+            ...(mode === "animation" ? {} : { animationPathDraft: null }),
+          }
     ),
     }),
     {

@@ -4,6 +4,7 @@ import { createEmptyScenarioDocument } from "../src/animation/scenario-document"
 import {
   AnimationOverview,
   AnimationOptions,
+  AnimationPathBuilder,
   RequestFlowOptions,
   createAnimationColorPatch,
   createAnimationWidthPatch,
@@ -44,11 +45,23 @@ describe("AnimationOptions", () => {
     expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
       "Animate all connections"
     );
+    expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
+      "Build custom path"
+    );
     const flow = renderToStaticMarkup(
       <RequestFlowOptions nodeId="user" nodeLabel="User" />
     );
     expect(flow).toContain("Create request flow");
+    expect(flow).toContain("Build custom path");
     expect(flow).toContain("User");
+  });
+
+  test("renders a dedicated click-in-order path builder", () => {
+    const markup = renderToStaticMarkup(<AnimationPathBuilder />);
+    expect(markup).toContain("Click connected blocks in order");
+    expect(markup).toContain("Click the first block on the canvas");
+    expect(markup).toContain("Play path");
+    expect(markup).toContain("Undo last");
   });
 
   test("offers only the gradient beam on an unanimated edge", () => {
@@ -63,7 +76,8 @@ describe("AnimationOptions", () => {
     expect(markup).not.toContain("<select");
     expect(markup).toContain("h-7");
     expect(markup).not.toContain("Preview selection");
-    expect(markup).toContain("Create selected path");
+    expect(markup).toContain("Build custom path");
+    expect(markup).not.toContain("Create selected path");
     expect(markup).toContain("Advanced");
     expect(markup).not.toContain("<details");
   });

@@ -56,6 +56,7 @@ import { CanvasOptions, PageOptions } from "./canvas-options";
 import {
   AnimationOptions,
   AnimationOverview,
+  AnimationPathBuilder,
   RequestFlowOptions,
 } from "./animation-options";
 import { PlaybackControls } from "./playback-controls";
@@ -112,6 +113,9 @@ export function Inspector() {
   const hasSelectedEdge = useFlowStore((s) =>
     s.edges.some((e) => e.selected)
   );
+  const isBuildingAnimationPath = useFlowStore(
+    (s) => s.animationPathDraft !== null
+  );
 
   if (workMode === "animation") {
     return (
@@ -119,7 +123,9 @@ export function Inspector() {
         <div className="border-b border-border px-4 py-3">
           <p className="text-xs font-semibold text-foreground">Animation</p>
           <p className="pt-0.5 text-[10px] text-muted-foreground">
-            {hasSelectedEdge
+            {isBuildingAnimationPath
+              ? "Pick blocks in order"
+              : hasSelectedEdge
               ? "Connection effect"
               : selectedNode
                 ? "Build a chained request"
@@ -127,7 +133,9 @@ export function Inspector() {
           </p>
         </div>
         <PlaybackControls />
-        {hasSelectedEdge ? (
+        {isBuildingAnimationPath ? (
+          <AnimationPathBuilder />
+        ) : hasSelectedEdge ? (
           <AnimationOptions />
         ) : selectedNode ? (
           <RequestFlowOptions

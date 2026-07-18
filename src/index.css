@@ -213,6 +213,51 @@
   opacity: 0 !important;
   pointer-events: none;
 }
+.animation-path-picking .react-flow__edge {
+  pointer-events: none;
+  opacity: 0.3;
+}
+.animation-path-picking .react-flow__edge.animation-path-edge {
+  opacity: 1;
+}
+.animation-path-picking
+  .react-flow__edge.animation-path-edge
+  > .react-flow__edge-path {
+  stroke: hsl(var(--ring));
+  stroke-width: 2;
+  opacity: 0.7 !important;
+}
+.animation-path-picking .react-flow__node {
+  cursor: crosshair;
+  opacity: 0.55;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+.animation-path-picking .react-flow__node:hover,
+.animation-path-picking .react-flow__node.animation-path-node {
+  opacity: 1;
+}
+.animation-path-picking .react-flow__node:hover {
+  filter: drop-shadow(0 0 5px hsl(var(--ring) / 0.45));
+}
+.animation-path-picking .react-flow__node.animation-path-node::after {
+  content: var(--animation-path-step);
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  z-index: 20;
+  display: flex;
+  height: 18px;
+  width: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid hsl(var(--background));
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
 .react-flow__attribution {
   display: none !important;
 }

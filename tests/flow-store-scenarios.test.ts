@@ -50,6 +50,7 @@ function resetStore() {
     showSmartGuides: true,
     motionPreference: "system",
     workMode: "design",
+    animationPathDraft: null,
   });
   temporal.clear();
   temporal.resume();
@@ -262,6 +263,67 @@ describe("animation target lifecycle", () => {
       ["firewall-proxy", 0],
       ["proxy-server", 1_500],
     ]);
+  });
+
+  test("builds a directed custom path by clicking blocks in order", () => {
+    useFlowStore.setState({
+      nodes: [
+        node("user", true),
+        node("firewall"),
+        node("proxy"),
+        node("server"),
+      ],
+      edges: [
+        edge("user-firewall", "user", "firewall", true),
+        edge("firewall-proxy", "firewall", "proxy"),
+        edge("proxy-server", "proxy", "server"),
+        edge("user-server", "user", "server"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().appendAnimationPathNode("firewall");
+    useFlowStore.getState().appendAnimationPathNode("server");
+
+    expect(useFlowStore.getState().animationPathDraft).toEqual({
+      nodeIds: ["user", "firewall"],
+      edgeIds: ["user-firewall"],
+      error: "Choose a directly connected outgoing block.",
+    });
+    expect(useFlowStore.getState().nodes.every((item) => !item.selected)).toBe(
+      true
+    );
+    expect(useFlowStore.getState().edges.every((item) => !item.selected)).toBe(
+      true
+    );
+  });
+
+  test("plays the custom path in its authored click order", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("firewall"), node("proxy")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("firewall-proxy", "firewall", "proxy"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath();
+    useFlowStore.getState().appendAnimationPathNode("user");
+    useFlowStore.getState().appendAnimationPathNode("firewall");
+    useFlowStore.getState().appendAnimationPathNode("proxy");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    expect(
+      scenario.tracks.map((track) => [
+        "id" in track.target ? track.target.id : null,
+        track.clips[0].startMs,
+      ])
+    ).toEqual([
+      ["user-firewall", 0],
+      ["firewall-proxy", 1_500],
+    ]);
+    expect(useFlowStore.getState().animationPathDraft).toBeNull();
   });
 
   test("duplicates internal edge tracks with fresh target, track, and clip IDs", () => {

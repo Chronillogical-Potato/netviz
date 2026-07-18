@@ -403,11 +403,18 @@ function CanvasInner() {
     return sel.length === 1 ? sel[0] : null;
   });
   const workMode = useFlowStore((s) => s.workMode);
+  const animationPathDraft = useFlowStore((s) => s.animationPathDraft);
+  const appendAnimationPathNode = useFlowStore(
+    (s) => s.appendAnimationPathNode
+  );
+  const cancelAnimationPath = useFlowStore((s) => s.cancelAnimationPath);
   const pageBg = useFlowStore(
     (s) => s.pages.find((p) => p.id === s.activePageId)?.bgColor
   );
   const isPreview = workMode === "preview";
   const isDesign = workMode === "design";
+  const isPickingAnimationPath =
+    workMode === "animation" && animationPathDraft !== null;
   const { screenToFlowPosition, getZoom } = useReactFlow();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -446,6 +453,15 @@ function CanvasInner() {
       window.removeEventListener("blur", blur);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isPickingAnimationPath) return;
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelAnimationPath();
+    };
+    window.addEventListener("keydown", cancelOnEscape);
+    return () => window.removeEventListener("keydown", cancelOnEscape);
+  }, [cancelAnimationPath, isPickingAnimationPath]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<AppNode>[]) => {
@@ -525,21 +541,60 @@ function CanvasInner() {
     [customBlocks]
   );
 
-  const displayNodes = useMemo(() => {
-    if (!nodes.some((n) => (n.data as { turbo?: boolean }).turbo)) return nodes;
-    return nodes.map((n) =>
-      (n.data as { turbo?: boolean }).turbo
-        ? { ...n, className: cn(n.className, "turbo-on") }
-        : n
-    );
-  }, [nodes]);
+  const animationPathSteps = useMemo(
+    () =>
+      new Map(
+        (animationPathDraft?.nodeIds ?? []).map((id, index) => [id, index + 1])
+      ),
+    [animationPathDraft]
+  );
+  const animationPathEdgeIds = useMemo(
+    () => new Set(animationPathDraft?.edgeIds ?? []),
+    [animationPathDraft]
+  );
 
-  const displayEdges = useMemo(() => {
-    if (!edges.some((e) => e.data?.turbo)) return edges;
-    return edges.map((e) =>
-      e.data?.turbo ? { ...e, className: cn(e.className, "turbo-on") } : e
-    );
-  }, [edges]);
+  const displayNodes = useMemo(
+    () =>
+      nodes.map((node) => {
+        const pathStep = animationPathSteps.get(node.id);
+        const turboOn = (node.data as { turbo?: boolean }).turbo;
+        if (!turboOn && pathStep === undefined) return node;
+        return {
+          ...node,
+          className: cn(
+            node.className,
+            turboOn && "turbo-on",
+            pathStep !== undefined && "animation-path-node"
+          ),
+          ...(pathStep !== undefined
+            ? {
+                style: {
+                  ...node.style,
+                  ["--animation-path-step" as string]: `"${pathStep}"`,
+                },
+              }
+            : {}),
+        };
+      }),
+    [animationPathSteps, nodes]
+  );
+
+  const displayEdges = useMemo(
+    () =>
+      edges.map((edge) => {
+        const inPath = animationPathEdgeIds.has(edge.id);
+        if (!edge.data?.turbo && !inPath) return edge;
+        return {
+          ...edge,
+          className: cn(
+            edge.className,
+            edge.data?.turbo && "turbo-on",
+            inPath && "animation-path-edge"
+          ),
+        };
+      }),
+    [animationPathEdgeIds, edges]
+  );
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -689,7 +744,8 @@ function CanvasInner() {
       className={cn(
         "relative h-full w-full",
         turbo && "turbo",
-        isPreview && "preview-canvas"
+        isPreview && "preview-canvas",
+        isPickingAnimationPath && "animation-path-picking"
       )}
       style={wrapperStyle}
       onDrop={isDesign ? onDrop : undefined}
@@ -700,6 +756,11 @@ function CanvasInner() {
         nodes={displayNodes}
         edges={displayEdges}
         onNodesChange={isPreview ? undefined : handleNodesChange}
+        onNodeClick={
+          isPickingAnimationPath
+            ? (_, node) => appendAnimationPathNode(node.id)
+            : undefined
+        }
         onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
         onNodeMouseLeave={() => setHoveredId(null)}
         onEdgesChange={isPreview ? undefined : onEdgesChange}
@@ -711,22 +772,31 @@ function CanvasInner() {
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
-        selectionOnDrag={!isPreview && tool === "select"}
+        selectionOnDrag={
+          !isPreview && !isPickingAnimationPath && tool === "select"
+        }
         panOnDrag={isPreview || tool === "hand" ? true : [1]}
         panOnScroll
         selectionMode={SelectionMode.Partial}
-        nodesDraggable={!isPreview}
-        nodesConnectable={!isPreview}
-        elementsSelectable={!isPreview}
+        nodesDraggable={!isPreview && !isPickingAnimationPath}
+        nodesConnectable={!isPreview && !isPickingAnimationPath}
+        elementsSelectable={!isPreview && !isPickingAnimationPath}
         nodesFocusable={!isPreview}
         edgesFocusable={!isPreview}
-        deleteKeyCode={isPreview ? null : ["Backspace", "Delete"]}
+        deleteKeyCode={
+          isPreview || isPickingAnimationPath ? null : ["Backspace", "Delete"]
+        }
         onlyRenderVisibleElements={!renderAll}
         elevateNodesOnSelect={false}
         fitView
         fitViewOptions={{ padding: 0.4 }}
       >
       </ReactFlow>
+      {isPickingAnimationPath ? (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border border-border bg-background/95 px-3 py-1.5 text-[10px] font-medium text-foreground shadow-lg backdrop-blur">
+          Click blocks in request order · Esc to cancel
+        </div>
+      ) : null}
       {isDesign && (tool === "rect" || tool === "circle" || tool === "text") && (
         <DrawOverlay tool={tool} onDone={() => setTool("select")} />
       )}

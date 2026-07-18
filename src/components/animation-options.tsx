@@ -23,7 +23,7 @@ import {
 } from "@/animation/gradient-beam";
 import { buildRequestFlow } from "@/animation/request-flow";
 import { scenarioRuntime } from "@/animation/runtime-instance";
-import { useFlowStore } from "@/store/flow-store";
+import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
 import { Check, ChevronDown, X } from "@/ui/icons";
 import { Slider } from "@/ui/slider";
@@ -429,9 +429,18 @@ function playAllAnimations() {
   scenarioRuntime.play();
 }
 
+const EMPTY_ANIMATION_PATH_DRAFT = {
+  nodeIds: [],
+  edgeIds: [],
+  error: null,
+};
+
 export function AnimationOverview() {
   const edgeCount = useFlowStore((state) => state.edges.length);
   const animateAllEdges = useFlowStore((state) => state.animateAllEdges);
+  const beginAnimationPath = useFlowStore(
+    (state) => state.beginAnimationPath
+  );
 
   return (
     <div className="border-b border-border px-4 py-3.5">
@@ -453,6 +462,16 @@ export function AnimationOverview() {
         <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
         Animate all connections
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2 h-7 w-full rounded-md text-xs"
+        disabled={edgeCount === 0}
+        onClick={() => beginAnimationPath()}
+      >
+        Build custom path
+      </Button>
     </div>
   );
 }
@@ -468,30 +487,12 @@ export function RequestFlowOptions({
   const animateRequestFlow = useFlowStore(
     (state) => state.animateRequestFlow
   );
-  const animateSelectedPath = useFlowStore(
-    (state) => state.animateSelectedPath
-  );
-  const nodes = useFlowStore((state) => state.nodes);
-  const selectedNodeIds = useMemo(
-    () => nodes.filter((node) => node.selected).map((node) => node.id),
-    [nodes]
+  const beginAnimationPath = useFlowStore(
+    (state) => state.beginAnimationPath
   );
   const connectionCount = useMemo(
     () => buildRequestFlow(edges, nodeId).length,
     [edges, nodeId]
-  );
-  const selectedNodeIdSet = useMemo(
-    () => new Set(selectedNodeIds),
-    [selectedNodeIds]
-  );
-  const selectedPathCount = useMemo(
-    () =>
-      edges.filter(
-        (edge) =>
-          selectedNodeIdSet.has(edge.source) &&
-          selectedNodeIdSet.has(edge.target)
-      ).length,
-    [edges, selectedNodeIdSet]
   );
 
   return (
@@ -515,25 +516,127 @@ export function RequestFlowOptions({
         <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
         Create request flow
       </Button>
-      {selectedNodeIds.length > 1 ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-2 h-7 w-full gap-2 rounded-md text-xs"
-          disabled={selectedPathCount === 0}
-          onClick={() => {
-            animateSelectedPath();
-            playAllAnimations();
-          }}
-        >
-          <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
-          Create selected path
-        </Button>
-      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-2 h-7 w-full rounded-md text-xs"
+        disabled={connectionCount === 0}
+        onClick={() => beginAnimationPath(nodeId)}
+      >
+        Build custom path
+      </Button>
       <p className="pt-2 text-center text-[9px] text-muted-foreground">
         {connectionCount} reachable connection{connectionCount === 1 ? "" : "s"}
       </p>
+    </div>
+  );
+}
+
+export function AnimationPathBuilder() {
+  const draft =
+    useFlowStore((state) => state.animationPathDraft) ??
+    EMPTY_ANIMATION_PATH_DRAFT;
+  const nodes = useFlowStore((state) => state.nodes);
+  const beginAnimationPath = useFlowStore(
+    (state) => state.beginAnimationPath
+  );
+  const undoAnimationPathNode = useFlowStore(
+    (state) => state.undoAnimationPathNode
+  );
+  const cancelAnimationPath = useFlowStore(
+    (state) => state.cancelAnimationPath
+  );
+  const animateDraftPath = useFlowStore((state) => state.animateDraftPath);
+
+  const pathNodes = draft.nodeIds
+    .map((id) => nodes.find((node) => node.id === id))
+    .filter((node) => node !== undefined);
+
+  return (
+    <div className="flex-1 overflow-y-auto pb-4" data-animation-path-builder>
+      <div className="border-b border-border px-4 py-3.5">
+        <p className="text-xs font-semibold text-foreground">Custom path</p>
+        <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+          Click connected blocks in order. Each click adds the next request
+          hop; connection lines cannot be selected while building.
+        </p>
+
+        {pathNodes.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[10px] text-muted-foreground">
+            Click the first block on the canvas
+          </div>
+        ) : (
+          <div className="max-h-60 overflow-y-auto rounded-lg bg-input p-1.5">
+            {pathNodes.map((node, index) => (
+              <div
+                key={node.id}
+                className="flex min-h-8 items-center gap-2 rounded-md px-2"
+              >
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+                  {index + 1}
+                </span>
+                <span className="truncate text-[11px] text-foreground">
+                  {getNodeDisplayName(node)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {draft.error ? (
+          <p className="pt-2 text-[10px] leading-4 text-destructive">
+            {draft.error}
+          </p>
+        ) : null}
+
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 rounded-md text-[10px]"
+            disabled={draft.nodeIds.length === 0}
+            onClick={undoAnimationPathNode}
+          >
+            Undo last
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 rounded-md text-[10px]"
+            disabled={draft.nodeIds.length === 0}
+            onClick={() => beginAnimationPath()}
+          >
+            Start over
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5 px-4 py-3.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 rounded-md text-xs"
+          onClick={cancelAnimationPath}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="h-7 rounded-md text-xs"
+          disabled={draft.edgeIds.length === 0}
+          onClick={() => {
+            animateDraftPath();
+            playAllAnimations();
+          }}
+        >
+          Play path
+        </Button>
+      </div>
     </div>
   );
 }
@@ -548,8 +651,8 @@ export function AnimationOptions() {
   const applyEffect = useFlowStore((state) => state.applySelectedEdgeEffect);
   const patchEffects = useFlowStore((state) => state.patchSelectedEdgeEffects);
   const removeEffects = useFlowStore((state) => state.removeSelectedEdgeEffects);
-  const animateSelectedPath = useFlowStore(
-    (state) => state.animateSelectedPath
+  const beginAnimationPath = useFlowStore(
+    (state) => state.beginAnimationPath
   );
   const summary = useMemo(
     () => summarizeAnimationSelection(document, selectedEdgeIds),
@@ -663,13 +766,10 @@ export function AnimationOptions() {
           variant="outline"
           size="sm"
           className="h-7 w-full gap-2 rounded-md text-xs"
-          onClick={() => {
-            animateSelectedPath();
-            playAllAnimations();
-          }}
+          onClick={() => beginAnimationPath()}
         >
           <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
-          Create selected path
+          Build custom path
         </Button>
       </div>
 
