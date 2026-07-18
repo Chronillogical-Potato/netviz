@@ -7,11 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import {
-  Background,
-  BackgroundVariant,
   ConnectionMode,
-  Controls,
-  MiniMap,
   Position,
   ReactFlow,
   SelectionMode,
@@ -40,6 +36,7 @@ import { LineNodeView } from "./nodes/line-node";
 import { ImageNodeView } from "./nodes/image-node";
 import { CodeNodeView } from "./nodes/code-node";
 import { LabeledEdge } from "./edges/labeled-edge";
+import { CanvasToolbar, type CanvasTool } from "./canvas-toolbar";
 import { cn } from "@/lib/utils";
 import {
   computeSnap,
@@ -127,6 +124,259 @@ function TurboDefs({ colors }: { colors: [string, string] }) {
   );
 }
 
+// Overlays subscribe to the viewport themselves so pan/zoom frames only
+// re-render these tiny components, never the whole canvas tree.
+function GuidesOverlay({ guides }: { guides: Guide[] }) {
+  const { x: vpX, y: vpY, zoom } = useViewport();
+  return (
+    <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+      {guides.map((g, i) => {
+        if (g.axis === "x") {
+          const x = vpX + g.pos * zoom;
+          return (
+            <line
+              key={i}
+              x1={x}
+              x2={x}
+              y1={vpY + g.from * zoom}
+              y2={vpY + g.to * zoom}
+              stroke="#0099ff"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          );
+        }
+        const y = vpY + g.pos * zoom;
+        return (
+          <line
+            key={i}
+            x1={vpX + g.from * zoom}
+            x2={vpX + g.to * zoom}
+            y1={y}
+            y2={y}
+            stroke="#0099ff"
+            strokeWidth={1}
+            strokeDasharray="4 3"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function MeasureOverlay({
+  selected,
+  hoveredId,
+  nodes,
+}: {
+  selected: AppNode;
+  hoveredId: string | null;
+  nodes: AppNode[];
+}) {
+  const { x: vpX, y: vpY, zoom } = useViewport();
+  const { w: sw, h: sh } = nodeDims(selected);
+  if (sw === 0 || sh === 0) return null;
+  const sx = (fx: number) => vpX + fx * zoom;
+  const sy = (fy: number) => vpY + fy * zoom;
+  const sL = selected.position.x;
+  const sR = sL + sw;
+  const sT = selected.position.y;
+  const sB = sT + sh;
+  const cx = sx((sL + sR) / 2);
+  const hovered =
+    hoveredId && hoveredId !== selected.id
+      ? nodes.find((n) => n.id === hoveredId) ?? null
+      : null;
+  const d = hovered ? computeDimsToTarget(selected, hovered) : null;
+  const measureLabel =
+    "absolute -translate-x-1/2 -translate-y-1/2 rounded-sm bg-primary px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap";
+  const hLine = (seg: DimSeg) => (
+    <line
+      x1={sx(seg.from)}
+      x2={sx(seg.to)}
+      y1={sy(seg.along)}
+      y2={sy(seg.along)}
+      stroke="#0099ff"
+      strokeWidth={1}
+    />
+  );
+  const vLine = (seg: DimSeg) => (
+    <line
+      x1={sx(seg.along)}
+      x2={sx(seg.along)}
+      y1={sy(seg.from)}
+      y2={sy(seg.to)}
+      stroke="#0099ff"
+      strokeWidth={1}
+    />
+  );
+  const hLabel = (seg: DimSeg) => (
+    <span
+      className={measureLabel}
+      style={{
+        left: (sx(seg.from) + sx(seg.to)) / 2,
+        top: sy(seg.along) - 10,
+      }}
+    >
+      {Math.round(seg.value)}
+    </span>
+  );
+  const vLabel = (seg: DimSeg) => (
+    <span
+      className={measureLabel}
+      style={{
+        left: sx(seg.along) + 14,
+        top: (sy(seg.from) + sy(seg.to)) / 2,
+      }}
+    >
+      {Math.round(seg.value)}
+    </span>
+  );
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10">
+      {d && (
+        <svg className="absolute inset-0 h-full w-full">
+          {d.left && hLine(d.left)}
+          {d.right && hLine(d.right)}
+          {d.gapH && hLine(d.gapH)}
+          {d.top && vLine(d.top)}
+          {d.bottom && vLine(d.bottom)}
+          {d.gapV && vLine(d.gapV)}
+        </svg>
+      )}
+      <span
+        className="absolute -translate-x-1/2 rounded-sm bg-primary px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap"
+        style={{ left: cx, top: sy(sB) + 6 }}
+      >
+        {Math.round(sw)} × {Math.round(sh)}
+      </span>
+      {d?.left && hLabel(d.left)}
+      {d?.right && hLabel(d.right)}
+      {d?.gapH && hLabel(d.gapH)}
+      {d?.top && vLabel(d.top)}
+      {d?.bottom && vLabel(d.bottom)}
+      {d?.gapV && vLabel(d.gapV)}
+    </div>
+  );
+}
+
+type DrawTool = "rect" | "circle" | "text";
+
+// Figma-style draw tools: drag out a freeform rect/circle (or click for a
+// default-size one), click to place text. Covers the flow pane while a
+// draw tool is active so existing nodes don't swallow the gesture.
+function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
+  const { screenToFlowPosition } = useReactFlow();
+  const addShapeNode = useFlowStore((s) => s.addShapeNode);
+  const addTextNode = useFlowStore((s) => s.addTextNode);
+  const selectNodes = useFlowStore((s) => s.selectNodes);
+  const ref = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDraft(null);
+        onDone();
+      }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onDone]);
+
+  const toLocal = (e: React.PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const p = toLocal(e);
+    setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!draft) return;
+    const p = toLocal(e);
+    setDraft((d) => (d ? { ...d, x1: p.x, y1: p.y } : d));
+  };
+
+  const onPointerUp = () => {
+    if (!draft || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const start = screenToFlowPosition({
+      x: r.left + Math.min(draft.x0, draft.x1),
+      y: r.top + Math.min(draft.y0, draft.y1),
+    });
+    const end = screenToFlowPosition({
+      x: r.left + Math.max(draft.x0, draft.x1),
+      y: r.top + Math.max(draft.y0, draft.y1),
+    });
+    const w = end.x - start.x;
+    const h = end.y - start.y;
+    setDraft(null);
+    let id: string;
+    if (tool === "text") {
+      id = addTextNode(
+        screenToFlowPosition({ x: r.left + draft.x0, y: r.top + draft.y0 })
+      );
+    } else {
+      const shape: ShapeKind = tool === "circle" ? "circle" : "rectangle";
+      const dragged = w >= 8 && h >= 8;
+      id = dragged
+        ? addShapeNode(shape, start, {
+            width: Math.round(w),
+            height: Math.round(h),
+          })
+        : // Plain click: default-size shape centered on the click point.
+          addShapeNode(shape, {
+            x: start.x - (shape === "circle" ? 110 : 150),
+            y: start.y - (shape === "circle" ? 110 : 100),
+          });
+    }
+    selectNodes([id]);
+    onDone();
+  };
+
+  const rect = draft
+    ? {
+        left: Math.min(draft.x0, draft.x1),
+        top: Math.min(draft.y0, draft.y1),
+        width: Math.abs(draft.x1 - draft.x0),
+        height: Math.abs(draft.y1 - draft.y0),
+      }
+    : null;
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "absolute inset-0 z-[5] select-none",
+        tool === "text" ? "cursor-text" : "cursor-crosshair"
+      )}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {rect && rect.width > 2 && tool !== "text" && (
+        <div
+          className={cn(
+            "absolute border border-primary bg-primary/10",
+            tool === "circle" ? "rounded-full" : "rounded-sm"
+          )}
+          style={rect}
+        />
+      )}
+    </div>
+  );
+}
+
 function CanvasInner() {
   const nodes = useFlowStore((s) => s.nodes);
   const edges = useFlowStore((s) => s.edges);
@@ -144,22 +394,22 @@ function CanvasInner() {
   const animateEdges = useFlowStore((s) => s.animateEdges);
   const animationSpeed = useFlowStore((s) => s.animationSpeed);
   const turboColors = useFlowStore((s) => s.turboColors);
-  const showMinimap = useFlowStore((s) => s.showMinimap);
   const showControls = useFlowStore((s) => s.showControls);
-  const showGrid = useFlowStore((s) => s.showGrid);
   const showSmartGuides = useFlowStore((s) => s.showSmartGuides);
   const renderAll = useFlowStore((s) => s.renderAllElements);
   const selectedSingle = useFlowStore((s) => {
     const sel = s.nodes.filter((n) => n.selected);
     return sel.length === 1 ? sel[0] : null;
   });
-  const allNodes = useFlowStore((s) => s.nodes);
   const workMode = useFlowStore((s) => s.workMode);
+  const pageBg = useFlowStore(
+    (s) => s.pages.find((p) => p.id === s.activePageId)?.bgColor
+  );
   const isPreview = workMode === "preview";
-  const { screenToFlowPosition } = useReactFlow();
-  const { x: vpX, y: vpY, zoom } = useViewport();
+  const { screenToFlowPosition, getZoom } = useReactFlow();
 
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [tool, setTool] = useState<CanvasTool>("select");
   const [altDown, setAltDown] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const activeSnaps = useRef<Map<string, ActiveSnap>>(new Map());
@@ -206,7 +456,13 @@ function CanvasInner() {
             (n) => n.id !== drag.id && !n.hidden
           );
           const activeSnap = activeSnaps.current.get(drag.id);
-          const snap = computeSnap(drag, c.position, others, zoom, activeSnap);
+          const snap = computeSnap(
+            drag,
+            c.position,
+            others,
+            getZoom(),
+            activeSnap
+          );
           if (c.dragging) {
             activeSnaps.current.set(drag.id, snap.activeSnap);
             nextGuides.push(...snap.guides);
@@ -246,7 +502,7 @@ function CanvasInner() {
       }
       onNodesChange(patched);
     },
-    [onNodesChange, guides.length, showSmartGuides, zoom]
+    [onNodesChange, guides.length, showSmartGuides, getZoom]
   );
 
   const registry = useMemo(
@@ -409,6 +665,7 @@ function CanvasInner() {
     "--turbo-start": turboColors[0],
     "--turbo-end": turboColors[1],
     "--dash-duration": `${animationSpeed}s`,
+    ...(pageBg ? { "--page-bg": pageBg } : {}),
   } as CSSProperties;
 
   return (
@@ -437,8 +694,8 @@ function CanvasInner() {
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
-        selectionOnDrag
-        panOnDrag={[1]}
+        selectionOnDrag={tool === "select"}
+        panOnDrag={tool === "hand" ? true : [1]}
         panOnScroll
         selectionMode={SelectionMode.Partial}
         onlyRenderVisibleElements={!renderAll}
@@ -446,137 +703,23 @@ function CanvasInner() {
         fitView
         fitViewOptions={{ padding: 0.4 }}
       >
-        {showGrid && (
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={18}
-            size={1.4}
-            color="hsl(var(--canvas-dot))"
-          />
-        )}
-        {showControls && <Controls showInteractive={false} />}
-        {showMinimap && <MiniMap pannable zoomable />}
       </ReactFlow>
-      {!isPreview && showSmartGuides && guides.length > 0 && (
-        <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">
-          {guides.map((g, i) => {
-            if (g.axis === "x") {
-              const x = vpX + g.pos * zoom;
-              return (
-                <line
-                  key={i}
-                  x1={x}
-                  x2={x}
-                  y1={vpY + g.from * zoom}
-                  y2={vpY + g.to * zoom}
-                  stroke="#ef4444"
-                  strokeWidth={1}
-                  strokeDasharray="4 3"
-                />
-              );
-            }
-            const y = vpY + g.pos * zoom;
-            return (
-              <line
-                key={i}
-                x1={vpX + g.from * zoom}
-                x2={vpX + g.to * zoom}
-                y1={y}
-                y2={y}
-                stroke="#ef4444"
-                strokeWidth={1}
-                strokeDasharray="4 3"
-              />
-            );
-          })}
-        </svg>
+      {!isPreview && (tool === "rect" || tool === "circle" || tool === "text") && (
+        <DrawOverlay tool={tool} onDone={() => setTool("select")} />
       )}
-      {!isPreview && showSmartGuides && altDown && selectedSingle && (() => {
-        const { w: sw, h: sh } = nodeDims(selectedSingle);
-        if (sw === 0 || sh === 0) return null;
-        const sx = (fx: number) => vpX + fx * zoom;
-        const sy = (fy: number) => vpY + fy * zoom;
-        const sL = selectedSingle.position.x;
-        const sR = sL + sw;
-        const sT = selectedSingle.position.y;
-        const sB = sT + sh;
-        const cx = sx((sL + sR) / 2);
-        const hovered =
-          hoveredId && hoveredId !== selectedSingle.id
-            ? allNodes.find((n) => n.id === hoveredId) ?? null
-            : null;
-        const d = hovered ? computeDimsToTarget(selectedSingle, hovered) : null;
-        const labelRed =
-          "absolute -translate-x-1/2 -translate-y-1/2 rounded-sm bg-red-500 px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap";
-        const hLine = (seg: DimSeg) => (
-          <line
-            x1={sx(seg.from)}
-            x2={sx(seg.to)}
-            y1={sy(seg.along)}
-            y2={sy(seg.along)}
-            stroke="#ef4444"
-            strokeWidth={1}
-          />
-        );
-        const vLine = (seg: DimSeg) => (
-          <line
-            x1={sx(seg.along)}
-            x2={sx(seg.along)}
-            y1={sy(seg.from)}
-            y2={sy(seg.to)}
-            stroke="#ef4444"
-            strokeWidth={1}
-          />
-        );
-        const hLabel = (seg: DimSeg) => (
-          <span
-            className={labelRed}
-            style={{
-              left: (sx(seg.from) + sx(seg.to)) / 2,
-              top: sy(seg.along) - 10,
-            }}
-          >
-            {Math.round(seg.value)}
-          </span>
-        );
-        const vLabel = (seg: DimSeg) => (
-          <span
-            className={labelRed}
-            style={{
-              left: sx(seg.along) + 14,
-              top: (sy(seg.from) + sy(seg.to)) / 2,
-            }}
-          >
-            {Math.round(seg.value)}
-          </span>
-        );
-        return (
-          <div className="pointer-events-none absolute inset-0 z-10">
-            {d && (
-              <svg className="absolute inset-0 h-full w-full">
-                {d.left && hLine(d.left)}
-                {d.right && hLine(d.right)}
-                {d.gapH && hLine(d.gapH)}
-                {d.top && vLine(d.top)}
-                {d.bottom && vLine(d.bottom)}
-                {d.gapV && vLine(d.gapV)}
-              </svg>
-            )}
-            <span
-              className="absolute -translate-x-1/2 rounded-sm bg-blue-500 px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap"
-              style={{ left: cx, top: sy(sB) + 6 }}
-            >
-              {Math.round(sw)} × {Math.round(sh)}
-            </span>
-            {d?.left && hLabel(d.left)}
-            {d?.right && hLabel(d.right)}
-            {d?.gapH && hLabel(d.gapH)}
-            {d?.top && vLabel(d.top)}
-            {d?.bottom && vLabel(d.bottom)}
-            {d?.gapV && vLabel(d.gapV)}
-          </div>
-        );
-      })()}
+      {!isPreview && showControls && (
+        <CanvasToolbar tool={tool} onToolChange={setTool} />
+      )}
+      {!isPreview && showSmartGuides && guides.length > 0 && (
+        <GuidesOverlay guides={guides} />
+      )}
+      {!isPreview && showSmartGuides && altDown && selectedSingle && (
+        <MeasureOverlay
+          selected={selectedSingle}
+          hoveredId={hoveredId}
+          nodes={nodes}
+        />
+      )}
       {connectPopover && (
         <>
           {sourceHandlePos && (
@@ -635,11 +778,11 @@ function CanvasInner() {
             onMouseDown={() => setConnectPopover(null)}
           />
           <div
-            className="fixed z-50 w-56 rounded-md border border-border bg-card p-1.5 shadow-lg"
+            className="fixed z-50 w-56 rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
             style={{ left: connectPopover.screenX, top: connectPopover.screenY }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <p className="px-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="px-1.5 pb-1.5 pt-0.5 text-xs font-semibold text-foreground">
               Connect to…
             </p>
             <div className="grid max-h-72 grid-cols-1 gap-0.5 overflow-y-auto">
@@ -652,7 +795,7 @@ function CanvasInner() {
                     key={b.id}
                     type="button"
                     onClick={() => pickBlock(b.id)}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
                   >
                     <span
                       className={cn(

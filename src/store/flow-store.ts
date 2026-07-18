@@ -217,8 +217,12 @@ type FlowState = Snapshot & {
   onEdgesChange: OnEdgesChange<LabeledEdge>;
   onConnect: OnConnect;
   addInfraNode: (block: BlockDef, position: { x: number; y: number }) => string;
-  addShapeNode: (shape: ShapeKind, position: { x: number; y: number }) => void;
-  addTextNode: (position: { x: number; y: number }) => void;
+  addShapeNode: (
+    shape: ShapeKind,
+    position: { x: number; y: number },
+    size?: { width: number; height: number }
+  ) => string;
+  addTextNode: (position: { x: number; y: number }) => string;
   addCodeNode: (position: { x: number; y: number }) => void;
   addStepNode: (position: { x: number; y: number }) => void;
   addLineNode: (position: { x: number; y: number }) => void;
@@ -564,37 +568,47 @@ export const useFlowStore = create<FlowState>()(
     return id;
   },
 
-  addShapeNode: (shape, position) =>
+  addShapeNode: (shape, position, size) => {
+    const id = nextNodeId();
     set((s) => ({
+      // Newest node on top (array-last), like Figma — reorder via the
+      // Layers panel / Arrange buttons. Uniform zIndex keeps paint order
+      // driven purely by the array.
       nodes: [
         ...s.nodes,
         {
-          id: nextNodeId(),
+          id,
           type: "shape",
           position,
           style:
-            shape === "circle"
+            size ??
+            (shape === "circle"
               ? { width: 220, height: 220 }
-              : { width: 300, height: 200 },
+              : { width: 300, height: 200 }),
           zIndex: 0,
-          data: { shape, label: shape === "circle" ? "Circle" : "Rectangle", accent: "slate" },
+          data: { shape, accent: "slate" },
         },
       ],
-    })),
+    }));
+    return id;
+  },
 
-  addTextNode: (position) =>
+  addTextNode: (position) => {
+    const id = nextNodeId();
     set((s) => ({
       nodes: [
         ...s.nodes,
         {
-          id: nextNodeId(),
+          id,
           type: "text",
           position,
-          zIndex: 1,
+          zIndex: 0,
           data: { text: "Text", accent: "amber", bgColor: "transparent" },
         },
       ],
-    })),
+    }));
+    return id;
+  },
 
   addCodeNode: (position) =>
     set((s) => ({
