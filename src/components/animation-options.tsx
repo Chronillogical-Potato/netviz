@@ -441,6 +441,7 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
     beamLengthPx: 48,
     opacity: 1,
     glowBlurPx: 0,
+    shimmer: true,
   },
   nodeIds: [],
   edgeIds: [],
@@ -887,6 +888,32 @@ export function AnimationPathBuilder() {
               setAnimationPathAppearance({ glowBlurPx })
             }
           />
+          <Row label="Block shimmer">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={draft.appearance.shimmer}
+              aria-label="Block shimmer"
+              onClick={() =>
+                setAnimationPathAppearance({
+                  shimmer: !draft.appearance.shimmer,
+                })
+              }
+              className={cn(
+                "flex h-5 w-9 items-center rounded-full p-0.5 transition-colors",
+                draft.appearance.shimmer ? "bg-primary" : "bg-accent"
+              )}
+            >
+              <span
+                className={cn(
+                  "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                  draft.appearance.shimmer
+                    ? "translate-x-4"
+                    : "translate-x-0"
+                )}
+              />
+            </button>
+          </Row>
         </div>
       </div>
 

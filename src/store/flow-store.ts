@@ -255,6 +255,7 @@ export type AnimationPathAppearance = {
   beamLengthPx: number;
   opacity: number;
   glowBlurPx: number;
+  shimmer: boolean;
 };
 export type AnimationPathDraft = {
   scenarioId: string | null;
@@ -425,6 +426,7 @@ const defaultAnimationPathAppearance = (): AnimationPathAppearance => ({
   beamLengthPx: 48,
   opacity: 1,
   glowBlurPx: 0,
+  shimmer: true,
 });
 
 function animationPathAppearance(
@@ -432,9 +434,10 @@ function animationPathAppearance(
   scenarioId: string
 ): AnimationPathAppearance {
   const defaults = defaultAnimationPathAppearance();
-  const clip = document.scenarios
-    .find((scenario) => scenario.id === scenarioId)
-    ?.tracks.find(
+  const scenario = document.scenarios.find(
+    (candidate) => candidate.id === scenarioId
+  );
+  const clip = scenario?.tracks.find(
       (track) =>
         track.property === "connection-effect" &&
         track.clips.some(
@@ -466,6 +469,14 @@ function animationPathAppearance(
       typeof params.glowBlurPx === "number"
         ? params.glowBlurPx
         : defaults.glowBlurPx,
+    shimmer:
+      scenario?.tracks.some(
+        (track) =>
+          track.property === "node-effect" &&
+          track.clips.some(
+            (candidate) => candidate.effect.type === "node.border-beam"
+          )
+      ) ?? defaults.shimmer,
   };
 }
 
@@ -495,27 +506,31 @@ function buildAnimationPathScenario(input: {
       edgeIds: [edgeId],
       effect: edgeEffect,
       clip: createGradientBeamClip(
-        REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS
+        input.appearance.shimmer
+          ? REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS
+          : index * GRADIENT_BEAM_DURATION_MS
       ),
     });
   });
-  input.nodeIds.forEach((nodeId, index) => {
-    const incomingEdge =
-      index === 0
-        ? undefined
-        : input.edges.find((edge) => edge.id === input.edgeIds[index - 1]);
-    const nodeEffect = createNodeBorderEffect(nodeEntrySide(incomingEdge));
-    nodeEffect.params = {
-      ...nodeEffect.params,
-      colors: [...input.appearance.colors],
-    };
-    document = applyNodeEffect(document, {
-      nodeIds: [nodeId],
-      effect: nodeEffect,
-      append: true,
-      clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+  if (input.appearance.shimmer) {
+    input.nodeIds.forEach((nodeId, index) => {
+      const incomingEdge =
+        index === 0
+          ? undefined
+          : input.edges.find((edge) => edge.id === input.edgeIds[index - 1]);
+      const nodeEffect = createNodeBorderEffect(nodeEntrySide(incomingEdge));
+      nodeEffect.params = {
+        ...nodeEffect.params,
+        colors: [...input.appearance.colors],
+      };
+      document = applyNodeEffect(document, {
+        nodeIds: [nodeId],
+        effect: nodeEffect,
+        append: true,
+        clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+      });
     });
-  });
+  }
   return document.scenarios[0] ?? null;
 }
 

@@ -70,6 +70,7 @@ describe("AnimationOptions", () => {
     expect(markup).toContain('aria-label="Path beam length"');
     expect(markup).toContain('aria-label="Path animation opacity"');
     expect(markup).toContain('aria-label="Path animation glow"');
+    expect(markup).toContain('aria-label="Block shimmer"');
     expect(markup).toContain("Save &amp; play");
     expect(markup).toContain("Undo last");
   });

@@ -402,6 +402,7 @@ describe("animation target lifecycle", () => {
         beamLengthPx: 48,
         opacity: 1,
         glowBlurPx: 0,
+        shimmer: true,
       },
       nodeIds: ["user", "firewall"],
       edgeIds: ["user-firewall"],
@@ -470,6 +471,7 @@ describe("animation target lifecycle", () => {
         beamLengthPx: 48,
         opacity: 1,
         glowBlurPx: 0,
+        shimmer: true,
       },
       nodeIds: ["user", "firewall", "proxy"],
       edgeIds: ["user-firewall", "firewall-proxy"],
@@ -560,7 +562,35 @@ describe("animation target lifecycle", () => {
       beamLengthPx: 72,
       opacity: 0.65,
       glowBlurPx: 8,
+      shimmer: true,
     });
+  });
+
+  test("can save a custom path without block shimmer", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("server")],
+      edges: [edge("user-server", "user", "server")],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().setAnimationPathAppearance({ shimmer: false });
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+
+    const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const edgeClip = scenario.tracks.find(
+      (track) => track.property === "connection-effect"
+    )?.clips[0];
+    expect(
+      scenario.tracks.filter((track) => track.property === "node-effect")
+    ).toEqual([]);
+    expect(edgeClip?.startMs).toBe(0);
+    expect(scenario.durationMs).toBe(1_500);
+
+    useFlowStore.getState().editAnimationPath(scenario.id);
+    expect(useFlowStore.getState().animationPathDraft?.appearance.shimmer).toBe(
+      false
+    );
   });
 
   test("saves multiple named custom paths without replacing earlier paths", () => {
