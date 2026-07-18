@@ -5,8 +5,10 @@ import {
 import type { PageScenarioDocumentV1, ScenarioEffectV1 } from "./model";
 
 export const GRADIENT_BEAM_DURATION_MS = 1_500;
-export const REQUEST_FLOW_HOP_DELAY_MS = GRADIENT_BEAM_DURATION_MS;
 export const NODE_BORDER_DURATION_MS = 800;
+export const REQUEST_FLOW_EDGE_DELAY_MS = NODE_BORDER_DURATION_MS;
+export const REQUEST_FLOW_HOP_DELAY_MS =
+  NODE_BORDER_DURATION_MS + GRADIENT_BEAM_DURATION_MS;
 
 export function createGradientBeamEffect(): ScenarioEffectV1 {
   return {

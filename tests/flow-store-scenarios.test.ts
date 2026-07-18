@@ -227,7 +227,7 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().animateRequestFlow("user");
 
     const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
-    expect(scenario.durationMs).toBe(5_300);
+    expect(scenario.durationMs).toBe(7_700);
     expect(
       scenario.tracks
         .filter((track) => track.property === "connection-effect")
@@ -236,9 +236,9 @@ describe("animation target lifecycle", () => {
           track.clips[0].startMs,
         ])
     ).toEqual([
-      ["user-firewall", 0],
-      ["firewall-proxy", 1_500],
-      ["proxy-server", 3_000],
+      ["user-firewall", 800],
+      ["firewall-proxy", 3_100],
+      ["proxy-server", 5_400],
     ]);
     expect(
       scenario.tracks
@@ -249,9 +249,9 @@ describe("animation target lifecycle", () => {
         ])
     ).toEqual([
       ["user", 0],
-      ["firewall", 1_500],
-      ["proxy", 3_000],
-      ["server", 4_500],
+      ["firewall", 2_300],
+      ["proxy", 4_600],
+      ["server", 6_900],
     ]);
   });
 
@@ -316,7 +316,7 @@ describe("animation target lifecycle", () => {
     );
   });
 
-  test("plays the custom path in its authored click order", () => {
+  test("finishes each block shimmer before its outgoing edge starts", () => {
     useFlowStore.setState({
       nodes: [node("user"), node("firewall"), node("proxy")],
       edges: [
@@ -341,8 +341,8 @@ describe("animation target lifecycle", () => {
         track.clips[0].startMs,
       ])
     ).toEqual([
-      ["user-firewall", 0],
-      ["firewall-proxy", 1_500],
+      ["user-firewall", 800],
+      ["firewall-proxy", 3_100],
     ]);
     expect(
       scenario.tracks
@@ -354,10 +354,10 @@ describe("animation target lifecycle", () => {
         ])
     ).toEqual([
       ["user", 0, 800],
-      ["firewall", 1_500, 800],
-      ["proxy", 3_000, 800],
+      ["firewall", 2_300, 800],
+      ["proxy", 4_600, 800],
     ]);
-    expect(scenario.durationMs).toBe(3_800);
+    expect(scenario.durationMs).toBe(5_400);
     expect(useFlowStore.getState().animationPathDraft).toBeNull();
 
     useFlowStore.getState().editAnimationPath();

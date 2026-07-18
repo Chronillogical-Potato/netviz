@@ -50,7 +50,9 @@ import {
   createGradientBeamEffect,
   createNodeBorderClip,
   createNodeBorderEffect,
+  GRADIENT_BEAM_DURATION_MS,
   normalizeGradientBeamDefaults,
+  REQUEST_FLOW_EDGE_DELAY_MS,
   REQUEST_FLOW_HOP_DELAY_MS,
 } from "@/animation/gradient-beam";
 import { findAuthoredCustomPath } from "@/animation/custom-path";
@@ -1138,7 +1140,8 @@ export const useFlowStore = create<FlowState>()(
           edgeIds: [step.edgeId],
           effect: createGradientBeamEffect(),
           clip: createGradientBeamClip(
-            step.hop * REQUEST_FLOW_HOP_DELAY_MS
+            REQUEST_FLOW_EDGE_DELAY_MS +
+              step.hop * REQUEST_FLOW_HOP_DELAY_MS
           ),
         });
       }
@@ -1191,7 +1194,7 @@ export const useFlowStore = create<FlowState>()(
           edgeIds: [step.edgeId],
           effect: createGradientBeamEffect(),
           clip: createGradientBeamClip(
-            step.hop * REQUEST_FLOW_HOP_DELAY_MS
+            step.hop * GRADIENT_BEAM_DURATION_MS
           ),
         });
       }
@@ -1311,7 +1314,10 @@ export const useFlowStore = create<FlowState>()(
         scenarioDocument = applyEdgeEffect(scenarioDocument, {
           edgeIds: [edgeId],
           effect: createGradientBeamEffect(),
-          clip: createGradientBeamClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+          clip: createGradientBeamClip(
+            REQUEST_FLOW_EDGE_DELAY_MS +
+              index * REQUEST_FLOW_HOP_DELAY_MS
+          ),
         });
       });
       scenarioDocument = removeNodeEffects(scenarioDocument, {
