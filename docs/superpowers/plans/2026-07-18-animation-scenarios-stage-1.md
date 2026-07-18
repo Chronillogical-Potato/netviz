@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add Stage 1 connection-animation authoring and deterministic playback without changing the approved editor density or introducing the Stage 2 timeline.
+**Goal:** Add a first-class Animation mode for Stage 1 connection-animation authoring and deterministic playback without changing the approved editor density or introducing the Stage 2 timeline.
 
 **Architecture:** Store one versioned scenario document with each page, but keep playback state in a separate non-persisted runtime. A single monotonic clock evaluates enabled edge clips and notifies only mounted target renderers. Every SVG effect receives the exact XYFlow `edgePath`, while the base edge, motion overlay, interaction path, and label remain separate layers.
 
@@ -14,7 +14,7 @@
 
 - Transport time, active preview scope, loop iteration, and reduced-motion overrides never enter `useFlowStore`, IndexedDB, project JSON, or undo history.
 - Authored scenario data is page-owned and participates in save/load, undo, duplication, deletion, clear, and page switching.
-- Design mode never autoplays. Preview autoplays the page default only when resolved motion preferences allow it.
+- `WorkMode` is `design | animation | preview`. Design retains static diagram editing and never plays motion; Animation owns scenario authoring and explicit playback; Preview is read-only and autoplays the page default only when resolved motion preferences allow it.
 - Effects reuse the exact `edgePath`; no DOM-derived path reconstruction is allowed.
 - Unknown effect types and parameters round-trip unchanged and render the base edge only.
 - Stage 1 does not add a timeline drawer, marker/trigger behavior, node or camera animation, paired request/response tracks, or video export.
@@ -139,7 +139,7 @@ timelineMs = timelineAnchorMs
 - [ ] Run focused tests, `bun test`, and `bun run build`.
 - [ ] Commit as `Integrate scenarios with project state`.
 
-## Task 6: Add compact authoring and playback controls
+## Task 6: Add Animation mode, compact authoring, and playback controls
 
 **Files:**
 
@@ -151,7 +151,7 @@ timelineMs = timelineAnchorMs
 - Modify: `src/store/flow-store.ts`
 
 - [ ] Add component tests or pure selector tests first for `none | uniform | mixed` values and one-update multi-selection broadcasts.
-- [ ] Replace legacy Animate/Speed with Animation preset, direction, duration, delay, `Preview selection`, and a collapsed Advanced disclosure. Selecting None removes clips.
+- [ ] Add `animation` to the mode switcher. Design retains the current static edge appearance controls; Animation shows Animation preset, direction, duration, delay, `Preview selection`, and a collapsed Advanced disclosure. Selecting None removes clips.
 - [ ] Show `Mixed` or `—` without inventing fallback values. A timing edit must not silently animate an unanimated edge.
 - [ ] Add `PlaybackControls` with play/pause, restart, seek, rate, loop, reverse, semantic labels, and keyboard handling that ignores interactive/editable elements.
 - [ ] Only playback controls subscribe to transport time; Canvas and Inspector must not subscribe to frame ticks.
@@ -159,7 +159,7 @@ timelineMs = timelineAnchorMs
 - [ ] Run focused tests, `bun test`, and `bun run build`.
 - [ ] Commit as `Add animation authoring controls`.
 
-## Task 7: Make Preview a playback surface
+## Task 7: Separate Design, Animation, and Preview lifecycles
 
 **Files:**
 
@@ -168,6 +168,7 @@ timelineMs = timelineAnchorMs
 - Modify: `src/components/toolbar.tsx`
 - Modify: `src/index.css`
 
+- [ ] Enter Animation through a lifecycle action that activates the page default scenario but stays stopped until explicit playback; leaving it stops/resets transport.
 - [ ] Enter Preview through a lifecycle action that clears selection and autoplays the default scenario only when motion is allowed.
 - [ ] In Preview disable dragging, connecting, selection, focus mutation, deletion, copy/paste, and undo; retain pan/zoom, visible non-empty labels, transport, and `Exit preview`.
 - [ ] Resolve system reduced motion with `matchMedia`; pause at zero and disable autoplay/loop unless the explicit in-app override enables motion.
@@ -184,7 +185,7 @@ timelineMs = timelineAnchorMs
 - [ ] Reuse an existing port 8888 server when present; do not kill it. Otherwise start the repo server once.
 - [ ] Create a graph with at least two differently oriented connections and validate all five presets.
 - [ ] Assert every motion path `d` equals its base path before and after node move, pan, zoom, resize, and selection.
-- [ ] Verify Design does not autoplay; selection preview and compact play/pause/restart/seek/rate/reverse/loop are deterministic.
+- [ ] Verify Design exposes only static diagram options and never plays; Animation exposes scenario options and deterministic selection preview/play/pause/restart/seek/rate/reverse/loop.
 - [ ] Verify multi-selection shows Mixed and broadcasts a chosen field to all selected edges.
 - [ ] Verify Preview removes authoring controls, preserves labels/pan/zoom/transport, blocks mutations, and exits with Escape.
 - [ ] Verify reduced-motion default and explicit override, desktop and narrow viewport layouts, dark and light themes, browser logs, and screenshots.
