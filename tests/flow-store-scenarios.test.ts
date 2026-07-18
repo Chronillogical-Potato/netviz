@@ -4,6 +4,7 @@ import { scenarioRuntime } from "../src/animation/runtime-instance";
 import type { FlowSnapshotV2 } from "../src/animation/snapshot-migrations";
 import {
   DEFAULT_TURBO_COLORS,
+  isAnimationCanvasMode,
   useFlowStore,
   type AppNode,
   type LabeledEdge,
@@ -60,6 +61,12 @@ function resetStore() {
 beforeEach(resetStore);
 
 describe("page-owned animation state", () => {
+  test("uses animation canvas styling in preview mode", () => {
+    expect(isAnimationCanvasMode("design")).toBe(false);
+    expect(isAnimationCanvasMode("animation")).toBe(true);
+    expect(isAnimationCanvasMode("preview")).toBe(true);
+  });
+
   test("returns clean preview to the editor mode it entered from", () => {
     useFlowStore.getState().setWorkMode("animation");
     useFlowStore.getState().setWorkMode("preview");

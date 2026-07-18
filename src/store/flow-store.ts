@@ -247,6 +247,7 @@ type Snapshot = {
 
 export type WorkMode = "design" | "animation" | "preview";
 export type EditorMode = Exclude<WorkMode, "preview">;
+export const isAnimationCanvasMode = (mode: WorkMode) => mode !== "design";
 export type MotionPreference = "system" | "full" | "reduced";
 export type AnimationPathAppearance = {
   colors: [string, string];

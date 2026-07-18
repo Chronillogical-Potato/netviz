@@ -4,7 +4,10 @@ import { Toolbar } from "@/components/toolbar";
 import { Sidebar } from "@/components/sidebar";
 import { Canvas } from "@/components/canvas";
 import { Inspector } from "@/components/inspector";
-import { useFlowStore } from "@/store/flow-store";
+import {
+  isAnimationCanvasMode,
+  useFlowStore,
+} from "@/store/flow-store";
 import { cn } from "@/lib/utils";
 
 export default function App() {
@@ -91,7 +94,7 @@ export default function App() {
       <div
         className={cn(
           "flex h-screen w-screen flex-col bg-background text-foreground",
-          workMode === "animation" && "animation-mode",
+          isAnimationCanvasMode(workMode) && "animation-mode",
           isPreview && "preview-mode"
         )}
         data-motion={reducedMotion ? "reduced" : "full"}
