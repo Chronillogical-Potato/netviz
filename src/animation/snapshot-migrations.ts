@@ -226,17 +226,23 @@ function legacyDurationMs(animationSpeed: unknown): number {
   return 800;
 }
 
+export function clearLegacyAnimatedFlags(
+  edges: readonly LabeledEdge[]
+): LabeledEdge[] {
+  return edges.map((edge) =>
+    edge.animated === false
+      ? edge
+      : ({ ...edge, animated: false } as LabeledEdge)
+  );
+}
+
 function migratePage(
   pageId: string,
   edges: LabeledEdge[],
   durationMs: number
 ): { edges: LabeledEdge[]; scenarioDocument: PageScenarioDocumentV1 } {
   const animated = edges.filter((edge) => edge.animated === true);
-  const normalizedEdges = edges.map((edge) =>
-    edge.animated === false
-      ? edge
-      : ({ ...edge, animated: false } as LabeledEdge)
-  );
+  const normalizedEdges = clearLegacyAnimatedFlags(edges);
 
   if (animated.length === 0) {
     return { edges: normalizedEdges, scenarioDocument: emptyScenarioDocument() };
@@ -384,7 +390,7 @@ export function normalizeFlowSnapshotV2(input: unknown): FlowSnapshotV2 {
     assertCollection(content.groups);
     pageContents[pageId] = {
       nodes: content.nodes as AppNode[],
-      edges: content.edges as LabeledEdge[],
+      edges: clearLegacyAnimatedFlags(content.edges as LabeledEdge[]),
       groups: content.groups as Group[],
       scenarioDocument: normalizeScenarioDocument(content.scenarioDocument),
     };
@@ -400,7 +406,7 @@ export function normalizeFlowSnapshotV2(input: unknown): FlowSnapshotV2 {
     projectName:
       typeof input.projectName === "string" ? input.projectName : "Untitled",
     nodes: input.nodes as AppNode[],
-    edges: input.edges as LabeledEdge[],
+    edges: clearLegacyAnimatedFlags(input.edges as LabeledEdge[]),
     customBlocks: input.customBlocks as BlockDef[],
     groups: input.groups as Group[],
     pages: input.pages as Page[],

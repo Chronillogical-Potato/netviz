@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseFlowSnapshot } from "../src/lib/storage";
+import {
+  createFlowSnapshot,
+  parseFlowSnapshot,
+} from "../src/lib/storage";
 
 const minimalV1 = {
   version: 1,
@@ -43,5 +46,37 @@ describe("project snapshot parsing", () => {
     });
     expect("currentTimeMs" in parsed).toBe(false);
     expect("transportStatus" in parsed).toBe(false);
+  });
+
+  test("does not export legacy CSS animation flags", () => {
+    const parsed = parseFlowSnapshot(minimalV1);
+    const { version: _version, ...source } = parsed;
+    const edge = {
+      id: "edge-a",
+      type: "labeled" as const,
+      source: "a",
+      target: "b",
+      animated: true,
+      data: { lineStyle: "solid" as const },
+    };
+    const snapshot = createFlowSnapshot({
+      ...source,
+      edges: [edge],
+      pageContents: {
+        "page-2": {
+          nodes: [],
+          edges: [{ ...edge, id: "edge-b" }],
+          groups: [],
+          scenarioDocument: {
+            schemaVersion: 1,
+            scenarios: [],
+            defaultScenarioId: null,
+          },
+        },
+      },
+    });
+
+    expect(snapshot.edges[0].animated).toBe(false);
+    expect(snapshot.pageContents["page-2"].edges[0].animated).toBe(false);
   });
 });

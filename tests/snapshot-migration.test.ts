@@ -161,6 +161,36 @@ describe("version 1 animation migration", () => {
 });
 
 describe("version 2 normalization", () => {
+  test("clears legacy CSS animation flags on active and inactive page edges", () => {
+    const base = migrateFlowSnapshotV1(
+      legacySnapshot({
+        pages: [
+          { id: "page-1", name: "Page 1" },
+          { id: "page-2", name: "Page 2" },
+        ],
+      })
+    );
+    const normalized = normalizeFlowSnapshotV2({
+      ...base,
+      edges: [legacyEdge("active-edge", true)],
+      pageContents: {
+        "page-2": {
+          nodes: [],
+          edges: [legacyEdge("inactive-edge", true)],
+          groups: [],
+          scenarioDocument: {
+            schemaVersion: 1,
+            scenarios: [],
+            defaultScenarioId: null,
+          },
+        },
+      },
+    });
+
+    expect(normalized.edges[0].animated).toBe(false);
+    expect(normalized.pageContents["page-2"].edges[0].animated).toBe(false);
+  });
+
   test("round-trips unknown effect types and parameters", () => {
     const snapshot = {
       ...migrateFlowSnapshotV1(legacySnapshot()),
