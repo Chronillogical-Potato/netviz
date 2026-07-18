@@ -23,7 +23,10 @@ import {
   createGradientBeamEffect,
 } from "@/animation/gradient-beam";
 import { buildRequestFlow } from "@/animation/request-flow";
-import { findAuthoredCustomPaths } from "@/animation/custom-path";
+import {
+  findAuthoredCustomPaths,
+  type AnimationPathPreset,
+} from "@/animation/custom-path";
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
@@ -159,7 +162,7 @@ function Picker({
             ref={panelRef}
             role="listbox"
             aria-label={`${label} options`}
-            className="fixed z-50 rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
+            className="fixed z-50 max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
             style={position}
           >
             {options.map((option) => (
@@ -436,8 +439,10 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   scenarioId: null,
   name: "",
   preset: "single-line" as const,
+  staggerMs: 300,
   appearance: {
     colors: ["#ffaa40", "#9c40ff"] as [string, string],
+    responseColors: ["#38bdf8", "#818cf8"] as [string, string],
     widthPx: 2,
     beamLengthPx: 48,
     opacity: 1,
@@ -449,14 +454,21 @@ const EMPTY_ANIMATION_PATH_DRAFT = {
   error: null,
 };
 
-const PATH_PRESETS = [
+const PATH_PRESETS: Array<{ value: AnimationPathPreset; label: string }> = [
   { value: "single-line", label: "Single line" },
   { value: "bidirectional", label: "Bi-directional" },
   { value: "multiple-inputs", label: "Multiple inputs" },
   { value: "multiple-outputs", label: "Multiple outputs" },
-] as const;
+  { value: "request-response", label: "Request + response" },
+  { value: "scatter-gather", label: "Scatter + gather" },
+  { value: "round-robin", label: "Round robin" },
+  { value: "staggered-outputs", label: "Staggered outputs" },
+  { value: "failover", label: "Fallback / failover" },
+  { value: "cascade", label: "Cascade / tree" },
+  { value: "loop", label: "Loop / polling" },
+];
 
-const PATH_PRESET_HELP = {
+const PATH_PRESET_HELP: Record<AnimationPathPreset, string> = {
   "single-line":
     "Click connected blocks in order. Each click adds the next request hop.",
   bidirectional:
@@ -465,7 +477,21 @@ const PATH_PRESET_HELP = {
     "Click the receiving block first, then each block that sends into it.",
   "multiple-outputs":
     "Click the source block first, then each block that receives from it.",
-} as const;
+  "request-response":
+    "Click a request route in order. The response returns along the same route.",
+  "scatter-gather":
+    "Click the source, at least two workers, then their shared result block.",
+  "round-robin":
+    "Click the router first, then outputs in the order they should receive work.",
+  "staggered-outputs":
+    "Click the source first, then outputs. Each beam starts after a tunable delay.",
+  failover:
+    "Click the source, primary destination, then the fallback destination.",
+  cascade:
+    "Click the root first, then add connected descendants to build a tree.",
+  loop:
+    "Click connected blocks in order, then click the first block again to close the loop.",
+};
 
 const ANIMATION_PATH_DRAG_MIME = "application/x-netviz-animation-path";
 
@@ -579,14 +605,37 @@ export function ExistingAnimationPath() {
             .map((id) => nodes.find((node) => node.id === id))
             .filter((node) => node !== undefined)
             .map(getNodeDisplayName);
-          const route =
-            path.preset === "bidirectional"
-              ? names.join(" ↔ ")
-              : path.preset === "multiple-inputs"
-                ? `${names.slice(1).join(" + ")} → ${names[0] ?? ""}`
-                : path.preset === "multiple-outputs"
-                  ? `${names[0] ?? ""} → ${names.slice(1).join(" + ")}`
-                  : names.join(" → ");
+          const route = (() => {
+            if (path.preset === "bidirectional") return names.join(" ↔ ");
+            if (path.preset === "multiple-inputs") {
+              return `${names.slice(1).join(" + ")} → ${names[0] ?? ""}`;
+            }
+            if (
+              path.preset === "multiple-outputs" ||
+              path.preset === "cascade"
+            ) {
+              return `${names[0] ?? ""} → ${names.slice(1).join(" + ")}`;
+            }
+            if (path.preset === "scatter-gather") {
+              return `${names[0] ?? ""} → ${names.slice(1, -1).join(" + ")} → ${names.at(-1) ?? ""}`;
+            }
+            if (path.preset === "request-response") {
+              return `${names.join(" → ")} ↩`;
+            }
+            if (path.preset === "round-robin") {
+              return `${names.join(" → ")} ↻`;
+            }
+            if (path.preset === "staggered-outputs") {
+              return `${names[0] ?? ""} → ${names.slice(1).join(" ⋯ ")}`;
+            }
+            if (path.preset === "failover") {
+              return `${names[0] ?? ""} → ${names[1] ?? ""} ⇢ ${names[2] ?? ""}`;
+            }
+            if (path.preset === "loop") {
+              return `${names.slice(0, -1).join(" → ")} ↻`;
+            }
+            return names.join(" → ");
+          })();
           const colors = document.scenarios
             .find((scenario) => scenario.id === path.scenarioId)
             ?.tracks.find(
@@ -646,7 +695,7 @@ export function ExistingAnimationPath() {
                   {path.name === "Default scenario" ? "Custom path" : path.name}
                 </span>
                 <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
-                  {path.nodeIds.length} blocks
+                  {new Set(path.nodeIds).size} blocks
                 </span>
               </div>
               <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
@@ -760,6 +809,9 @@ export function AnimationPathBuilder() {
   const setAnimationPathPreset = useFlowStore(
     (state) => state.setAnimationPathPreset
   );
+  const setAnimationPathStaggerMs = useFlowStore(
+    (state) => state.setAnimationPathStaggerMs
+  );
   const setAnimationPathAppearance = useFlowStore(
     (state) => state.setAnimationPathAppearance
   );
@@ -768,12 +820,30 @@ export function AnimationPathBuilder() {
   const pathNodes = draft.nodeIds
     .map((id) => nodes.find((node) => node.id === id))
     .filter((node) => node !== undefined);
-  const canSave =
-    draft.preset === "multiple-inputs" || draft.preset === "multiple-outputs"
-      ? draft.edgeIds.length >= 2
-      : draft.preset === "bidirectional"
-        ? draft.edgeIds.length === 1
-        : draft.edgeIds.length >= 1;
+  const canSave = (() => {
+    if (draft.preset === "bidirectional") return draft.edgeIds.length === 1;
+    if (draft.preset === "failover") return draft.edgeIds.length === 2;
+    if (draft.preset === "scatter-gather") {
+      const workerCount = draft.nodeIds.length - 2;
+      return workerCount >= 2 && draft.edgeIds.length === workerCount * 2;
+    }
+    if (draft.preset === "loop") {
+      return (
+        draft.edgeIds.length >= 2 &&
+        draft.nodeIds[0] === draft.nodeIds[draft.nodeIds.length - 1]
+      );
+    }
+    if (
+      draft.preset === "multiple-inputs" ||
+      draft.preset === "multiple-outputs" ||
+      draft.preset === "round-robin" ||
+      draft.preset === "staggered-outputs" ||
+      draft.preset === "cascade"
+    ) {
+      return draft.edgeIds.length >= 2;
+    }
+    return draft.edgeIds.length >= 1;
+  })();
 
   return (
     <div className="flex-1 overflow-y-auto pb-4" data-animation-path-builder>
@@ -794,35 +864,41 @@ export function AnimationPathBuilder() {
           />
         </label>
 
-        <div className="mb-3">
-          <p className="mb-1.5 text-[10px] text-muted-foreground">
-            Path preset
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {PATH_PRESETS.map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
-                aria-pressed={draft.preset === preset.value}
-                onClick={() => setAnimationPathPreset(preset.value)}
-                className={cn(
-                  "h-8 rounded-md border px-2 text-[10px] transition-colors",
-                  draft.preset === preset.value
-                    ? "border-primary/50 bg-primary/10 text-foreground"
-                    : "border-border bg-input text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+        <div className="mb-3 flex flex-col gap-2">
+          <Row label="Path preset">
+            <Picker
+              label="Path preset"
+              value={draft.preset}
+              options={PATH_PRESETS}
+              onChange={(value) =>
+                setAnimationPathPreset(value as AnimationPathPreset)
+              }
+            />
+          </Row>
+          {draft.preset === "staggered-outputs" ? (
+            <TimingRow
+              label="Stagger"
+              ariaLabel="Path stagger delay"
+              state={{ status: "uniform", value: draft.staggerMs }}
+              min={0.1}
+              max={2}
+              disabled={false}
+              onChange={(seconds) =>
+                setAnimationPathStaggerMs(seconds * 1_000)
+              }
+            />
+          ) : null}
         </div>
 
         {pathNodes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[10px] text-muted-foreground">
             {draft.preset === "multiple-inputs"
               ? "Click the receiving block on the canvas"
-              : draft.preset === "multiple-outputs"
+              : draft.preset === "multiple-outputs" ||
+                  draft.preset === "round-robin" ||
+                  draft.preset === "staggered-outputs" ||
+                  draft.preset === "failover" ||
+                  draft.preset === "scatter-gather"
                 ? "Click the source block on the canvas"
                 : "Click the first block on the canvas"}
           </div>
@@ -903,6 +979,40 @@ export function AnimationPathBuilder() {
               }
             />
           </Row>
+          {draft.preset === "request-response" ? (
+            <>
+              <Row label="Reply start">
+                <ColorField
+                  label="Response start color"
+                  value={draft.appearance.responseColors[0]}
+                  disabled={false}
+                  onChange={(color) =>
+                    setAnimationPathAppearance({
+                      responseColors: [
+                        color,
+                        draft.appearance.responseColors[1],
+                      ],
+                    })
+                  }
+                />
+              </Row>
+              <Row label="Reply end">
+                <ColorField
+                  label="Response end color"
+                  value={draft.appearance.responseColors[1]}
+                  disabled={false}
+                  onChange={(color) =>
+                    setAnimationPathAppearance({
+                      responseColors: [
+                        draft.appearance.responseColors[0],
+                        color,
+                      ],
+                    })
+                  }
+                />
+              </Row>
+            </>
+          ) : null}
           <ValueRow
             label="Width"
             ariaLabel="Path animation width"

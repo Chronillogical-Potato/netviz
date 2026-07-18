@@ -65,9 +65,9 @@ describe("AnimationOptions", () => {
     expect(markup).toContain('aria-label="Path name"');
     expect(markup).toContain("Path preset");
     expect(markup).toContain("Single line");
-    expect(markup).toContain("Bi-directional");
-    expect(markup).toContain("Multiple inputs");
-    expect(markup).toContain("Multiple outputs");
+    expect(markup).toContain('aria-label="Path preset"');
+    expect(markup).toContain('aria-haspopup="listbox"');
+    expect(markup).not.toContain("<select");
     expect(markup).toContain("Appearance");
     expect(markup).toContain('aria-label="Path start color"');
     expect(markup).toContain('aria-label="Path end color"');
