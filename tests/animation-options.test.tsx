@@ -14,6 +14,7 @@ import {
 } from "../src/components/animation-options";
 import { projectEdgeEffect } from "../src/animation/edge-effects";
 import { evaluateClipTiming } from "../src/animation/timing";
+import { Dialog } from "../src/ui/dialog";
 import {
   useFlowStore,
   type LabeledEdge,
@@ -110,6 +111,23 @@ describe("AnimationOptions", () => {
     );
     expect(markup).toContain('aria-label="Drag Login flow to reorder"');
     expect(markup).toContain("Drag to reorder");
+  });
+
+  test("provides custom path delete confirmation content", () => {
+    const markup = renderToStaticMarkup(
+      <Dialog open>
+        <AnimationOptionComponents.AnimationPathDeleteConfirmation
+          name="Login flow"
+          onCancel={() => {}}
+          onConfirm={() => {}}
+        />
+      </Dialog>
+    );
+    expect(markup).toContain("Delete animation?");
+    expect(markup).toContain("Login flow");
+    expect(markup).toContain("cannot be undone");
+    expect(markup).toContain("Cancel");
+    expect(markup).toContain("Delete animation");
   });
 
   test("offers only the gradient beam on an unanimated edge", () => {

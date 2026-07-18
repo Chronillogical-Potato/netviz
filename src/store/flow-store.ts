@@ -396,6 +396,7 @@ type FlowState = Snapshot & {
     scenarioId: string,
     beforeScenarioId: string | null
   ) => void;
+  deleteAnimationPath: (scenarioId: string) => void;
   animateDraftPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
@@ -2179,6 +2180,36 @@ export const useFlowStore = create<FlowState>()(
               : scenario
           ),
         },
+      };
+    }),
+
+  deleteAnimationPath: (scenarioId) =>
+    set((s) => {
+      const customPaths = findAuthoredCustomPaths(
+        s.scenarioDocument,
+        s.edges
+      );
+      if (!customPaths.some((path) => path.scenarioId === scenarioId)) return s;
+
+      const scenarios = s.scenarioDocument.scenarios.filter(
+        (scenario) => scenario.id !== scenarioId
+      );
+      const nextPathId = customPaths.find(
+        (path) => path.scenarioId !== scenarioId
+      )?.scenarioId;
+      return {
+        scenarioDocument: {
+          ...s.scenarioDocument,
+          scenarios,
+          defaultScenarioId:
+            s.scenarioDocument.defaultScenarioId === scenarioId
+              ? nextPathId ?? scenarios[0]?.id ?? null
+              : s.scenarioDocument.defaultScenarioId,
+        },
+        animationPathDraft:
+          s.animationPathDraft?.scenarioId === scenarioId
+            ? null
+            : s.animationPathDraft,
       };
     }),
 

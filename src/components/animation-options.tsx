@@ -30,6 +30,14 @@ import {
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/ui/dialog";
 import { Input } from "@/ui/input";
 import { Check, ChevronDown, X } from "@/ui/icons";
 import { Slider } from "@/ui/slider";
@@ -551,6 +559,35 @@ export function AnimationPathDragHandle({ name }: { name: string }) {
   );
 }
 
+export function AnimationPathDeleteConfirmation({
+  name,
+  onCancel,
+  onConfirm,
+}: {
+  name: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Delete animation?</DialogTitle>
+        <DialogDescription>
+          “{name}” will be permanently removed. This cannot be undone.
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="destructive" onClick={onConfirm}>
+          Delete animation
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
 export function AnimationOverview() {
   const edgeCount = useFlowStore((state) => state.edges.length);
   const animateAllEdges = useFlowStore((state) => state.animateAllEdges);
@@ -603,7 +640,14 @@ export function ExistingAnimationPath() {
   const reorderAnimationPath = useFlowStore(
     (state) => state.reorderAnimationPath
   );
+  const deleteAnimationPath = useFlowStore(
+    (state) => state.deleteAnimationPath
+  );
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    scenarioId: string;
+    name: string;
+  } | null>(null);
   const [dropBeforeId, setDropBeforeId] = useState<
     string | null | undefined
   >(undefined);
@@ -737,7 +781,7 @@ export function ExistingAnimationPath() {
               <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
                 {route}
               </p>
-              <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
                 <Button
                   type="button"
                   variant="ghost"
@@ -759,11 +803,52 @@ export function ExistingAnimationPath() {
                 >
                   Play
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Delete ${
+                    path.name === "Default scenario"
+                      ? "Custom path"
+                      : path.name
+                  }`}
+                  className="h-6 rounded-md text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() =>
+                    setDeleteTarget({
+                      scenarioId: path.scenarioId,
+                      name:
+                        path.name === "Default scenario"
+                          ? "Custom path"
+                          : path.name,
+                    })
+                  }
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           );
         })}
       </div>
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <AnimationPathDeleteConfirmation
+            name={deleteTarget?.name ?? "Custom path"}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={() => {
+              if (!deleteTarget) return;
+              const { scenarioId } = deleteTarget;
+              setDeleteTarget(null);
+              deleteAnimationPath(scenarioId);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

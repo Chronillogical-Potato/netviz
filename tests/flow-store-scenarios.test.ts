@@ -979,6 +979,38 @@ describe("animation target lifecycle", () => {
     ).toEqual(["proxy-server"]);
   });
 
+  test("deletes a custom path and activates the remaining path", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("firewall"), node("proxy"), node("server")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("proxy-server", "proxy", "server"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().setAnimationPathName("Login");
+    useFlowStore.getState().appendAnimationPathNode("firewall");
+    useFlowStore.getState().animateDraftPath();
+    const loginId = useFlowStore.getState().scenarioDocument.defaultScenarioId;
+
+    useFlowStore.getState().beginAnimationPath("proxy");
+    useFlowStore.getState().setAnimationPathName("Checkout");
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+    const checkoutId =
+      useFlowStore.getState().scenarioDocument.defaultScenarioId;
+    useFlowStore.getState().editAnimationPath(checkoutId ?? undefined);
+
+    useFlowStore.getState().deleteAnimationPath(checkoutId!);
+
+    expect(useFlowStore.getState().scenarioDocument).toMatchObject({
+      defaultScenarioId: loginId,
+      scenarios: [{ id: loginId, name: "Login" }],
+    });
+    expect(useFlowStore.getState().animationPathDraft).toBeNull();
+  });
+
   test("activates the saved path that contains a selected edge", () => {
     useFlowStore.setState({
       nodes: [node("user"), node("firewall"), node("proxy"), node("server")],
