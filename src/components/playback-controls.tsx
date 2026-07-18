@@ -13,6 +13,10 @@ import {
   applyNodeBorderEntrySides,
   normalizeGradientBeamDefaults,
 } from "@/animation/gradient-beam";
+import {
+  buildSequentialCustomPathScenario,
+  PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID,
+} from "@/animation/custom-path";
 import { cn } from "@/lib/utils";
 import {
   useFlowStore,
@@ -101,6 +105,17 @@ function prepareAllConnections() {
   );
   if (scenarioDocument !== state.scenarioDocument) {
     useFlowStore.setState({ scenarioDocument });
+  }
+  const sequence = buildSequentialCustomPathScenario(
+    scenarioDocument,
+    state.edges
+  );
+  if (
+    sequence &&
+    scenarioRuntime.getTransportSnapshot().scenarioId !==
+      PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID
+  ) {
+    scenarioRuntime.activate(state.activePageId, sequence);
   }
   scenarioRuntime.setTargetScope(null);
   scenarioRuntime.setLoop(true);

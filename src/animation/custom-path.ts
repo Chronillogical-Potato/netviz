@@ -11,6 +11,51 @@ export interface NamedAuthoredCustomPath extends AuthoredCustomPath {
   name: string;
 }
 
+export const PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID =
+  "__netviz-play-all-custom-paths__";
+
+export function buildSequentialCustomPathScenario(
+  document: PageScenarioDocumentV1,
+  edges: readonly RequestFlowEdge[]
+): ScenarioV1 | null {
+  const paths = findAuthoredCustomPaths(document, edges);
+  const scenarios = paths.flatMap((path) => {
+    const scenario = document.scenarios.find(
+      (candidate) => candidate.id === path.scenarioId
+    );
+    return scenario ? [scenario] : [];
+  });
+  if (scenarios.length === 0) return null;
+
+  const gapMs = 400;
+  let offsetMs = 0;
+  const tracks = scenarios.flatMap((scenario, index) => {
+    const shifted = scenario.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => ({
+        ...clip,
+        startMs: clip.startMs + offsetMs,
+      })),
+    }));
+    offsetMs += scenario.durationMs;
+    if (index < scenarios.length - 1) offsetMs += gapMs;
+    return shifted;
+  });
+
+  return {
+    id: PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID,
+    name: "Play all animations",
+    durationMs: offsetMs,
+    playback: {
+      rate: 1,
+      loop: { mode: "repeat", startMs: 0, endMs: offsetMs },
+    },
+    tracks,
+    markers: [],
+    triggers: [],
+  };
+}
+
 function findPathInScenario(
   scenario: ScenarioV1,
   edges: readonly RequestFlowEdge[]

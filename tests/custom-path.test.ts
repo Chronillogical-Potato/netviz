@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { PageScenarioDocumentV1, ScenarioTrackV1 } from "../src/animation/model";
 import {
+  buildSequentialCustomPathScenario,
   findAuthoredCustomPath,
   findAuthoredCustomPaths,
 } from "../src/animation/custom-path";
@@ -96,6 +97,40 @@ describe("authored custom paths", () => {
         edgeIds: ["proxy-server"],
       },
     ]);
+  });
+
+  test("builds one ordered playback scenario from every custom path", () => {
+    const first = {
+      ...document([track("user-firewall", 0)]).scenarios[0],
+      name: "Login",
+    };
+    const second = {
+      ...document([track("proxy-server", 0)]).scenarios[0],
+      id: "scenario-2",
+      name: "Checkout",
+    };
+    const combined = buildSequentialCustomPathScenario(
+      {
+        schemaVersion: 1,
+        defaultScenarioId: first.id,
+        scenarios: [first, second],
+      },
+      [
+        { id: "user-firewall", source: "user", target: "firewall" },
+        { id: "proxy-server", source: "proxy", target: "server" },
+      ]
+    );
+
+    expect(combined?.name).toBe("Play all animations");
+    expect(
+      combined?.tracks.map((item) => item.clips[0]?.startMs)
+    ).toEqual([0, 4_400]);
+    expect(combined?.durationMs).toBe(8_400);
+    expect(combined?.playback.loop).toEqual({
+      mode: "repeat",
+      startMs: 0,
+      endMs: 8_400,
+    });
   });
 
   test("reconstructs a connected path from persisted scenario timing", () => {
