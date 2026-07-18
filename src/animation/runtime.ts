@@ -44,6 +44,7 @@ export class ScenarioRuntime {
   private readonly unsubscribeClock: () => boolean;
   private pageId: string | null = null;
   private scenario: ScenarioV1 | null = null;
+  private targetScope: Set<string> | null = null;
   private projectionEnabled = false;
   private destroyed = false;
   private clockSnapshot: ClockSnapshot;
@@ -99,6 +100,7 @@ export class ScenarioRuntime {
     this.clearActiveTargets();
     this.pageId = pageId;
     this.scenario = scenario;
+    this.targetScope = null;
     this.projectionEnabled = false;
     this.forceNextTransportNotification = true;
     this.indexTracks(scenario);
@@ -226,6 +228,18 @@ export class ScenarioRuntime {
     );
   };
 
+  setTargetScope = (targetIds: readonly string[] | null) => {
+    this.assertAlive();
+    const nextScope =
+      targetIds === null ? null : new Set(targetIds.filter(Boolean));
+    if (scopesEqual(this.targetScope, nextScope)) return;
+    this.clearActiveTargets();
+    this.targetScope = nextScope;
+    if (this.projectionEnabled) {
+      this.evaluateTargets(this.clockSnapshot.currentTimeMs);
+    }
+  };
+
   /** Stops playback, clears all runtime projections, and resets to time zero. */
   stop = () => {
     this.assertAlive();
@@ -288,6 +302,7 @@ export class ScenarioRuntime {
 
     const nextActiveTargets = new Set<string>();
     for (const targetId of this.targetListeners.keys()) {
+      if (this.targetScope !== null && !this.targetScope.has(targetId)) continue;
       const frame = this.createTargetFrame(targetId, timeMs);
       if (frame.clips.length === 0) continue;
       nextActiveTargets.add(targetId);
@@ -304,6 +319,16 @@ export class ScenarioRuntime {
 
   private createTargetFrame(targetId: string, timeMs: number): TargetFrame {
     const clips: ActiveClipFrame[] = [];
+    if (this.targetScope !== null && !this.targetScope.has(targetId)) {
+      return {
+        pageId: this.pageId,
+        scenarioId: this.scenario?.id ?? null,
+        targetId,
+        timeMs,
+        clips,
+        clear: false,
+      };
+    }
     for (const track of this.tracksByTarget.get(targetId) ?? []) {
       for (const clip of track.clips) {
         const timing = evaluateClipTiming(clip, timeMs);
@@ -363,4 +388,9 @@ export class ScenarioRuntime {
   private assertAlive() {
     if (this.destroyed) throw new Error("ScenarioRuntime has been destroyed");
   }
+}
+
+function scopesEqual(left: Set<string> | null, right: Set<string> | null) {
+  if (left === null || right === null) return left === right;
+  return left.size === right.size && [...left].every((id) => right.has(id));
 }

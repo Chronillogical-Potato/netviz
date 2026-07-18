@@ -215,6 +215,36 @@ describe("scenario runtime", () => {
     });
   });
 
+  test("scopes selection previews without changing authored scenario targets", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+    const framesA: string[] = [];
+    const framesB: string[] = [];
+    const overlapping = scenario();
+    overlapping.tracks[1] = {
+      ...overlapping.tracks[1],
+      clips: [effectClip("clip-b", 0, 200)],
+    };
+
+    runtime.activate("page-1", overlapping);
+    runtime.subscribeTarget("edge-a", (frame) => {
+      if (!frame.clear) framesA.push(frame.targetId);
+    });
+    runtime.subscribeTarget("edge-b", (frame) => {
+      if (!frame.clear) framesB.push(frame.targetId);
+    });
+    runtime.setTargetScope(["edge-a"]);
+    runtime.play();
+    scheduler.frame(50);
+
+    expect(framesA).toEqual(["edge-a", "edge-a"]);
+    expect(framesB).toEqual([]);
+    expect(overlapping.tracks).toHaveLength(2);
+
+    runtime.setTargetScope(null);
+    expect(framesB).toEqual(["edge-b"]);
+  });
+
   test("reconciles same-scenario edits without changing transport time or play state", () => {
     const scheduler = new ManualScheduler();
     const runtime = new ScenarioRuntime(scheduler);
