@@ -33,6 +33,7 @@ export type SettingsActions = {
   onSave: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
+  onExportReact: () => void;
   onImport: () => void;
   onUploadImage: () => void;
   onClearCanvas: () => void;
@@ -267,6 +268,18 @@ export function SettingsDialog({
                         SVG
                       </Button>
                     </div>
+                  </SettingsRow>
+                  <SettingsRow
+                    label="Export React component"
+                    description="Download a portable animated TSX component."
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={run(actions.onExportReact)}
+                    >
+                      React
+                    </Button>
                   </SettingsRow>
                   <SettingsRow
                     label="Import file"

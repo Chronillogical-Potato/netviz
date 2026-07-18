@@ -17,6 +17,10 @@ import {
   downloadSnapshot,
   readSnapshotFromFile,
 } from "@/lib/storage";
+import {
+  generateReactComponent,
+  reactComponentFileName,
+} from "@/lib/react-export";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -493,6 +497,28 @@ export function Toolbar() {
     );
   };
 
+  const exportReactComponent = () => {
+    const state = useFlowStore.getState();
+    if (state.nodes.length === 0) return;
+    const code = generateReactComponent({
+      projectName: state.projectName,
+      nodes: state.nodes,
+      edges: state.edges,
+      customBlocks: state.customBlocks,
+      scenarioDocument: state.scenarioDocument,
+      pageBackground: state.pages.find((page) => page.id === state.activePageId)
+        ?.bgColor,
+    });
+    const url = URL.createObjectURL(
+      new Blob([code], { type: "text/plain;charset=utf-8" })
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = reactComponentFileName(state.projectName);
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const load = async (f: File) => {
     try {
       const snap = await readSnapshotFromFile(f);
@@ -525,6 +551,7 @@ export function Toolbar() {
           onSave: save,
           onExportPng: () => openExportDialog("png"),
           onExportSvg: () => openExportDialog("svg"),
+          onExportReact: exportReactComponent,
           onImport: () => fileRef.current?.click(),
           onUploadImage: () => imageRef.current?.click(),
           onClearCanvas: () => setConfirmClearOpen(true),
