@@ -9,6 +9,7 @@ export type AnimationPathPreset =
   | "request-response"
   | "scatter-gather"
   | "round-robin"
+  // Kept only so previously saved staggered paths can be reopened.
   | "staggered-outputs"
   | "failover"
   | "cascade"
@@ -107,15 +108,19 @@ function findPathInScenario(
     }));
   if (authored.length === 0) return null;
   const authoredPreset = authored[0]?.preset;
-  const preset =
+  const storedPreset =
     typeof authoredPreset === "string" &&
     PATH_PRESETS.has(authoredPreset as AnimationPathPreset)
       ? (authoredPreset as AnimationPathPreset)
       : "single-line";
+  const preset: AnimationPathPreset =
+    storedPreset === "staggered-outputs"
+      ? "multiple-outputs"
+      : storedPreset;
   if (
     authored.some(
       (item) =>
-        item.preset !== undefined && item.preset !== preset
+        item.preset !== undefined && item.preset !== storedPreset
     )
   ) {
     return null;
@@ -202,7 +207,7 @@ function findPathInScenario(
       nodeIds: [hubId, ...resolved.map((edge) => edge.target)],
     };
     const staggerMs = authored[0]?.staggerMs;
-    if (preset === "staggered-outputs" && typeof staggerMs === "number") {
+    if (preset === "multiple-outputs" && typeof staggerMs === "number") {
       result.staggerMs = staggerMs;
     }
     return result;

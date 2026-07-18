@@ -397,7 +397,7 @@ describe("animation target lifecycle", () => {
       scenarioId: null,
       name: "Custom path 1",
       preset: "single-line",
-      staggerMs: 300,
+      staggerMs: 0,
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         responseColors: ["#38bdf8", "#818cf8"],
@@ -469,7 +469,7 @@ describe("animation target lifecycle", () => {
       scenarioId: scenario.id,
       name: "Custom path 1",
       preset: "single-line",
-      staggerMs: 300,
+      staggerMs: 0,
       appearance: {
         colors: ["#ffaa40", "#9c40ff"],
         responseColors: ["#38bdf8", "#818cf8"],
@@ -729,7 +729,7 @@ describe("animation target lifecycle", () => {
     });
   });
 
-  test("supports round-robin, staggered output, and failover schedules", () => {
+  test("supports round-robin, staggered multiple-output, and failover schedules", () => {
     const graph = {
       nodes: [node("router"), node("a"), node("b")],
       edges: [
@@ -740,7 +740,7 @@ describe("animation target lifecycle", () => {
     useFlowStore.setState(graph);
 
     const buildOutputs = (
-      preset: "round-robin" | "staggered-outputs" | "failover"
+      preset: "round-robin" | "multiple-outputs" | "failover"
     ) => {
       useFlowStore.getState().beginAnimationPath();
       useFlowStore.getState().setAnimationPathPreset(preset);
@@ -751,7 +751,7 @@ describe("animation target lifecycle", () => {
 
     buildOutputs("round-robin");
     useFlowStore.getState().animateDraftPath();
-    buildOutputs("staggered-outputs");
+    buildOutputs("multiple-outputs");
     useFlowStore.getState().setAnimationPathStaggerMs(400);
     useFlowStore.getState().animateDraftPath();
     buildOutputs("failover");
@@ -783,7 +783,7 @@ describe("animation target lifecycle", () => {
 
     useFlowStore.getState().editAnimationPath(scenarios[1].id);
     expect(useFlowStore.getState().animationPathDraft).toMatchObject({
-      preset: "staggered-outputs",
+      preset: "multiple-outputs",
       staggerMs: 400,
       nodeIds: ["router", "a", "b"],
     });

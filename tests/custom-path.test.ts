@@ -245,6 +245,41 @@ describe("authored custom paths", () => {
     ]);
   });
 
+  test("reopens legacy staggered outputs as customized multiple outputs", () => {
+    const legacy = {
+      ...document([
+        track("hub-a", 800, {
+          pathPreset: "staggered-outputs",
+          staggerMs: 400,
+        }),
+        track("hub-b", 1_200, {
+          pathPreset: "staggered-outputs",
+          staggerMs: 400,
+        }),
+      ]).scenarios[0],
+      id: "legacy-staggered",
+      name: "Legacy staggered",
+    };
+
+    expect(
+      findAuthoredCustomPaths(
+        {
+          schemaVersion: 1,
+          defaultScenarioId: legacy.id,
+          scenarios: [legacy],
+        },
+        [
+          { id: "hub-a", source: "hub", target: "a" },
+          { id: "hub-b", source: "hub", target: "b" },
+        ]
+      )[0]
+    ).toMatchObject({
+      preset: "multiple-outputs",
+      staggerMs: 400,
+      nodeIds: ["hub", "a", "b"],
+    });
+  });
+
   test("repairs persisted paths whose edges overlap their block shimmer", () => {
     const normalized = applyNodeBorderEntrySides(
       normalizeGradientBeamDefaults(

@@ -563,8 +563,11 @@ function buildAnimationPathScenario(input: {
       pathPreset: preset,
       direction: options.direction ?? "forward",
       ...(options.phase ? { pathPhase: options.phase } : {}),
-      ...(preset === "staggered-outputs"
-        ? { staggerMs: input.staggerMs ?? 300 }
+      ...(preset === "multiple-outputs" || preset === "staggered-outputs"
+        ? {
+            staggerMs:
+              input.staggerMs ?? (preset === "staggered-outputs" ? 300 : 0),
+          }
         : {}),
     };
     document = applyEdgeEffect(document, {
@@ -656,21 +659,28 @@ function buildAnimationPathScenario(input: {
       edgeById(input.edgeIds[0])
     );
     input.nodeIds.slice(1).forEach((nodeId) => addShimmer(nodeId, 0));
-  } else if (preset === "multiple-outputs") {
-    input.edgeIds.forEach((edgeId) =>
-      addEdge(
-        edgeId,
-        input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0
-      )
-    );
+  } else if (
+    preset === "multiple-outputs" ||
+    preset === "staggered-outputs"
+  ) {
+    const staggerMs =
+      input.staggerMs ?? (preset === "staggered-outputs" ? 300 : 0);
     addShimmer(input.nodeIds[0], 0);
-    input.nodeIds.slice(1).forEach((nodeId, index) =>
+    input.edgeIds.forEach((edgeId, index) => {
+      const startMs =
+        (input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0) +
+        index * staggerMs;
+      addEdge(edgeId, startMs);
       addShimmer(
-        nodeId,
-        REQUEST_FLOW_HOP_DELAY_MS,
-        edgeById(input.edgeIds[index])
-      )
-    );
+        input.nodeIds[index + 1],
+        staggerMs === 0
+          ? REQUEST_FLOW_HOP_DELAY_MS
+          : startMs +
+              GRADIENT_BEAM_DURATION_MS -
+              REQUEST_FLOW_ARRIVAL_LEAD_MS,
+        edgeById(edgeId)
+      );
+    });
   } else if (preset === "scatter-gather") {
     const scatterEdges = input.edgeIds.slice(0, workerCount);
     const gatherEdges = input.edgeIds.slice(workerCount);
@@ -707,20 +717,6 @@ function buildAnimationPathScenario(input: {
     addShimmer(input.nodeIds[0], 0);
     input.edgeIds.forEach((edgeId, index) => {
       const startMs = edgeStart(index);
-      addEdge(edgeId, startMs);
-      addShimmer(
-        input.nodeIds[index + 1],
-        startMs + GRADIENT_BEAM_DURATION_MS - REQUEST_FLOW_ARRIVAL_LEAD_MS,
-        edgeById(edgeId)
-      );
-    });
-  } else if (preset === "staggered-outputs") {
-    const staggerMs = input.staggerMs ?? 300;
-    addShimmer(input.nodeIds[0], 0);
-    input.edgeIds.forEach((edgeId, index) => {
-      const startMs =
-        (input.appearance.shimmer ? REQUEST_FLOW_EDGE_DELAY_MS : 0) +
-        index * staggerMs;
       addEdge(edgeId, startMs);
       addShimmer(
         input.nodeIds[index + 1],
@@ -1834,7 +1830,7 @@ export const useFlowStore = create<FlowState>()(
           scenarioId: existingDraft?.scenarioId ?? null,
           name: existingDraft?.name ?? `Custom path ${pathNumber}`,
           preset: existingDraft?.preset ?? "single-line",
-          staggerMs: existingDraft?.staggerMs ?? 300,
+          staggerMs: existingDraft?.staggerMs ?? 0,
           appearance:
             existingDraft?.appearance ?? defaultAnimationPathAppearance(),
           nodeIds: hasStart ? [startNodeId] : [],
@@ -1879,7 +1875,10 @@ export const useFlowStore = create<FlowState>()(
         ? {
             animationPathDraft: {
               ...s.animationPathDraft,
-              staggerMs: Math.min(2_000, Math.max(100, staggerMs)),
+              staggerMs:
+                staggerMs === 0
+                  ? 0
+                  : Math.min(2_000, Math.max(100, staggerMs)),
             },
           }
         : s
@@ -2110,7 +2109,7 @@ export const useFlowStore = create<FlowState>()(
       return {
         animationPathDraft: {
           ...path,
-          staggerMs: path.staggerMs ?? 300,
+          staggerMs: path.staggerMs ?? 0,
           name:
             path.name === "Default scenario" ? "Custom path" : path.name,
           appearance: animationPathAppearance(
@@ -2201,7 +2200,7 @@ export const useFlowStore = create<FlowState>()(
         edges: s.edges,
         appearance,
         preset: draft?.preset ?? "single-line",
-        staggerMs: draft?.staggerMs ?? 300,
+        staggerMs: draft?.staggerMs ?? 0,
       });
       if (!savedScenario) return s;
       const existingIndex = s.scenarioDocument.scenarios.findIndex(
