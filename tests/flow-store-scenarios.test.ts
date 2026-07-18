@@ -120,13 +120,22 @@ describe("page-owned animation state", () => {
   });
 
   test("honors reduced motion before Preview autoplay", () => {
-    useFlowStore.setState({ edges: [edge("edge-a", "a", "b", true)] });
+    useFlowStore.setState({
+      nodes: [node("a", true), node("b")],
+      edges: [edge("edge-a", "a", "b", true)],
+    });
     useFlowStore.getState().applySelectedEdgeEffect({
       type: "edge.pulse",
       params: { direction: "forward" },
     });
     useFlowStore.getState().setMotionPreference("reduced");
     useFlowStore.getState().setWorkMode("preview");
+    expect(useFlowStore.getState().nodes.some((item) => item.selected)).toBe(
+      false
+    );
+    expect(useFlowStore.getState().edges.some((item) => item.selected)).toBe(
+      false
+    );
     expect(scenarioRuntime.getTransportSnapshot()).toMatchObject({
       currentTimeMs: 0,
       isPlaying: false,
@@ -324,5 +333,35 @@ describe("document replacement", () => {
       scenarioDocument: { scenarios: [] },
     });
     expect(useFlowStore.temporal.getState().pastStates).toHaveLength(0);
+  });
+
+  test("clears legacy CSS animation flags while hydrating version 2 state", () => {
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!merge) throw new Error("Expected persisted-state merge");
+    const current = useFlowStore.getState();
+    const hydrated = merge(
+      {
+        edges: [
+          { ...edge("active-edge", "a", "b", false), animated: true },
+        ],
+        pageContents: {
+          "page-2": {
+            nodes: [],
+            edges: [
+              {
+                ...edge("inactive-edge", "a", "b", false),
+                animated: true,
+              },
+            ],
+            groups: [],
+            scenarioDocument: createEmptyScenarioDocument(),
+          },
+        },
+      },
+      current
+    ) as typeof current;
+
+    expect(hydrated.edges[0].animated).toBe(false);
+    expect(hydrated.pageContents["page-2"].edges[0].animated).toBe(false);
   });
 });

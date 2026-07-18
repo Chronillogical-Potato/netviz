@@ -260,19 +260,19 @@
   to   { --turbo-angle: 360deg; }
 }
 
-/* Animated edges: flow source → target */
-@property --dash-offset {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 12;
+/* Runtime motion is an inert overlay; authored base paths stay unchanged. */
+.nv-edge-motion {
+  pointer-events: none;
 }
-.react-flow__edge.animated .react-flow__edge-path {
-  stroke-dasharray: 6 6;
-  animation: dashdraw var(--dash-duration, 0.8s) linear infinite;
+[data-motion="reduced"] .nv-edge-motion {
+  display: none;
 }
-@keyframes dashdraw {
-  from { stroke-dashoffset: var(--dash-offset); }
-  to   { stroke-dashoffset: 0; }
+[data-motion="reduced"] .react-flow__node.turbo-on .infra-card::before,
+[data-motion="reduced"] .react-flow__node.turbo-on .shape-card::before,
+[data-motion="reduced"] .react-flow__node.turbo-on .step-card::before,
+[data-motion="reduced"] .react-flow__node.turbo-on .text-card::before,
+[data-motion="reduced"] .react-flow__node.turbo-on .code-card::before {
+  animation: none;
 }
 
 /* Preview mode: hide hover/edit UI on blocks and edges */
@@ -280,9 +280,13 @@
   opacity: 0 !important;
   pointer-events: none !important;
 }
-.preview-mode .react-flow__edge .react-flow__edgelabel-renderer button {
-  opacity: 0 !important;
+.preview-mode .react-flow__edgelabel-renderer button {
   pointer-events: none !important;
+}
+.preview-mode
+  .react-flow__edgelabel-renderer
+  button[data-empty-label="true"] {
+  opacity: 0 !important;
 }
 .preview-mode .infra-card button,
 .preview-mode [data-hover-only] {

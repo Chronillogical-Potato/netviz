@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Toolbar } from "@/components/toolbar";
 import { Sidebar } from "@/components/sidebar";
@@ -10,12 +10,36 @@ import { cn } from "@/lib/utils";
 export default function App() {
   const workMode = useFlowStore((s) => s.workMode);
   const setWorkMode = useFlowStore((s) => s.setWorkMode);
+  const motionPreference = useFlowStore((s) => s.motionPreference);
   const isPreview = workMode === "preview";
+  const [systemReduced, setSystemReduced] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setSystemReduced(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  const reducedMotion =
+    motionPreference === "reduced" ||
+    (motionPreference === "system" && systemReduced);
 
   useEffect(() => {
     if (!isPreview) return;
     const h = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setWorkMode("design");
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest(
+          "input, select, textarea, button, [contenteditable='true'], [role='dialog'], [role='menu']"
+        )
+      ) {
+        return;
+      }
+      setWorkMode("design");
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -28,6 +52,7 @@ export default function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (useFlowStore.getState().workMode === "preview") return;
       const t = e.target as HTMLElement | null;
       if (
         t &&
@@ -68,6 +93,7 @@ export default function App() {
           "flex h-screen w-screen flex-col bg-background text-foreground",
           isPreview && "preview-mode"
         )}
+        data-motion={reducedMotion ? "reduced" : "full"}
       >
         <Toolbar />
         <div className="flex flex-1 overflow-hidden">

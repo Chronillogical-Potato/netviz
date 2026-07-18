@@ -39,6 +39,7 @@ import { ImageNodeView } from "./nodes/image-node";
 import { CodeNodeView } from "./nodes/code-node";
 import { LabeledEdge } from "./edges/labeled-edge";
 import { CanvasToolbar, type CanvasTool } from "./canvas-toolbar";
+import { PlaybackControls } from "./playback-controls";
 import { cn } from "@/lib/utils";
 import {
   computeSnap,
@@ -394,8 +395,6 @@ function CanvasInner() {
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const turbo = useFlowStore((s) => s.turbo);
-  const animateEdges = useFlowStore((s) => s.animateEdges);
-  const animationSpeed = useFlowStore((s) => s.animationSpeed);
   const turboColors = useFlowStore((s) => s.turboColors);
   const showControls = useFlowStore((s) => s.showControls);
   const showSmartGuides = useFlowStore((s) => s.showSmartGuides);
@@ -409,6 +408,7 @@ function CanvasInner() {
     (s) => s.pages.find((p) => p.id === s.activePageId)?.bgColor
   );
   const isPreview = workMode === "preview";
+  const isDesign = workMode === "design";
   const { screenToFlowPosition, getZoom } = useReactFlow();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -549,6 +549,7 @@ function CanvasInner() {
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
+      if (!isDesign) return;
       e.preventDefault();
       const raw = e.dataTransfer.getData(DRAG_MIME);
       if (!raw) return;
@@ -584,16 +585,17 @@ function CanvasInner() {
       addStepNode,
       addLineNode,
       addCodeNode,
+      isDesign,
     ]
   );
 
   const defaultEdgeOptions = useMemo(
     () => ({
       type: "labeled",
-      animated: animateEdges,
+      animated: false,
       markerEnd: turbo ? undefined : DEFAULT_MARKER,
     }),
-    [animateEdges, turbo]
+    [turbo]
   );
 
   const [connectPopover, setConnectPopover] = useState<{
@@ -680,7 +682,6 @@ function CanvasInner() {
   const wrapperStyle = {
     "--turbo-start": turboColors[0],
     "--turbo-end": turboColors[1],
-    "--dash-duration": `${animationSpeed}s`,
     ...(pageBg ? { "--page-bg": pageBg } : {}),
   } as CSSProperties;
 
@@ -692,52 +693,63 @@ function CanvasInner() {
         isPreview && "preview-canvas"
       )}
       style={wrapperStyle}
-      onDrop={onDrop}
-      onDragOver={onDragOver}
+      onDrop={isDesign ? onDrop : undefined}
+      onDragOver={isDesign ? onDragOver : undefined}
     >
       <TurboDefs colors={turboColors} />
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
-        onNodesChange={handleNodesChange}
+        onNodesChange={isPreview ? undefined : handleNodesChange}
         onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
         onNodeMouseLeave={() => setHoveredId(null)}
-        onEdgesChange={onEdgesChange}
-        onBeforeDelete={handleBeforeDelete}
-        onConnect={onConnect}
-        onConnectEnd={onConnectEnd}
+        onEdgesChange={isPreview ? undefined : onEdgesChange}
+        onBeforeDelete={isPreview ? undefined : handleBeforeDelete}
+        onConnect={isPreview ? undefined : onConnect}
+        onConnectEnd={isPreview ? undefined : onConnectEnd}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
-        selectionOnDrag={tool === "select"}
-        panOnDrag={tool === "hand" ? true : [1]}
+        selectionOnDrag={!isPreview && tool === "select"}
+        panOnDrag={isPreview || tool === "hand" ? true : [1]}
         panOnScroll
         selectionMode={SelectionMode.Partial}
+        nodesDraggable={!isPreview}
+        nodesConnectable={!isPreview}
+        elementsSelectable={!isPreview}
+        nodesFocusable={!isPreview}
+        edgesFocusable={!isPreview}
+        deleteKeyCode={isPreview ? null : ["Backspace", "Delete"]}
         onlyRenderVisibleElements={!renderAll}
         elevateNodesOnSelect={false}
         fitView
         fitViewOptions={{ padding: 0.4 }}
       >
       </ReactFlow>
-      {!isPreview && (tool === "rect" || tool === "circle" || tool === "text") && (
+      {isDesign && (tool === "rect" || tool === "circle" || tool === "text") && (
         <DrawOverlay tool={tool} onDone={() => setTool("select")} />
       )}
-      {!isPreview && showControls && (
+      {isDesign && showControls && (
         <CanvasToolbar tool={tool} onToolChange={setTool} />
       )}
-      {!isPreview && showSmartGuides && guides.length > 0 && (
+      {(workMode === "animation" || workMode === "preview") && (
+        <div className="pointer-events-none absolute inset-x-2 bottom-3 z-30 flex justify-center">
+          <PlaybackControls className="pointer-events-auto max-w-full" />
+        </div>
+      )}
+      {isDesign && showSmartGuides && guides.length > 0 && (
         <GuidesOverlay guides={guides} />
       )}
-      {!isPreview && showSmartGuides && altDown && selectedSingle && (
+      {isDesign && showSmartGuides && altDown && selectedSingle && (
         <MeasureOverlay
           selected={selectedSingle}
           hoveredId={hoveredId}
           nodes={nodes}
         />
       )}
-      {connectPopover && (
+      {!isPreview && connectPopover && (
         <>
           {sourceHandlePos && (
             <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full">

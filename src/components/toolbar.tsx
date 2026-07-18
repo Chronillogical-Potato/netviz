@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  Activity,
   Check,
   ChevronDown,
   Eye,
@@ -11,7 +12,11 @@ import type { AppIcon } from "@/ui/icons";
 import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/react";
 import { toPng, toSvg } from "html-to-image";
 import { useFlowStore } from "@/store/flow-store";
-import { downloadSnapshot, readSnapshotFromFile } from "@/lib/storage";
+import {
+  createFlowSnapshot,
+  downloadSnapshot,
+  readSnapshotFromFile,
+} from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -30,6 +35,7 @@ import { SettingsDialog } from "./settings-dialog";
 import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
   { id: "design", label: "Design", icon: PenLine },
+  { id: "animation", label: "Animation", icon: Activity },
   { id: "preview", label: "Preview", icon: Eye },
 ];
 
@@ -156,8 +162,10 @@ export function Toolbar() {
   // read the full workspace via getState() at call time so the toolbar
   // doesn't re-render on every node drag frame.
   const hasNodes = useFlowStore((s) => s.nodes.length > 0);
+  const workMode = useFlowStore((s) => s.workMode);
+  const setWorkMode = useFlowStore((s) => s.setWorkMode);
   const setRenderAll = useFlowStore((s) => s.setRenderAllElements);
-  const replace = useFlowStore((s) => s.replace);
+  const replaceDocument = useFlowStore((s) => s.replaceDocument);
   const clear = useFlowStore((s) => s.clear);
   const resetWorkspace = useFlowStore((s) => s.resetWorkspace);
   const selectAll = useFlowStore((s) => s.selectAll);
@@ -180,6 +188,7 @@ export function Toolbar() {
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      if (workMode === "preview") return;
       const target = e.target as HTMLElement | null;
       if (target && /input|textarea/i.test(target.tagName)) return;
       if (target?.isContentEditable) return;
@@ -199,7 +208,7 @@ export function Toolbar() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selectAll]);
+  }, [selectAll, workMode]);
 
   const uploadImage = (f: File) => {
     const reader = new FileReader();
@@ -468,8 +477,7 @@ export function Toolbar() {
   const doSave = (name: string) => {
     const s = useFlowStore.getState();
     downloadSnapshot(
-      {
-        version: 1,
+      createFlowSnapshot({
         projectName: s.projectName,
         nodes: s.nodes,
         edges: s.edges,
@@ -478,11 +486,10 @@ export function Toolbar() {
         pages: s.pages,
         activePageId: s.activePageId,
         pageContents: s.pageContents,
+        scenarioDocument: s.scenarioDocument,
         turbo: s.turbo,
-        animateEdges: s.animateEdges,
-        animationSpeed: s.animationSpeed,
         turboColors: s.turboColors,
-      },
+      }),
       name
     );
   };
@@ -490,34 +497,33 @@ export function Toolbar() {
   const load = async (f: File) => {
     try {
       const snap = await readSnapshotFromFile(f);
-      const loadedPages =
-        snap.pages && snap.pages.length > 0
-          ? snap.pages
-          : [{ id: "page-1", name: "Page 1" }];
-      const loadedActive =
-        snap.activePageId &&
-        loadedPages.some((p) => p.id === snap.activePageId)
-          ? snap.activePageId
-          : loadedPages[0].id;
-      replace({
-        projectName: snap.projectName ?? "Untitled",
-        nodes: snap.nodes,
-        edges: snap.edges,
-        customBlocks: snap.customBlocks ?? [],
-        groups: snap.groups ?? [],
-        pages: loadedPages,
-        activePageId: loadedActive,
-        pageContents: snap.pageContents ?? {},
-        turbo: snap.turbo ?? false,
-        animateEdges: snap.animateEdges ?? false,
-        animationSpeed: snap.animationSpeed ?? 0.8,
-        turboColors: snap.turboColors ?? undefined,
-      });
+      replaceDocument(snap);
     } catch (e) {
       console.error(e);
       alert("Could not load file. See console for details.");
     }
   };
+
+  if (workMode === "preview") {
+    return (
+      <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-2.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setWorkMode("design")}
+          aria-label="Exit preview"
+        >
+          Exit preview
+        </Button>
+        <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-xs font-semibold text-foreground">
+          <Logo className="h-4 w-4" />
+          Preview
+        </div>
+        <span className="text-[10px] text-muted-foreground">Esc to exit</span>
+      </header>
+    );
+  }
 
   return (
     <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-background px-2.5">

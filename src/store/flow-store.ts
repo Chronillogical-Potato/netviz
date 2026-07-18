@@ -34,6 +34,7 @@ import {
   type ScenarioClipPatchV1,
 } from "@/animation/scenario-document";
 import {
+  clearLegacyAnimatedFlags,
   migrateFlowSnapshotV1,
   type FlowSnapshotV2,
 } from "@/animation/snapshot-migrations";
@@ -211,8 +212,6 @@ type Snapshot = {
   pageContents: Record<string, PageContent>;
   scenarioDocument: PageScenarioDocumentV1;
   turbo: boolean;
-  animateEdges: boolean;
-  animationSpeed: number;
   turboColors: [string, string];
   edgeColor?: string;
   edgeLineStyle: EdgeLineStyle;
@@ -282,8 +281,6 @@ type FlowState = Snapshot & {
   addCustomBlock: (block: Omit<BlockDef, "id" | "builtin">) => BlockDef;
   deleteCustomBlock: (id: string) => void;
   toggleTurbo: () => void;
-  toggleAnimateEdges: () => void;
-  setAnimationSpeed: (speed: number) => void;
   setTurboColor: (index: 0 | 1, color: string) => void;
   setEdgeColor: (color: string | undefined) => void;
   setEdgeLabelColor: (
@@ -564,8 +561,6 @@ export const useFlowStore = create<FlowState>()(
   pageContents: {},
   scenarioDocument: createEmptyScenarioDocument(),
   turbo: false,
-  animateEdges: false,
-  animationSpeed: 0.8,
   turboColors: DEFAULT_TURBO_COLORS,
   edgeLineStyle: "solid" as EdgeLineStyle,
   edgeDashGap: 6,
@@ -1043,52 +1038,6 @@ export const useFlowStore = create<FlowState>()(
       };
     }),
 
-  toggleAnimateEdges: () =>
-    set((s) => {
-      const selected = s.edges.filter((e) => e.selected);
-      if (selected.length > 0) {
-        const allAnimated = selected.every((e) => e.animated);
-        const nextAnim = !allAnimated;
-        return {
-          edges: s.edges.map((e) =>
-            e.selected
-              ? {
-                  ...e,
-                  animated: nextAnim,
-                  data: {
-                    ...(e.data ?? {}),
-                    lineStyle:
-                      nextAnim && (e.data?.lineStyle ?? "solid") === "solid"
-                        ? "dashed"
-                        : e.data?.lineStyle,
-                  },
-                }
-              : e
-          ),
-        };
-      }
-      const next = !s.animateEdges;
-      const nextStyle: EdgeLineStyle =
-        next && s.edgeLineStyle === "solid" ? "dashed" : s.edgeLineStyle;
-      return {
-        animateEdges: next,
-        edgeLineStyle: nextStyle,
-        edges: s.edges.map((e) => ({
-          ...e,
-          animated: next,
-          data: {
-            ...(e.data ?? {}),
-            lineStyle:
-              next && (e.data?.lineStyle ?? "solid") === "solid"
-                ? "dashed"
-                : e.data?.lineStyle,
-          },
-        })),
-      };
-    }),
-
-  setAnimationSpeed: (speed) => set({ animationSpeed: speed }),
-
   applySelectedEdgeEffect: (effect, clip) =>
     set((s) => {
       const edgeIds = s.edges
@@ -1518,7 +1467,20 @@ export const useFlowStore = create<FlowState>()(
   setMotionPreference: (motionPreference) => set({ motionPreference }),
   renderAllElements: false,
   setRenderAllElements: (v) => set({ renderAllElements: v }),
-  setWorkMode: (mode) => set({ workMode: mode }),
+  setWorkMode: (mode) =>
+    set((state) =>
+      mode === "preview"
+        ? {
+            workMode: mode,
+            nodes: state.nodes.map((node) =>
+              node.selected ? { ...node, selected: false } : node
+            ),
+            edges: state.edges.map((edge) =>
+              edge.selected ? { ...edge, selected: false } : edge
+            ),
+          }
+        : { workMode: mode }
+    ),
     }),
     {
       partialize: (state) => ({
@@ -1550,6 +1512,7 @@ export const useFlowStore = create<FlowState>()(
       version: 2,
       migrate: (persisted, version) => {
         const previous = (persisted ?? {}) as Partial<Snapshot> & {
+          animateEdges?: boolean;
           animationSpeed?: number;
         };
         if (version >= 2) return previous;
@@ -1583,6 +1546,9 @@ export const useFlowStore = create<FlowState>()(
         const strip = (ns?: AppNode[]) =>
           ns?.map((n) => ({ ...n, zIndex: 0 }));
         const nodes = strip(p.nodes) ?? current.nodes;
+        const edges = p.edges
+          ? clearLegacyAnimatedFlags(p.edges)
+          : current.edges;
         const pageContents = p.pageContents
           ? Object.fromEntries(
               Object.entries(p.pageContents).map(([k, c]) => [
@@ -1590,6 +1556,7 @@ export const useFlowStore = create<FlowState>()(
                 {
                   ...c,
                   nodes: strip(c.nodes) ?? c.nodes,
+                  edges: clearLegacyAnimatedFlags(c.edges),
                   scenarioDocument:
                     c.scenarioDocument ?? createEmptyScenarioDocument(),
                 },
@@ -1600,6 +1567,7 @@ export const useFlowStore = create<FlowState>()(
           ...current,
           ...p,
           nodes,
+          edges,
           pageContents,
           scenarioDocument:
             p.scenarioDocument ?? createEmptyScenarioDocument(),
