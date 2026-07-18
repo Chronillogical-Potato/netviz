@@ -230,6 +230,29 @@ describe("EdgeMotionLayer", () => {
     expect(markup.match(/data-edge-layer="motion"/g)).toHaveLength(2);
   });
 
+  test("anchors the gradient beam to the source at its first frame", () => {
+    const markup = renderEffect(clip("edge.gradient-beam"), 0);
+    const beam = markup.match(
+      /<path[^>]*data-motion-role="gradient-beam"[^>]*>/
+    )?.[0];
+
+    expect(beam).toContain('stroke-dasharray="0.1 0.9"');
+    expect(beam).toContain('stroke-dashoffset="1"');
+  });
+
+  test("anchors a reversed gradient beam to the target at its first frame", () => {
+    const markup = renderEffect(
+      clip("edge.gradient-beam", { direction: "reverse" }),
+      0
+    );
+    const beam = markup.match(
+      /<path[^>]*data-motion-role="gradient-beam"[^>]*>/
+    )?.[0];
+
+    expect(beam).toContain('stroke-dasharray="0.1 0.9"');
+    expect(beam).toContain('stroke-dashoffset="0.1"');
+  });
+
   test("renders materially distinct bounded primitives for all five presets", () => {
     const dash = renderEffect(
       clip("edge.moving-dash", { dashLengthPx: 6, gapLengthPx: 11 })

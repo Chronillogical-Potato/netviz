@@ -132,19 +132,29 @@ export function createEdgeMotionPrimitives(
           opacity: 0.2,
           linecap: "round",
         },
-        ...phases.map((phase, index) => ({
-          role: "gradient-beam" as const,
-          stroke: `url(#${gradientIds[index + 1]})`,
-          strokeWidth: projection.widthPx,
-          opacity: projection.opacity,
-          linecap: "round" as const,
-          gradientPhase: phase,
-          gradientReversed:
+        ...phases.map((phase, index) => {
+          const reversed =
             projection.direction === "reverse" ||
             (projection.direction === "ping-pong" &&
               projection.travelDirection === "reverse") ||
-            (projection.direction === "bidirectional" && index === 1),
-        })),
+            (projection.direction === "bidirectional" && index === 1);
+          const trailStart = reversed
+            ? Math.max(0, phase - projection.trailLengthRatio)
+            : phase;
+          return {
+            role: "gradient-beam" as const,
+            stroke: `url(#${gradientIds[index + 1]})`,
+            strokeWidth: projection.widthPx,
+            opacity: projection.opacity,
+            dasharray: `${projection.trailLengthRatio} ${
+              1 - projection.trailLengthRatio
+            }`,
+            dashoffset: Number((1 - trailStart).toFixed(6)),
+            linecap: "round" as const,
+            gradientPhase: phase,
+            gradientReversed: reversed,
+          };
+        }),
       ];
 
     case "packet": {
