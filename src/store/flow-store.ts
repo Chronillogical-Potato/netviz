@@ -26,11 +26,13 @@ import type {
 } from "@/animation/model";
 import {
   applyEdgeEffect,
+  applyNodeEffect,
   cloneScenarioTargets,
   createEmptyScenarioDocument,
   patchEdgeEffects,
   pruneScenarioTargets,
   removeEdgeEffects,
+  removeNodeEffects,
   type ScenarioClipPatchV1,
 } from "@/animation/scenario-document";
 import {
@@ -46,9 +48,12 @@ import {
 import {
   createGradientBeamClip,
   createGradientBeamEffect,
+  createNodeBorderClip,
+  createNodeBorderEffect,
   normalizeGradientBeamDefaults,
   REQUEST_FLOW_HOP_DELAY_MS,
 } from "@/animation/gradient-beam";
+import { findAuthoredCustomPath } from "@/animation/custom-path";
 import {
   buildRequestFlow,
   buildSelectedRequestFlow,
@@ -348,6 +353,7 @@ type FlowState = Snapshot & {
   appendAnimationPathNode: (nodeId: string) => void;
   undoAnimationPathNode: () => void;
   cancelAnimationPath: () => void;
+  editAnimationPath: () => void;
   animateDraftPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
@@ -1136,6 +1142,26 @@ export const useFlowStore = create<FlowState>()(
           ),
         });
       }
+      const nodeHops = new Map<string, number>([[startNodeId, 0]]);
+      for (const step of steps) {
+        const edge = s.edges.find((candidate) => candidate.id === step.edgeId);
+        if (!edge) continue;
+        const hop = step.hop + 1;
+        const previous = nodeHops.get(edge.target);
+        if (previous === undefined || hop < previous) {
+          nodeHops.set(edge.target, hop);
+        }
+      }
+      scenarioDocument = removeNodeEffects(scenarioDocument, {
+        nodeIds: s.nodes.map((node) => node.id),
+      });
+      for (const [nodeId, hop] of nodeHops) {
+        scenarioDocument = applyNodeEffect(scenarioDocument, {
+          nodeIds: [nodeId],
+          effect: createNodeBorderEffect(),
+          clip: createNodeBorderClip(hop * REQUEST_FLOW_HOP_DELAY_MS),
+        });
+      }
       return { scenarioDocument };
     }),
 
@@ -1255,9 +1281,27 @@ export const useFlowStore = create<FlowState>()(
 
   cancelAnimationPath: () => set({ animationPathDraft: null }),
 
+  editAnimationPath: () => {
+    scenarioRuntime.pause();
+    set((s) => {
+      const path = findAuthoredCustomPath(s.scenarioDocument, s.edges);
+      if (!path) return s;
+      return {
+        animationPathDraft: { ...path, error: null },
+        nodes: s.nodes.map((node) =>
+          node.selected ? { ...node, selected: false } : node
+        ),
+        edges: s.edges.map((edge) =>
+          edge.selected ? { ...edge, selected: false } : edge
+        ),
+      };
+    });
+  },
+
   animateDraftPath: () =>
     set((s) => {
       const edgeIds = s.animationPathDraft?.edgeIds ?? [];
+      const nodeIds = s.animationPathDraft?.nodeIds ?? [];
       if (edgeIds.length === 0) return s;
 
       let scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
@@ -1268,6 +1312,16 @@ export const useFlowStore = create<FlowState>()(
           edgeIds: [edgeId],
           effect: createGradientBeamEffect(),
           clip: createGradientBeamClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+        });
+      });
+      scenarioDocument = removeNodeEffects(scenarioDocument, {
+        nodeIds: s.nodes.map((node) => node.id),
+      });
+      nodeIds.forEach((nodeId, index) => {
+        scenarioDocument = applyNodeEffect(scenarioDocument, {
+          nodeIds: [nodeId],
+          effect: createNodeBorderEffect(),
+          clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
         });
       });
       return { scenarioDocument, animationPathDraft: null };

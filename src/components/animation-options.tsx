@@ -22,6 +22,7 @@ import {
   createGradientBeamEffect,
 } from "@/animation/gradient-beam";
 import { buildRequestFlow } from "@/animation/request-flow";
+import { findAuthoredCustomPath } from "@/animation/custom-path";
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
@@ -472,6 +473,70 @@ export function AnimationOverview() {
       >
         Build custom path
       </Button>
+    </div>
+  );
+}
+
+export function ExistingAnimationPath() {
+  const document = useFlowStore((state) => state.scenarioDocument);
+  const edges = useFlowStore((state) => state.edges);
+  const nodes = useFlowStore((state) => state.nodes);
+  const editAnimationPath = useFlowStore((state) => state.editAnimationPath);
+  const path = useMemo(
+    () => findAuthoredCustomPath(document, edges),
+    [document, edges]
+  );
+  if (!path) return null;
+
+  const names = path.nodeIds
+    .map((id) => nodes.find((node) => node.id === id))
+    .filter((node) => node !== undefined)
+    .map(getNodeDisplayName);
+
+  return (
+    <div
+      className="border-b border-border px-4 py-3.5"
+      data-existing-animation-path
+    >
+      <p className="text-xs font-semibold text-foreground">Animations</p>
+      <div className="mt-2 rounded-lg bg-input p-2.5">
+        <div className="flex items-center gap-2">
+          <span className="h-[2px] w-5 shrink-0 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+          <span className="truncate text-[11px] font-medium text-foreground">
+            Custom path
+          </span>
+          <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
+            {path.nodeIds.length} blocks
+          </span>
+        </div>
+        <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
+          {names.join(" → ")}
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 rounded-md text-[10px]"
+            onClick={editAnimationPath}
+          >
+            Edit
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 rounded-md text-[10px]"
+            onClick={() => {
+              editAnimationPath();
+              useFlowStore.getState().animateDraftPath();
+              playAllAnimations();
+            }}
+          >
+            Play
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

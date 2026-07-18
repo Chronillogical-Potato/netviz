@@ -349,12 +349,11 @@ export class ScenarioRuntime {
     this.tracksByTarget.clear();
     if (!scenario) return;
     for (const track of scenario.tracks) {
-      if (
-        !track.enabled ||
-        track.property !== "connection-effect" ||
-        track.target.type !== "edge" ||
-        !("id" in track.target)
-      ) {
+      const supportedTarget =
+        (track.property === "connection-effect" &&
+          track.target.type === "edge") ||
+        (track.property === "node-effect" && track.target.type === "node");
+      if (!track.enabled || !supportedTarget || !("id" in track.target)) {
         continue;
       }
       const tracks = this.tracksByTarget.get(track.target.id) ?? [];

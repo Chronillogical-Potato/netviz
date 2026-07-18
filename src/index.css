@@ -332,6 +332,38 @@
 [data-motion="reduced"] .nv-edge-motion {
   display: none;
 }
+.nv-node-motion-border {
+  --node-flow-angle: 0deg;
+  --node-flow-opacity: 0;
+  --node-flow-start: #ffaa40;
+  --node-flow-end: #9c40ff;
+  position: absolute;
+  inset: -3px;
+  z-index: 15;
+  border-radius: inherit;
+  padding: 3px;
+  background: conic-gradient(
+    from var(--node-flow-angle),
+    transparent 0deg,
+    var(--node-flow-start) 18deg,
+    var(--node-flow-end) 78deg,
+    transparent 126deg
+  );
+  opacity: var(--node-flow-opacity);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--node-flow-start) 35%, transparent),
+    0 0 12px color-mix(in srgb, var(--node-flow-end) 28%, transparent);
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--node-flow-end) 55%, transparent));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+[data-motion="reduced"] .nv-node-motion-border {
+  display: none;
+}
 [data-motion="reduced"] .react-flow__node.turbo-on .infra-card::before,
 [data-motion="reduced"] .react-flow__node.turbo-on .shape-card::before,
 [data-motion="reduced"] .react-flow__node.turbo-on .step-card::before,

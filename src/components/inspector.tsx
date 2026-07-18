@@ -57,6 +57,7 @@ import {
   AnimationOptions,
   AnimationOverview,
   AnimationPathBuilder,
+  ExistingAnimationPath,
   RequestFlowOptions,
 } from "./animation-options";
 import { PlaybackControls } from "./playback-controls";
@@ -133,6 +134,7 @@ export function Inspector() {
           </p>
         </div>
         <PlaybackControls />
+        {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}
         {isBuildingAnimationPath ? (
           <AnimationPathBuilder />
         ) : hasSelectedEdge ? (

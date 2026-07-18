@@ -227,16 +227,31 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().animateRequestFlow("user");
 
     const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
-    expect(scenario.durationMs).toBe(4_500);
+    expect(scenario.durationMs).toBe(5_300);
     expect(
-      scenario.tracks.map((track) => [
-        "id" in track.target ? track.target.id : null,
-        track.clips[0].startMs,
-      ])
+      scenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+        ])
     ).toEqual([
       ["user-firewall", 0],
       ["firewall-proxy", 1_500],
       ["proxy-server", 3_000],
+    ]);
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "node-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+        ])
+    ).toEqual([
+      ["user", 0],
+      ["firewall", 1_500],
+      ["proxy", 3_000],
+      ["server", 4_500],
     ]);
   });
 
@@ -254,8 +269,11 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().animateSelectedPath();
 
     const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const edgeTracks = scenario.tracks.filter(
+      (track) => track.property === "connection-effect"
+    );
     expect(
-      scenario.tracks.map((track) => [
+      edgeTracks.map((track) => [
         "id" in track.target ? track.target.id : null,
         track.clips[0].startMs,
       ])
@@ -314,8 +332,11 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().animateDraftPath();
 
     const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
+    const edgeTracks = scenario.tracks.filter(
+      (track) => track.property === "connection-effect"
+    );
     expect(
-      scenario.tracks.map((track) => [
+      edgeTracks.map((track) => [
         "id" in track.target ? track.target.id : null,
         track.clips[0].startMs,
       ])
@@ -323,7 +344,28 @@ describe("animation target lifecycle", () => {
       ["user-firewall", 0],
       ["firewall-proxy", 1_500],
     ]);
+    expect(
+      scenario.tracks
+        .filter((track) => track.property === "node-effect")
+        .map((track) => [
+          "id" in track.target ? track.target.id : null,
+          track.clips[0].startMs,
+          track.clips[0].durationMs,
+        ])
+    ).toEqual([
+      ["user", 0, 800],
+      ["firewall", 1_500, 800],
+      ["proxy", 3_000, 800],
+    ]);
+    expect(scenario.durationMs).toBe(3_800);
     expect(useFlowStore.getState().animationPathDraft).toBeNull();
+
+    useFlowStore.getState().editAnimationPath();
+    expect(useFlowStore.getState().animationPathDraft).toEqual({
+      nodeIds: ["user", "firewall", "proxy"],
+      edgeIds: ["user-firewall", "firewall-proxy"],
+      error: null,
+    });
   });
 
   test("duplicates internal edge tracks with fresh target, track, and clip IDs", () => {

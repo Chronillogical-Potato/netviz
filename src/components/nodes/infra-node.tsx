@@ -9,6 +9,7 @@ import { resolveBlock, useFlowStore, type InfraNode } from "@/store/flow-store";
 import { ACCENT_CLASSES, CORE_BLOCKS } from "@/blocks/registry";
 import { resolveIcon } from "@/blocks/icons";
 import { cn } from "@/lib/utils";
+import { NodeMotionBorder } from "./node-motion-border";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -17,7 +18,7 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Left, key: "left" },
 ];
 
-function InfraNodeComponent({ data, selected }: NodeProps<InfraNode>) {
+function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const block = resolveBlock(data.blockId, customBlocks) ?? CORE_BLOCKS[0];
   const iconName = data.iconName ?? block.iconName;
@@ -104,6 +105,7 @@ function InfraNodeComponent({ data, selected }: NodeProps<InfraNode>) {
           : {}),
       }}
     >
+      <NodeMotionBorder nodeId={id} />
       <NodeResizer
         isVisible={selected}
 

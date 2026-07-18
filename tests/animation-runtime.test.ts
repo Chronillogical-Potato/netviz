@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ScenarioClipV1, ScenarioV1 } from "../src/animation/model";
 import type { AnimationFrameScheduler } from "../src/animation/clock";
-import { ScenarioRuntime } from "../src/animation/runtime";
+import { ScenarioRuntime, type TargetFrame } from "../src/animation/runtime";
 
 class ManualScheduler implements AnimationFrameScheduler {
   nowMs = 0;
@@ -121,6 +121,36 @@ describe("scenario runtime", () => {
 
     scheduler.frame(200);
     expect(framesB.at(-1)).toEqual({ clear: false, clipCount: 1 });
+  });
+
+  test("projects authored node border tracks through the same runtime", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+    const nodeClip = effectClip("node-clip", 0, 800);
+    nodeClip.effect = { type: "node.border-beam", params: {} };
+    const withNodeTrack: ScenarioV1 = {
+      ...scenario(),
+      tracks: [
+        ...scenario().tracks,
+        {
+          id: "node-track",
+          target: { type: "node", id: "node-a" },
+          property: "node-effect",
+          enabled: true,
+          clips: [nodeClip],
+        },
+      ],
+    };
+    const frames: TargetFrame[] = [];
+
+    runtime.activate("page-1", withNodeTrack);
+    runtime.subscribeTarget("node-a", (frame) => frames.push(frame));
+    runtime.play();
+    scheduler.frame(100);
+
+    expect(frames.at(-1)?.clips[0]?.clip.effect.type).toBe(
+      "node.border-beam"
+    );
   });
 
   test("exposes transport updates separately from target frames", () => {

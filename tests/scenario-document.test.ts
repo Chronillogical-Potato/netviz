@@ -6,6 +6,7 @@ import {
 } from "../src/animation/model";
 import {
   applyEdgeEffect,
+  applyNodeEffect,
   cloneScenarioTargets,
   createDefaultScenarioDocument,
   createEmptyScenarioDocument,
@@ -91,6 +92,34 @@ describe("scenario document factories", () => {
 });
 
 describe("scenario document edits", () => {
+  test("applies a border effect to a node target", () => {
+    const updated = applyNodeEffect(createEmptyScenarioDocument(), {
+      nodeIds: ["node-a"],
+      effect: {
+        type: "node.border-beam",
+        params: { colors: ["#ffaa40", "#9c40ff"] },
+      },
+      clip: { startMs: 1_500, durationMs: 800 },
+      idFactory: ids("scenario-1", "node-track", "node-clip"),
+    });
+
+    expect(updated.scenarios[0]?.tracks[0]).toEqual(
+      expect.objectContaining({
+        id: "node-track",
+        target: { type: "node", id: "node-a" },
+        property: "node-effect",
+        clips: [
+          expect.objectContaining({
+            id: "node-clip",
+            startMs: 1_500,
+            durationMs: 800,
+            effect: expect.objectContaining({ type: "node.border-beam" }),
+          }),
+        ],
+      })
+    );
+  });
+
   test("applies an edge effect by creating the default scenario and fresh targets", () => {
     const original = createEmptyScenarioDocument();
     const updated = applyEdgeEffect(original, {

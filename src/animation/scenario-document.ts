@@ -39,6 +39,14 @@ export interface ApplyEdgeEffectInput {
   idFactory?: AnimationIdFactory;
 }
 
+export interface ApplyNodeEffectInput {
+  nodeIds: readonly string[];
+  effect: ScenarioEffectV1;
+  scenarioId?: string;
+  clip?: Partial<Omit<ScenarioClipV1, "id" | "effect">>;
+  idFactory?: AnimationIdFactory;
+}
+
 export type ScenarioEffectPatchV1 = {
   type?: string;
   params?: JsonObject;
@@ -58,6 +66,11 @@ export interface PatchEdgeEffectsInput {
 
 export interface RemoveEdgeEffectsInput {
   edgeIds: readonly string[];
+  scenarioId?: string;
+}
+
+export interface RemoveNodeEffectsInput {
+  nodeIds: readonly string[];
   scenarioId?: string;
 }
 
@@ -195,6 +208,66 @@ export function applyEdgeEffect(
   return replaceScenario(workingDocument, scenarioIndex, nextScenario);
 }
 
+export function applyNodeEffect(
+  document: PageScenarioDocumentV1,
+  input: ApplyNodeEffectInput
+): PageScenarioDocumentV1 {
+  const nodeIds = uniqueValues(input.nodeIds);
+  if (nodeIds.length === 0) return document;
+
+  const idFactory = input.idFactory ?? randomId;
+  const resolved = resolveEditableScenario(document, input.scenarioId, idFactory);
+  if (resolved === null) return document;
+
+  const { document: workingDocument, scenarioIndex } = resolved;
+  const selected = new Set(nodeIds);
+  const scenario = workingDocument.scenarios[scenarioIndex];
+  if (scenario === undefined) return document;
+
+  const updatedTargets = new Set<string>();
+  const tracks = scenario.tracks.map((track) => {
+    if (!isSelectedNodeTrack(track, selected)) return track;
+    const firstClip = track.clips[0];
+    updatedTargets.add(track.target.id);
+    if (firstClip === undefined) {
+      return {
+        ...track,
+        enabled: true,
+        clips: [createScenarioClip(input.effect, { ...input.clip, idFactory })],
+      };
+    }
+    return {
+      ...track,
+      enabled: true,
+      clips: [
+        {
+          ...firstClip,
+          ...input.clip,
+          effect: cloneEffect(input.effect),
+        },
+        ...track.clips.slice(1),
+      ],
+    };
+  });
+
+  for (const nodeId of nodeIds) {
+    if (updatedTargets.has(nodeId)) continue;
+    tracks.push({
+      id: idFactory(),
+      target: { type: "node", id: nodeId },
+      property: "node-effect",
+      enabled: true,
+      clips: [createScenarioClip(input.effect, { ...input.clip, idFactory })],
+    });
+  }
+
+  return replaceScenario(
+    workingDocument,
+    scenarioIndex,
+    fitScenarioToClips({ ...scenario, tracks })
+  );
+}
+
 export function patchEdgeEffects(
   document: PageScenarioDocumentV1,
   input: PatchEdgeEffectsInput
@@ -242,6 +315,28 @@ export function removeEdgeEffects(
   );
   if (tracks.length === scenario.tracks.length) return document;
 
+  return replaceScenario(
+    document,
+    scenarioIndex,
+    fitScenarioToClips({ ...scenario, tracks })
+  );
+}
+
+export function removeNodeEffects(
+  document: PageScenarioDocumentV1,
+  input: RemoveNodeEffectsInput
+): PageScenarioDocumentV1 {
+  const scenarioIndex = resolveScenarioIndex(document, input.scenarioId);
+  if (scenarioIndex === -1) return document;
+
+  const selected = new Set(uniqueValues(input.nodeIds));
+  if (selected.size === 0) return document;
+  const scenario = document.scenarios[scenarioIndex];
+  if (scenario === undefined) return document;
+  const tracks = scenario.tracks.filter(
+    (track) => !isSelectedNodeTrack(track, selected)
+  );
+  if (tracks.length === scenario.tracks.length) return document;
   return replaceScenario(
     document,
     scenarioIndex,
@@ -453,6 +548,18 @@ function isSelectedConnectionTrack(
   return (
     track.property === "connection-effect" &&
     track.target.type === "edge" &&
+    "id" in track.target &&
+    selected.has(track.target.id)
+  );
+}
+
+function isSelectedNodeTrack(
+  track: ScenarioTrackV1,
+  selected: ReadonlySet<string>
+): track is ScenarioTrackV1 & { target: { type: string; id: string } } {
+  return (
+    track.property === "node-effect" &&
+    track.target.type === "node" &&
     "id" in track.target &&
     selected.has(track.target.id)
   );

@@ -6,6 +6,7 @@ import type { PageScenarioDocumentV1, ScenarioEffectV1 } from "./model";
 
 export const GRADIENT_BEAM_DURATION_MS = 1_500;
 export const REQUEST_FLOW_HOP_DELAY_MS = GRADIENT_BEAM_DURATION_MS;
+export const NODE_BORDER_DURATION_MS = 800;
 
 export function createGradientBeamEffect(): ScenarioEffectV1 {
   return {
@@ -27,6 +28,23 @@ export function createGradientBeamClip(
   return {
     startMs,
     durationMs: GRADIENT_BEAM_DURATION_MS,
+    easing: "linear",
+    repeatCount: 0,
+    repeatDelayMs: 0,
+  };
+}
+
+export function createNodeBorderEffect(): ScenarioEffectV1 {
+  return {
+    type: "node.border-beam",
+    params: { colors: ["#ffaa40", "#9c40ff"] },
+  };
+}
+
+export function createNodeBorderClip(startMs = 0): ScenarioClipPatchV1 {
+  return {
+    startMs,
+    durationMs: NODE_BORDER_DURATION_MS,
     easing: "linear",
     repeatCount: 0,
     repeatDelayMs: 0,
