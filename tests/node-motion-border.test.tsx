@@ -17,7 +17,10 @@ const clip: ScenarioClipV1 = {
   repeatDelayMs: 0,
   effect: {
     type: "node.border-beam",
-    params: { colors: ["#ffaa40", "#9c40ff"] },
+    params: {
+      colors: ["#ffaa40", "#9c40ff"],
+      entrySide: "right",
+    },
   },
 };
 
@@ -71,6 +74,7 @@ describe("NodeMotionBorder", () => {
 
     applyNodeMotionTargetFrame(element, frame(200));
     expect(element.attributes.get("data-motion-active")).toBe("true");
+    expect(element.attributes.get("data-motion-entry")).toBe("right");
     expect(element.style.values.get("--node-flow-position")).toBe("85%");
     expect(element.style.values.has("--node-flow-angle")).toBe(false);
     expect(element.style.values.get("--node-flow-start")).toBe("#ffaa40");
@@ -78,6 +82,7 @@ describe("NodeMotionBorder", () => {
 
     applyNodeMotionTargetFrame(element, frame(800, true));
     expect(element.attributes.has("data-motion-active")).toBe(false);
+    expect(element.attributes.has("data-motion-entry")).toBe(false);
     expect(element.style.values.get("--node-flow-opacity")).toBe("0");
   });
 });

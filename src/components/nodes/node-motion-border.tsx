@@ -31,6 +31,7 @@ const colorsOf = (frame: TargetFrame): [string, string] => {
 
 const clearNodeMotion = (element: NodeMotionElement) => {
   element.removeAttribute("data-motion-active");
+  element.removeAttribute("data-motion-entry");
   element.style.setProperty("--node-flow-opacity", "0");
 };
 
@@ -50,7 +51,17 @@ export function applyNodeMotionTargetFrame(
   const [start, end] = colorsOf({ ...frame, clips: [active] });
   const progress = active.timing.progress;
   const opacity = Math.min(1, progress * 6, (1 - progress) * 6);
+  const entrySide = active.clip.effect.params.entrySide;
   element.setAttribute("data-motion-active", "true");
+  element.setAttribute(
+    "data-motion-entry",
+    entrySide === "top" ||
+      entrySide === "right" ||
+      entrySide === "bottom" ||
+      entrySide === "left"
+      ? entrySide
+      : "left"
+  );
   element.style.setProperty(
     "--node-flow-position",
     `${120 - progress * 140}%`

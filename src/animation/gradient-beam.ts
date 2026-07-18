@@ -17,6 +17,20 @@ export const REQUEST_FLOW_HOP_DELAY_MS =
   GRADIENT_BEAM_DURATION_MS -
   REQUEST_FLOW_ARRIVAL_LEAD_MS;
 
+export type NodeBorderEntrySide = "top" | "right" | "bottom" | "left";
+
+const ENTRY_SIDES = new Set<NodeBorderEntrySide>([
+  "top",
+  "right",
+  "bottom",
+  "left",
+]);
+
+const entrySideOf = (value: unknown): NodeBorderEntrySide =>
+  typeof value === "string" && ENTRY_SIDES.has(value as NodeBorderEntrySide)
+    ? (value as NodeBorderEntrySide)
+    : "left";
+
 export function createGradientBeamEffect(): ScenarioEffectV1 {
   return {
     type: "edge.gradient-beam",
@@ -43,10 +57,12 @@ export function createGradientBeamClip(
   };
 }
 
-export function createNodeBorderEffect(): ScenarioEffectV1 {
+export function createNodeBorderEffect(
+  entrySide: NodeBorderEntrySide = "left"
+): ScenarioEffectV1 {
   return {
     type: "node.border-beam",
-    params: { colors: ["#ffaa40", "#9c40ff"] },
+    params: { colors: ["#ffaa40", "#9c40ff"], entrySide },
   };
 }
 
@@ -58,6 +74,64 @@ export function createNodeBorderClip(startMs = 0): ScenarioClipPatchV1 {
     repeatCount: 0,
     repeatDelayMs: 0,
   };
+}
+
+export function applyNodeBorderEntrySides(
+  document: PageScenarioDocumentV1,
+  edges: readonly {
+    id: string;
+    target: string;
+    targetHandle?: string | null;
+  }[]
+): PageScenarioDocumentV1 {
+  let changed = false;
+  const scenarios = document.scenarios.map((scenario) => {
+    const animatedEdgeIds = new Set(
+      scenario.tracks
+        .filter(
+          (track) =>
+            track.property === "connection-effect" &&
+            track.target.type === "edge" &&
+            "id" in track.target &&
+            track.clips.some(
+              (clip) => clip.effect.type === "edge.gradient-beam"
+            )
+        )
+        .map((track) => ("id" in track.target ? track.target.id : ""))
+    );
+    const incomingSides = new Map(
+      edges
+        .filter((edge) => animatedEdgeIds.has(edge.id))
+        .map((edge) => [edge.target, entrySideOf(edge.targetHandle)])
+    );
+    const tracks = scenario.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => {
+        if (
+          track.property !== "node-effect" ||
+          track.target.type !== "node" ||
+          !("id" in track.target) ||
+          clip.effect.type !== "node.border-beam"
+        ) {
+          return clip;
+        }
+        const entrySide =
+          incomingSides.get(track.target.id) ??
+          entrySideOf(clip.effect.params.entrySide);
+        if (clip.effect.params.entrySide === entrySide) return clip;
+        changed = true;
+        return {
+          ...clip,
+          effect: {
+            ...clip.effect,
+            params: { ...clip.effect.params, entrySide },
+          },
+        };
+      }),
+    }));
+    return { ...scenario, tracks };
+  });
+  return changed ? { ...document, scenarios } : document;
 }
 
 const uniqueStarts = (

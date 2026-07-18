@@ -320,8 +320,8 @@ describe("animation target lifecycle", () => {
     useFlowStore.setState({
       nodes: [node("user"), node("firewall"), node("proxy")],
       edges: [
-        edge("user-firewall", "user", "firewall"),
-        edge("firewall-proxy", "firewall", "proxy"),
+        { ...edge("user-firewall", "user", "firewall"), targetHandle: "right" },
+        { ...edge("firewall-proxy", "firewall", "proxy"), targetHandle: "top" },
       ],
     });
 
@@ -351,11 +351,12 @@ describe("animation target lifecycle", () => {
           "id" in track.target ? track.target.id : null,
           track.clips[0].startMs,
           track.clips[0].durationMs,
+          track.clips[0].effect.params.entrySide,
         ])
     ).toEqual([
-      ["user", 0, 800],
-      ["firewall", 2_100, 800],
-      ["proxy", 4_200, 800],
+      ["user", 0, 800, "left"],
+      ["firewall", 2_100, 800, "right"],
+      ["proxy", 4_200, 800, "top"],
     ]);
     expect(scenario.durationMs).toBe(5_000);
     expect(useFlowStore.getState().animationPathDraft).toBeNull();

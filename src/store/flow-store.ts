@@ -54,6 +54,7 @@ import {
   normalizeGradientBeamDefaults,
   REQUEST_FLOW_EDGE_DELAY_MS,
   REQUEST_FLOW_HOP_DELAY_MS,
+  type NodeBorderEntrySide,
 } from "@/animation/gradient-beam";
 import { findAuthoredCustomPath } from "@/animation/custom-path";
 import {
@@ -377,6 +378,16 @@ const nextEdgeId = () =>
 const nextBlockId = () => `custom-${Math.random().toString(36).slice(2, 10)}`;
 const nextPageId = () =>
   `p${Date.now().toString(36)}${(nodeSeq++).toString(36)}`;
+
+const nodeEntrySide = (edge?: LabeledEdge): NodeBorderEntrySide => {
+  const side = edge?.targetHandle;
+  return side === "top" ||
+    side === "right" ||
+    side === "bottom" ||
+    side === "left"
+    ? side
+    : "left";
+};
 
 const createEmptyPageContent = (): PageContent => ({
   nodes: [],
@@ -1145,24 +1156,32 @@ export const useFlowStore = create<FlowState>()(
           ),
         });
       }
-      const nodeHops = new Map<string, number>([[startNodeId, 0]]);
+      const nodeHops = new Map<
+        string,
+        { hop: number; entrySide: NodeBorderEntrySide }
+      >([[startNodeId, { hop: 0, entrySide: "left" }]]);
       for (const step of steps) {
         const edge = s.edges.find((candidate) => candidate.id === step.edgeId);
         if (!edge) continue;
         const hop = step.hop + 1;
         const previous = nodeHops.get(edge.target);
-        if (previous === undefined || hop < previous) {
-          nodeHops.set(edge.target, hop);
+        if (previous === undefined || hop < previous.hop) {
+          nodeHops.set(edge.target, {
+            hop,
+            entrySide: nodeEntrySide(edge),
+          });
         }
       }
       scenarioDocument = removeNodeEffects(scenarioDocument, {
         nodeIds: s.nodes.map((node) => node.id),
       });
-      for (const [nodeId, hop] of nodeHops) {
+      for (const [nodeId, nodeHop] of nodeHops) {
         scenarioDocument = applyNodeEffect(scenarioDocument, {
           nodeIds: [nodeId],
-          effect: createNodeBorderEffect(),
-          clip: createNodeBorderClip(hop * REQUEST_FLOW_HOP_DELAY_MS),
+          effect: createNodeBorderEffect(nodeHop.entrySide),
+          clip: createNodeBorderClip(
+            nodeHop.hop * REQUEST_FLOW_HOP_DELAY_MS
+          ),
         });
       }
       return { scenarioDocument };
@@ -1324,9 +1343,13 @@ export const useFlowStore = create<FlowState>()(
         nodeIds: s.nodes.map((node) => node.id),
       });
       nodeIds.forEach((nodeId, index) => {
+        const incomingEdge =
+          index === 0
+            ? undefined
+            : s.edges.find((edge) => edge.id === edgeIds[index - 1]);
         scenarioDocument = applyNodeEffect(scenarioDocument, {
           nodeIds: [nodeId],
-          effect: createNodeBorderEffect(),
+          effect: createNodeBorderEffect(nodeEntrySide(incomingEdge)),
           clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
         });
       });

@@ -9,7 +9,10 @@ import {
   scenarioRuntime,
 } from "@/animation/runtime-instance";
 import type { TransportSnapshot } from "@/animation/runtime";
-import { normalizeGradientBeamDefaults } from "@/animation/gradient-beam";
+import {
+  applyNodeBorderEntrySides,
+  normalizeGradientBeamDefaults,
+} from "@/animation/gradient-beam";
 import { cn } from "@/lib/utils";
 import {
   useFlowStore,
@@ -92,8 +95,9 @@ const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
 
 function prepareAllConnections() {
   const state = useFlowStore.getState();
-  const scenarioDocument = normalizeGradientBeamDefaults(
-    state.scenarioDocument
+  const scenarioDocument = applyNodeBorderEntrySides(
+    normalizeGradientBeamDefaults(state.scenarioDocument),
+    state.edges
   );
   if (scenarioDocument !== state.scenarioDocument) {
     useFlowStore.setState({ scenarioDocument });

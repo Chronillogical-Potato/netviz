@@ -337,13 +337,18 @@
   --node-flow-opacity: 0;
   --node-flow-start: #ffaa40;
   --node-flow-end: #9c40ff;
+  --node-flow-angle: 105deg;
+  --node-flow-size-x: 260%;
+  --node-flow-size-y: 100%;
+  --node-flow-x: var(--node-flow-position);
+  --node-flow-y: 0%;
   position: absolute;
   inset: -3px;
   z-index: 15;
   border-radius: inherit;
   padding: 3px;
   background: linear-gradient(
-    105deg,
+    var(--node-flow-angle),
     transparent 22%,
     color-mix(in srgb, var(--node-flow-start) 25%, transparent) 36%,
     var(--node-flow-start) 46%,
@@ -351,8 +356,8 @@
     color-mix(in srgb, var(--node-flow-end) 25%, transparent) 64%,
     transparent 78%
   );
-  background-size: 260% 100%;
-  background-position: var(--node-flow-position) 0;
+  background-size: var(--node-flow-size-x) var(--node-flow-size-y);
+  background-position: var(--node-flow-x) var(--node-flow-y);
   background-repeat: no-repeat;
   opacity: var(--node-flow-opacity);
   box-shadow: 0 0 10px color-mix(in srgb, var(--node-flow-end) 18%, transparent);
@@ -363,6 +368,24 @@
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   pointer-events: none;
+}
+.nv-node-motion-border[data-motion-entry="right"] {
+  --node-flow-angle: 75deg;
+  --node-flow-x: calc(100% - var(--node-flow-position));
+}
+.nv-node-motion-border[data-motion-entry="top"] {
+  --node-flow-angle: 195deg;
+  --node-flow-size-x: 100%;
+  --node-flow-size-y: 260%;
+  --node-flow-x: 0%;
+  --node-flow-y: var(--node-flow-position);
+}
+.nv-node-motion-border[data-motion-entry="bottom"] {
+  --node-flow-angle: 15deg;
+  --node-flow-size-x: 100%;
+  --node-flow-size-y: 260%;
+  --node-flow-x: 0%;
+  --node-flow-y: calc(100% - var(--node-flow-position));
 }
 [data-motion="reduced"] .nv-node-motion-border {
   display: none;

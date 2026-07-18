@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { PageScenarioDocumentV1, ScenarioTrackV1 } from "../src/animation/model";
 import { findAuthoredCustomPath } from "../src/animation/custom-path";
-import { normalizeGradientBeamDefaults } from "../src/animation/gradient-beam";
+import {
+  applyNodeBorderEntrySides,
+  normalizeGradientBeamDefaults,
+} from "../src/animation/gradient-beam";
 
 const track = (edgeId: string, startMs: number): ScenarioTrackV1 => ({
   id: `track-${edgeId}`,
@@ -93,14 +96,28 @@ describe("authored custom paths", () => {
   });
 
   test("repairs persisted paths whose edges overlap their block shimmer", () => {
-    const normalized = normalizeGradientBeamDefaults(
-      document([
-        track("user-firewall", 0),
-        track("firewall-proxy", 1_500),
-        nodeTrack("user", 0),
-        nodeTrack("firewall", 1_500),
-        nodeTrack("proxy", 3_000),
-      ])
+    const normalized = applyNodeBorderEntrySides(
+      normalizeGradientBeamDefaults(
+        document([
+          track("user-firewall", 0),
+          track("firewall-proxy", 1_500),
+          nodeTrack("user", 0),
+          nodeTrack("firewall", 1_500),
+          nodeTrack("proxy", 3_000),
+        ])
+      ),
+      [
+        {
+          id: "user-firewall",
+          target: "firewall",
+          targetHandle: "right",
+        },
+        {
+          id: "firewall-proxy",
+          target: "proxy",
+          targetHandle: "top",
+        },
+      ]
     );
     const scenario = normalized.scenarios[0];
 
@@ -114,6 +131,11 @@ describe("authored custom paths", () => {
         .filter((item) => item.property === "node-effect")
         .map((item) => item.clips[0].startMs)
     ).toEqual([0, 2_100, 4_200]);
+    expect(
+      scenario.tracks
+        .filter((item) => item.property === "node-effect")
+        .map((item) => item.clips[0].effect.params.entrySide)
+    ).toEqual(["left", "right", "top"]);
     expect(scenario.durationMs).toBe(5_000);
   });
 });
