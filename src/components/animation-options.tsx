@@ -1,4 +1,11 @@
-import { useMemo } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import type {
   AnimationDirectionV1,
   EdgeEffectPreset,
@@ -11,77 +18,28 @@ import {
   type ScenarioClipPatchV1,
 } from "@/animation/scenario-document";
 import {
-  prefersReducedMotion,
-  scenarioRuntime,
-} from "@/animation/runtime-instance";
+  createGradientBeamClip,
+  createGradientBeamEffect,
+} from "@/animation/gradient-beam";
+import { buildRequestFlow } from "@/animation/request-flow";
+import { scenarioRuntime } from "@/animation/runtime-instance";
 import { useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
+import { Check, ChevronDown, X } from "@/ui/icons";
+import { Slider } from "@/ui/slider";
 import { cn } from "@/lib/utils";
 
-const PRESETS: Array<{
+export const ANIMATION_PRESETS: Array<{
   type: EdgeEffectPreset;
   label: string;
   params: JsonObject;
+  clip?: ScenarioClipPatchV1;
 }> = [
-  {
-    type: "edge.moving-dash",
-    label: "Moving dash",
-    params: {
-      direction: "forward",
-      color: "#38bdf8",
-      widthPx: 2,
-      opacity: 1,
-      dashLengthPx: 8,
-      gapLengthPx: 6,
-    },
-  },
   {
     type: "edge.gradient-beam",
     label: "Gradient beam",
-    params: {
-      direction: "forward",
-      colors: ["#38bdf8", "#818cf8"],
-      widthPx: 3,
-      opacity: 1,
-      trailLength: 0.24,
-      glowBlurPx: 6,
-    },
-  },
-  {
-    type: "edge.packet",
-    label: "Packet",
-    params: {
-      direction: "forward",
-      color: "#38bdf8",
-      widthPx: 3,
-      opacity: 1,
-      sizePx: 6,
-      packetLength: 0.025,
-    },
-  },
-  {
-    type: "edge.pulse",
-    label: "Pulse",
-    params: {
-      direction: "forward",
-      color: "#38bdf8",
-      widthPx: 4,
-      opacity: 1,
-      trailLength: 0.18,
-      glowBlurPx: 8,
-    },
-  },
-  {
-    type: "edge.particle-stream",
-    label: "Particle stream",
-    params: {
-      direction: "forward",
-      color: "#38bdf8",
-      widthPx: 2,
-      opacity: 1,
-      particleCount: 8,
-      particleSizePx: 3,
-    },
+    params: createGradientBeamEffect().params,
+    clip: createGradientBeamClip(),
   },
 ];
 
@@ -92,46 +50,301 @@ const DIRECTIONS: Array<{ value: AnimationDirectionV1; label: string }> = [
   { value: "ping-pong", label: "Ping-pong" },
 ];
 
-const selectClass =
-  "h-8 w-full rounded-lg border border-border bg-input px-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-45";
-const inputClass =
-  "h-8 w-full rounded-lg border border-border bg-input px-2 text-xs tabular-nums text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-45";
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid min-h-7 grid-cols-[72px_1fr] items-center gap-2">
+      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <div className="flex min-w-0 items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
 
-function Row({
+function Picker({
   label,
-  children,
+  value,
+  options,
+  disabled,
+  onChange,
+  preview,
 }: {
   label: string;
-  children: React.ReactNode;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  preview?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    width: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        panelRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    if (disabled) return;
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(176, rect.width);
+    const left = Math.min(
+      rect.left,
+      Math.max(8, window.innerWidth - width - 8)
+    );
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setPosition(
+      spaceBelow < 240
+        ? { left, bottom: window.innerHeight - rect.top + 4, width }
+        : { left, top: rect.bottom + 4, width }
+    );
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={toggle}
+        className={cn(
+          "flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-input px-2 text-left text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-45",
+          open && "ring-1 ring-ring"
+        )}
+      >
+        {preview}
+        <span className="truncate">{selected?.label ?? value}</span>
+        <ChevronDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
+      </button>
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="listbox"
+            aria-label={`${label} options`}
+            className="fixed z-50 rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
+            style={position}
+          >
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex h-7 w-full items-center rounded-lg px-2 text-left text-xs transition-colors hover:bg-muted",
+                  option.value === value
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                )}
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === value ? (
+                  <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                ) : null}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+function secondsValue(state: FieldState<number | undefined>) {
+  return state.status === "uniform" && typeof state.value === "number"
+    ? state.value / 1_000
+    : null;
+}
+
+function TimingRow({
+  label,
+  ariaLabel,
+  state,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  state: FieldState<number | undefined>;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onChange: (seconds: number) => void;
+}) {
+  const value = secondsValue(state);
+  return (
+    <Row label={label}>
+      <Slider
+        min={min}
+        max={max}
+        step={0.05}
+        value={value ?? min}
+        disabled={disabled}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="min-w-0 flex-1"
+        aria-label={`${ariaLabel} slider`}
+      />
+      <div className="relative w-14 shrink-0">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={0.05}
+          aria-label={ariaLabel}
+          disabled={disabled}
+          value={value ?? ""}
+          placeholder={state.status === "mixed" ? "—" : "0"}
+          onChange={(event) => {
+            const next = Number(event.currentTarget.value);
+            if (Number.isFinite(next)) onChange(next);
+          }}
+          className="h-7 w-full rounded-md bg-input pl-1.5 pr-4 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-45"
+        />
+        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">
+          s
+        </span>
+      </div>
+    </Row>
+  );
+}
+
+function ValueRow({
+  label,
+  ariaLabel,
+  state,
+  min,
+  max,
+  step,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  state: FieldState<number | undefined>;
+  min: number;
+  max: number;
+  step: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const value =
+    state.status === "uniform" && typeof state.value === "number"
+      ? state.value
+      : null;
+  return (
+    <Row label={label}>
+      <Slider
+        min={min}
+        max={max}
+        step={step}
+        value={value ?? min}
+        disabled={disabled}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        className="min-w-0 flex-1"
+        aria-label={`${ariaLabel} slider`}
+      />
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={value ?? ""}
+        placeholder="—"
+        onChange={(event) => {
+          const next = Number(event.currentTarget.value);
+          if (Number.isFinite(next)) onChange(next);
+        }}
+        className="h-7 w-11 shrink-0 rounded-md bg-input px-1.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-45"
+      />
+    </Row>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  disabled: boolean;
+  onChange: (value: string) => void;
 }) {
   return (
-    <label className="grid min-h-8 grid-cols-[78px_1fr] items-center gap-2">
-      <span className="text-[11px] font-medium text-muted-foreground">
-        {label}
+    <label
+      className={cn(
+        "relative flex h-7 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md bg-input px-2 text-xs text-foreground transition-colors hover:bg-muted",
+        disabled && "cursor-not-allowed opacity-45"
+      )}
+    >
+      <span
+        className="h-4 w-4 shrink-0 rounded border border-foreground/15"
+        style={{ backgroundColor: value ?? "transparent" }}
+      />
+      <span className="truncate tabular-nums">
+        {value ? value.replace("#", "").toUpperCase() : "Mixed"}
       </span>
-      {children}
+      <input
+        type="color"
+        aria-label={label}
+        disabled={disabled || value === null}
+        value={value ?? "#808080"}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+      />
     </label>
   );
 }
 
-function numericValue(
-  state: FieldState<number | undefined>,
-  scale = 1
-) {
-  return state.status === "uniform" && typeof state.value === "number"
-    ? state.value / scale
-    : "";
-}
-
-export function createAnimationColorPatch(
-  color: string
-): ScenarioClipPatchV1 {
+export function createAnimationColorPatch(color: string): ScenarioClipPatchV1 {
   return { effect: { params: { color } } };
 }
 
-export function createAnimationWidthPatch(
-  value: number
-): ScenarioClipPatchV1 {
+export function createAnimationWidthPatch(value: number): ScenarioClipPatchV1 {
   const width = Math.min(24, Math.max(0.5, value));
   return {
     effect: {
@@ -153,17 +366,12 @@ export function summarizeAnimationSelection(
     selectedEdgeIds,
     (clip) => clip.effect.type
   );
-  const direction = summarizeEdgeEffectField(
-    document,
-    selectedEdgeIds,
-    (clip) => {
-      const value = clip.effect.params.direction;
-      return typeof value === "string" ? value : undefined;
-    }
-  );
   return {
     preset,
-    direction,
+    direction: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+      const value = clip.effect.params.direction;
+      return typeof value === "string" ? value : undefined;
+    }),
     duration: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) =>
       clip.durationMs
     ),
@@ -178,6 +386,18 @@ export function summarizeAnimationSelection(
         ? colors[0]
         : undefined;
     }),
+    secondaryColor: summarizeEdgeEffectField(
+      document,
+      selectedEdgeIds,
+      (clip) => {
+        const colors = clip.effect.params.colors;
+        const secondary = clip.effect.params.secondaryColor;
+        if (Array.isArray(colors) && typeof colors[1] === "string") {
+          return colors[1];
+        }
+        return typeof secondary === "string" ? secondary : undefined;
+      }
+    ),
     width: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
       const keys =
         clip.effect.type === "edge.packet"
@@ -202,6 +422,122 @@ export function summarizeAnimationSelection(
   };
 }
 
+function playAllAnimations() {
+  scenarioRuntime.setTargetScope(null);
+  scenarioRuntime.setLoop(true);
+  scenarioRuntime.restart();
+  scenarioRuntime.play();
+}
+
+export function AnimationOverview() {
+  const edgeCount = useFlowStore((state) => state.edges.length);
+  const animateAllEdges = useFlowStore((state) => state.animateAllEdges);
+
+  return (
+    <div className="border-b border-border px-4 py-3.5">
+      <p className="text-xs font-semibold text-foreground">Connections</p>
+      <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+        Apply one continuous gradient beam to every connection on this page.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 w-full gap-2 rounded-md text-xs"
+        disabled={edgeCount === 0}
+        onClick={() => {
+          animateAllEdges();
+          playAllAnimations();
+        }}
+      >
+        <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+        Animate all connections
+      </Button>
+    </div>
+  );
+}
+
+export function RequestFlowOptions({
+  nodeId,
+  nodeLabel,
+}: {
+  nodeId: string;
+  nodeLabel: string;
+}) {
+  const edges = useFlowStore((state) => state.edges);
+  const animateRequestFlow = useFlowStore(
+    (state) => state.animateRequestFlow
+  );
+  const animateSelectedPath = useFlowStore(
+    (state) => state.animateSelectedPath
+  );
+  const nodes = useFlowStore((state) => state.nodes);
+  const selectedNodeIds = useMemo(
+    () => nodes.filter((node) => node.selected).map((node) => node.id),
+    [nodes]
+  );
+  const connectionCount = useMemo(
+    () => buildRequestFlow(edges, nodeId).length,
+    [edges, nodeId]
+  );
+  const selectedNodeIdSet = useMemo(
+    () => new Set(selectedNodeIds),
+    [selectedNodeIds]
+  );
+  const selectedPathCount = useMemo(
+    () =>
+      edges.filter(
+        (edge) =>
+          selectedNodeIdSet.has(edge.source) &&
+          selectedNodeIdSet.has(edge.target)
+      ).length,
+    [edges, selectedNodeIdSet]
+  );
+
+  return (
+    <div className="border-b border-border px-4 py-3.5">
+      <p className="text-xs font-semibold text-foreground">Request flow</p>
+      <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+        Start at <span className="text-foreground">{nodeLabel}</span> and
+        follow every outgoing connection one hop at a time.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 w-full gap-2 rounded-md text-xs"
+        disabled={connectionCount === 0}
+        onClick={() => {
+          animateRequestFlow(nodeId);
+          playAllAnimations();
+        }}
+      >
+        <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+        Create request flow
+      </Button>
+      {selectedNodeIds.length > 1 ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-2 h-7 w-full gap-2 rounded-md text-xs"
+          disabled={selectedPathCount === 0}
+          onClick={() => {
+            animateSelectedPath();
+            playAllAnimations();
+          }}
+        >
+          <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+          Create selected path
+        </Button>
+      ) : null}
+      <p className="pt-2 text-center text-[9px] text-muted-foreground">
+        {connectionCount} reachable connection{connectionCount === 1 ? "" : "s"}
+      </p>
+    </div>
+  );
+}
+
 export function AnimationOptions() {
   const edges = useFlowStore((state) => state.edges);
   const selectedEdgeIds = useMemo(
@@ -209,268 +545,213 @@ export function AnimationOptions() {
     [edges]
   );
   const document = useFlowStore((state) => state.scenarioDocument);
-  const motionPreference = useFlowStore((state) => state.motionPreference);
   const applyEffect = useFlowStore((state) => state.applySelectedEdgeEffect);
   const patchEffects = useFlowStore((state) => state.patchSelectedEdgeEffects);
   const removeEffects = useFlowStore((state) => state.removeSelectedEdgeEffects);
-
+  const animateSelectedPath = useFlowStore(
+    (state) => state.animateSelectedPath
+  );
   const summary = useMemo(
     () => summarizeAnimationSelection(document, selectedEdgeIds),
     [document, selectedEdgeIds]
   );
 
-  let presetValue: string;
-  if (summary.preset.status === "none") {
-    presetValue = "none";
-  } else if (summary.preset.status === "mixed") {
-    presetValue = "mixed";
-  } else {
-    const value = summary.preset.value;
-    presetValue = PRESETS.some((preset) => preset.type === value)
-      ? value
-      : "unsupported";
-  }
-  const hasEffect = summary.preset.status !== "none";
-  const reduced = prefersReducedMotion(motionPreference);
-
-  const previewSelection = () => {
-    if (selectedEdgeIds.length === 0 || !hasEffect || reduced) return;
-    scenarioRuntime.setTargetScope(selectedEdgeIds);
-    scenarioRuntime.restart();
-    scenarioRuntime.play();
-  };
+  const hasBeam =
+    summary.preset.status === "uniform" &&
+    summary.preset.value === "edge.gradient-beam";
+  const currentPrimary =
+    summary.color.status === "uniform" ? summary.color.value ?? null : null;
+  const currentSecondary =
+    summary.secondaryColor.status === "uniform"
+      ? summary.secondaryColor.value ?? null
+      : null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 pb-4" data-animation-options>
-      <div className="flex flex-col gap-2 border-b border-border py-3.5">
-        <Row label="Preset">
-          <select
-            aria-label="Animation preset"
-            className={selectClass}
-            value={presetValue}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (value === "none") {
-                removeEffects();
-                return;
-              }
-              const preset = PRESETS.find((candidate) => candidate.type === value);
-              if (preset) applyEffect({ type: preset.type, params: preset.params });
-            }}
+    <div className="flex-1 overflow-y-auto pb-4" data-animation-options>
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-3.5">
+        {hasBeam ? (
+          <div className="mb-1 flex h-7 items-center gap-2">
+            <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+            <span className="text-xs font-medium text-foreground">
+              Gradient beam
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-7 w-7 rounded-md"
+              aria-label="Remove gradient beam"
+              onClick={removeEffects}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full gap-2 rounded-md text-xs"
+            onClick={() =>
+              applyEffect(createGradientBeamEffect(), createGradientBeamClip())
+            }
           >
-            {presetValue === "mixed" ? (
-              <option value="mixed" disabled>
-                Mixed
-              </option>
-            ) : null}
-            {presetValue === "unsupported" ? (
-              <option value="unsupported" disabled>
-                Unsupported effect
-              </option>
-            ) : null}
-            <option value="none">None</option>
-            {PRESETS.map((preset) => (
-              <option key={preset.type} value={preset.type}>
-                {preset.label}
-              </option>
-            ))}
-          </select>
-        </Row>
-
+            <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+            Add gradient beam
+          </Button>
+        )}
         <Row label="Direction">
-          <select
-            aria-label="Animation direction"
-            className={selectClass}
-            disabled={!hasEffect}
+          <Picker
+            label="Animation direction"
             value={
               summary.direction.status === "uniform"
-                ? summary.direction.value
+                ? summary.direction.value ?? "forward"
                 : summary.direction.status === "mixed"
                   ? "mixed"
                   : "none"
             }
-            onChange={(event) => {
-              const value = event.target.value as AnimationDirectionV1;
+            options={[
+              ...DIRECTIONS,
+              ...(summary.direction.status === "mixed"
+                ? [{ value: "mixed", label: "Mixed" }]
+                : []),
+              ...(summary.direction.status === "none"
+                ? [{ value: "none", label: "—" }]
+                : []),
+            ]}
+            disabled={!hasBeam}
+            onChange={(value) => {
               if (DIRECTIONS.some((item) => item.value === value)) {
-                patchEffects({ effect: { params: { direction: value } } });
+                patchEffects({
+                  effect: {
+                    params: { direction: value as AnimationDirectionV1 },
+                  },
+                });
               }
             }}
-          >
-            {summary.direction.status === "mixed" ? (
-              <option value="mixed" disabled>
-                Mixed
-              </option>
-            ) : null}
-            {summary.direction.status === "none" ? (
-              <option value="none" disabled>
-                —
-              </option>
-            ) : null}
-            {DIRECTIONS.map((direction) => (
-              <option key={direction.value} value={direction.value}>
-                {direction.label}
-              </option>
-            ))}
-          </select>
+          />
         </Row>
-
-        <Row label="Duration">
-          <div className="relative">
-            <input
-              type="number"
-              min={0.05}
-              max={60}
-              step={0.05}
-              aria-label="Animation duration"
-              className={cn(inputClass, "pr-7")}
-              placeholder={summary.duration.status === "mixed" ? "—" : "0.00"}
-              disabled={!hasEffect}
-              value={numericValue(summary.duration, 1_000)}
-              onChange={(event) => {
-                const seconds = Number(event.target.value);
-                if (Number.isFinite(seconds) && seconds > 0) {
-                  patchEffects({
-                    durationMs: Math.min(60_000, Math.max(50, seconds * 1_000)),
-                  });
-                }
-              }}
-            />
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-              s
-            </span>
-          </div>
-        </Row>
-
-        <Row label="Delay">
-          <div className="relative">
-            <input
-              type="number"
-              min={0}
-              max={60}
-              step={0.05}
-              aria-label="Animation delay"
-              className={cn(inputClass, "pr-7")}
-              placeholder={summary.delay.status === "mixed" ? "—" : "0.00"}
-              disabled={!hasEffect}
-              value={numericValue(summary.delay, 1_000)}
-              onChange={(event) => {
-                const seconds = Number(event.target.value);
-                if (Number.isFinite(seconds) && seconds >= 0) {
-                  patchEffects({
-                    startMs: Math.min(60_000, Math.max(0, seconds * 1_000)),
-                  });
-                }
-              }}
-            />
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">
-              s
-            </span>
-          </div>
-        </Row>
-
+        <TimingRow
+          label="Travel time"
+          ariaLabel="Beam travel time"
+          state={summary.duration}
+          min={0.4}
+          max={8}
+          disabled={!hasBeam}
+          onChange={(seconds) =>
+            patchEffects({
+              durationMs: Math.min(8_000, Math.max(400, seconds * 1_000)),
+              easing: "linear",
+            })
+          }
+        />
+        <TimingRow
+          label="Start delay"
+          ariaLabel="Beam start delay"
+          state={summary.delay}
+          min={0}
+          max={10}
+          disabled={!hasBeam}
+          onChange={(seconds) =>
+            patchEffects({
+              startMs: Math.min(10_000, Math.max(0, seconds * 1_000)),
+            })
+          }
+        />
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="mt-1 w-full"
-          disabled={!hasEffect || reduced}
-          onClick={previewSelection}
+          className="h-7 w-full gap-2 rounded-md text-xs"
+          onClick={() => {
+            animateSelectedPath();
+            playAllAnimations();
+          }}
         >
-          Preview selection
+          <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+          Create selected path
         </Button>
-        {reduced ? (
-          <p className="text-[10px] leading-4 text-muted-foreground">
-            Motion is reduced. Set Motion to Full in Settings to preview.
-          </p>
-        ) : null}
       </div>
 
-      <details className="group border-b border-border py-3.5">
-        <summary className="cursor-pointer select-none text-xs font-semibold text-foreground outline-none">
-          Advanced
-        </summary>
-        <div className="mt-3 flex flex-col gap-2">
-          <Row label="Color">
-            <input
-              type="color"
-              aria-label="Animation color"
-              disabled={!hasEffect || summary.color.status !== "uniform"}
-              value={
-                summary.color.status === "uniform" ? summary.color.value : "#38bdf8"
-              }
-              onChange={(event) =>
-                patchEffects(createAnimationColorPatch(event.target.value))
-              }
-              className="h-8 w-full cursor-pointer rounded-lg border border-border bg-input p-1 disabled:cursor-not-allowed disabled:opacity-45"
-            />
-          </Row>
-          <Row label="Width">
-            <input
-              type="number"
-              min={0.5}
-              max={24}
-              step={0.5}
-              aria-label="Animation width"
-              className={inputClass}
-              placeholder="—"
-              disabled={!hasEffect}
-              value={numericValue(summary.width)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (Number.isFinite(value) && value > 0) {
-                  patchEffects(createAnimationWidthPatch(value));
-                }
-              }}
-            />
-          </Row>
-          <Row label="Opacity">
-            <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              aria-label="Animation opacity"
-              className={inputClass}
-              placeholder="—"
-              disabled={!hasEffect}
-              value={numericValue(summary.opacity)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (Number.isFinite(value)) {
+      <div className="border-b border-border px-4 py-3.5">
+        <p className="pb-2.5 text-xs font-semibold text-foreground">Advanced</p>
+        <div className="flex flex-col gap-2">
+          <Row label="Start">
+            <ColorField
+              label="Animation start color"
+              value={currentPrimary}
+              disabled={!hasBeam}
+              onChange={(color) => {
+                if (currentSecondary) {
                   patchEffects({
-                    effect: {
-                      params: { opacity: Math.min(1, Math.max(0, value)) },
-                    },
+                    effect: { params: { colors: [color, currentSecondary] } },
                   });
+                } else {
+                  patchEffects(createAnimationColorPatch(color));
                 }
               }}
             />
           </Row>
-          <Row label="Glow">
-            <input
-              type="number"
-              min={0}
-              max={32}
-              step={1}
-              aria-label="Animation glow"
-              className={inputClass}
-              placeholder="—"
-              disabled={!hasEffect}
-              value={numericValue(summary.glow)}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (Number.isFinite(value)) {
+          <Row label="End">
+            <ColorField
+              label="Animation end color"
+              value={currentSecondary}
+              disabled={!hasBeam}
+              onChange={(color) => {
+                if (currentPrimary) {
                   patchEffects({
-                    effect: {
-                      params: { glowBlurPx: Math.min(32, Math.max(0, value)) },
-                    },
+                    effect: { params: { colors: [currentPrimary, color] } },
                   });
+                } else {
+                  patchEffects({ effect: { params: { secondaryColor: color } } });
                 }
               }}
             />
           </Row>
+          <ValueRow
+            label="Width"
+            ariaLabel="Animation width"
+            state={summary.width}
+            min={0.5}
+            max={24}
+            step={0.5}
+            disabled={!hasBeam}
+            onChange={(value) =>
+              patchEffects(createAnimationWidthPatch(value))
+            }
+          />
+          <ValueRow
+            label="Opacity"
+            ariaLabel="Animation opacity"
+            state={summary.opacity}
+            min={0}
+            max={1}
+            step={0.05}
+            disabled={!hasBeam}
+            onChange={(value) =>
+              patchEffects({
+                effect: { params: { opacity: Math.min(1, Math.max(0, value)) } },
+              })
+            }
+          />
+          <ValueRow
+            label="Glow"
+            ariaLabel="Animation glow"
+            state={summary.glow}
+            min={0}
+            max={32}
+            step={1}
+            disabled={!hasBeam}
+            onChange={(value) =>
+              patchEffects({
+                effect: {
+                  params: { glowBlurPx: Math.min(32, Math.max(0, value)) },
+                },
+              })
+            }
+          />
         </div>
-      </details>
+      </div>
     </div>
   );
 }

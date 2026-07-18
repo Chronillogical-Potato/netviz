@@ -32,11 +32,14 @@ import {
   Minus as RMinus,
   Moon as RMoon,
   More2,
+  Pause as RPause,
   Pen,
   Pen2,
+  Play as RPlay,
   Plus as RPlus,
   Pointer as RPointer,
   Record,
+  Restart as RRestart,
   Search as RSearch,
   Shapes as RShapes,
   Sparkles as RSparkles,
@@ -111,11 +114,14 @@ export const Minus = filled(RMinus);
 export const Moon = filled(RMoon);
 export const MoreVertical = filled(More2);
 export const MousePointer2 = filled(Cursor);
+export const Pause = filled(RPause);
 export const PenLine = filled(Pen);
 export const Pencil = filled(Pen2);
 export const Plus = filled(RPlus);
+export const Play = filled(RPlay);
 export const Pointer = filled(RPointer);
 export const Search = filled(RSearch);
+export const Restart = filled(RRestart);
 export const Settings = filled(RSettings);
 export const Shapes = filled(RShapes);
 export const Sparkles = filled(RSparkles);

@@ -39,7 +39,6 @@ import { ImageNodeView } from "./nodes/image-node";
 import { CodeNodeView } from "./nodes/code-node";
 import { LabeledEdge } from "./edges/labeled-edge";
 import { CanvasToolbar, type CanvasTool } from "./canvas-toolbar";
-import { PlaybackControls } from "./playback-controls";
 import { cn } from "@/lib/utils";
 import {
   computeSnap,
@@ -733,11 +732,6 @@ function CanvasInner() {
       )}
       {isDesign && showControls && (
         <CanvasToolbar tool={tool} onToolChange={setTool} />
-      )}
-      {(workMode === "animation" || workMode === "preview") && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-3 z-30 flex justify-center">
-          <PlaybackControls className="pointer-events-auto max-w-full" />
-        </div>
       )}
       {isDesign && showSmartGuides && guides.length > 0 && (
         <GuidesOverlay guides={guides} />

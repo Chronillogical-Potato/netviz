@@ -41,7 +41,7 @@ describe("PlaybackControls", () => {
     scenarioRuntime.stop();
   });
 
-  test("renders the complete compact transport with semantic labels", () => {
+  test("renders a compact sidebar player without a confusing total timeline", () => {
     useFlowStore.setState({ workMode: "animation", motionPreference: "full" });
     scenarioRuntime.activate("page-playback-controls", scenario());
     scenarioRuntime.seek(2_500);
@@ -52,13 +52,13 @@ describe("PlaybackControls", () => {
     expect(markup).toContain('aria-label="Animation playback"');
     expect(markup).toContain('aria-label="Play animation"');
     expect(markup).toContain('aria-label="Restart animation"');
-    expect(markup).toContain('aria-label="Playback position"');
-    expect(markup).toContain('aria-label="Playback rate"');
-    expect(markup).toContain('aria-label="Reverse playback"');
-    expect(markup).toContain('aria-label="Loop playback"');
-    expect(markup).toContain('aria-valuetext="0:02.5 of 0:12.5"');
-    expect(markup).toContain('max="12500"');
-    expect(markup).toContain('value="2500"');
+    expect(markup).toContain('aria-label="Playback speed"');
+    expect(markup).toContain('aria-label="Playback rate 1x"');
+    expect(markup).not.toContain("Continuous");
+    expect(markup).not.toContain('aria-label="Playback position"');
+    expect(markup).not.toContain("0:02.5");
+    expect(markup).not.toContain("0:12.5");
+    expect(markup).not.toContain('aria-label="Reverse playback"');
   });
 
   test("offers an explicit override while reduced motion blocks playback", () => {

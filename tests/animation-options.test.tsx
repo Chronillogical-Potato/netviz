@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import {
+  AnimationOverview,
   AnimationOptions,
+  RequestFlowOptions,
   createAnimationColorPatch,
   createAnimationWidthPatch,
   summarizeAnimationSelection,
@@ -38,16 +40,45 @@ beforeEach(() => {
 });
 
 describe("AnimationOptions", () => {
-  test("renders the compact Stage 1 authoring surface for an unanimated edge", () => {
+  test("offers all-connections and request-chain authoring states", () => {
+    expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
+      "Animate all connections"
+    );
+    const flow = renderToStaticMarkup(
+      <RequestFlowOptions nodeId="user" nodeLabel="User" />
+    );
+    expect(flow).toContain("Create request flow");
+    expect(flow).toContain("User");
+  });
+
+  test("offers only the gradient beam on an unanimated edge", () => {
     const markup = renderToStaticMarkup(<AnimationOptions />);
 
-    expect(markup).toContain('aria-label="Animation preset"');
-    expect(markup).toContain('value="none" selected="">None</option>');
-    expect(markup).toContain('aria-label="Animation direction"');
-    expect(markup).toContain('aria-label="Animation duration"');
-    expect(markup).toContain('aria-label="Animation delay"');
-    expect(markup).toContain("Preview selection");
+    expect(markup).toContain("Add gradient beam");
+    expect(markup).not.toContain('aria-label="Animation preset"');
+    expect(markup).not.toContain("Moving dash");
+    expect(markup).not.toContain("Packet");
+    expect(markup).not.toContain("Pulse");
+    expect(markup).not.toContain("Particle stream");
+    expect(markup).not.toContain("<select");
+    expect(markup).toContain("h-7");
+    expect(markup).not.toContain("Preview selection");
+    expect(markup).toContain("Create selected path");
     expect(markup).toContain("Advanced");
+    expect(markup).not.toContain("<details");
+  });
+
+  test("uses a short repeating travel-time model for gradient beams", () => {
+    useFlowStore.getState().applySelectedEdgeEffect({
+      type: "edge.gradient-beam",
+      params: { direction: "forward" },
+    }, { durationMs: 2_000, easing: "linear" });
+
+    const markup = renderToStaticMarkup(<AnimationOptions />);
+    expect(markup).toContain('aria-label="Beam travel time"');
+    expect(markup).toContain('aria-label="Beam start delay"');
+    expect(markup).toContain("Travel time");
+    expect(markup).toContain("Start delay");
   });
 
   test("shows mixed state when selected edges do not share an effect", () => {

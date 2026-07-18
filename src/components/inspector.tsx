@@ -25,6 +25,7 @@ import {
   X,
 } from "@/ui/icons";
 import {
+  getNodeDisplayName,
   resolveBlock,
   useFlowStore,
   type AppNode,
@@ -52,7 +53,12 @@ import { Input } from "@/ui/input";
 import { Segmented } from "@/ui/segmented";
 import { Slider } from "@/ui/slider";
 import { CanvasOptions, PageOptions } from "./canvas-options";
-import { AnimationOptions } from "./animation-options";
+import {
+  AnimationOptions,
+  AnimationOverview,
+  RequestFlowOptions,
+} from "./animation-options";
+import { PlaybackControls } from "./playback-controls";
 import { cn } from "@/lib/utils";
 import {
   deriveLegacyLineEndpoints,
@@ -115,15 +121,21 @@ export function Inspector() {
           <p className="pt-0.5 text-[10px] text-muted-foreground">
             {hasSelectedEdge
               ? "Connection effect"
-              : "Select one or more connections"}
+              : selectedNode
+                ? "Build a chained request"
+                : "All connections"}
           </p>
         </div>
+        <PlaybackControls />
         {hasSelectedEdge ? (
           <AnimationOptions />
+        ) : selectedNode ? (
+          <RequestFlowOptions
+            nodeId={selectedNode.id}
+            nodeLabel={getNodeDisplayName(selectedNode)}
+          />
         ) : (
-          <div className="px-4 py-5 text-xs leading-5 text-muted-foreground">
-            Select an edge on the canvas to add a motion preset and timing.
-          </div>
+          <AnimationOverview />
         )}
       </aside>
     );
