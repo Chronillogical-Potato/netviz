@@ -205,8 +205,8 @@ describe("EdgeMotionLayer", () => {
 
     runtime.listener?.(targetFrame([clip("edge.gradient-beam")]));
 
-    expect(slot.gradients[1]?.getAttribute("x1")).toBe("25");
-    expect(slot.gradients[1]?.getAttribute("y1")).toBe("50");
+    expect(slot.gradients[1]?.getAttribute("x1")).toBe("37");
+    expect(slot.gradients[1]?.getAttribute("y1")).toBe("74");
     expect(slot.gradients[1]?.getAttribute("x2")).toBe("0");
     expect(slot.gradients[1]?.getAttribute("y2")).toBe("0");
   });
@@ -223,15 +223,32 @@ describe("EdgeMotionLayer", () => {
 
     runtime.listener?.(targetFrame([authored], false, 50));
 
-    expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.05 0.95");
+    expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.07 0.93");
     expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("1");
     expect(slot.gradientStops[1][3]?.getAttribute("stop-opacity")).toBeNull();
 
     runtime.listener?.(targetFrame([authored], false, 500));
 
     expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.4 0.6");
-    expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("0.9");
+    expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("0.7");
     expect(slot.gradientStops[1][3]?.getAttribute("stop-opacity")).toBe("0");
+  });
+
+  test("shrinks the beam into the target block before disappearing", () => {
+    const runtime = new FakeTargetRuntime();
+    const slot = fakeSlot();
+    slot.paths[1] = new FakeMeasuredPath(100);
+    subscribeEdgeMotionTarget(runtime, "edge:/one", [slot], () => ({
+      motionState: "playing",
+      gradientVector: { x1: 0, y1: 0, x2: 100, y2: 0 },
+    }));
+    const authored = clip("edge.gradient-beam", { beamLengthPx: 40 });
+
+    runtime.listener?.(targetFrame([authored], false, 950));
+
+    expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.07 0.93");
+    expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("0.07");
+    expect(slot.gradientStops[1][0]?.getAttribute("stop-opacity")).toBeNull();
   });
 
   test("keeps an authored beam length consistent across different edge lengths", () => {
@@ -351,10 +368,10 @@ describe("EdgeMotionLayer", () => {
     expect(beam).toContain('opacity="0.2"');
     expect(beam).toContain('data-motion-role="gradient-beam"');
     expect(beam).toContain('gradientUnits="userSpaceOnUse"');
-    expect(beam).toContain('x1="15"');
-    expect(beam).toContain('y1="5"');
-    expect(beam).toContain('x2="12"');
-    expect(beam).toContain('y2="4"');
+    expect(beam).toContain('x1="16.5"');
+    expect(beam).toContain('y1="5.5"');
+    expect(beam).toContain('x2="13.5"');
+    expect(beam).toContain('y2="4.5"');
     expect(beam).toContain(
       '<stop offset="0" stop-color="#ffaa40" stop-opacity="0"'
     );

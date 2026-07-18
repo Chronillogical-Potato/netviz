@@ -69,7 +69,7 @@ interface MotionPrimitive {
   gradientPhase?: number;
   gradientSpan?: number;
   gradientReversed?: boolean;
-  gradientAnchored?: boolean;
+  gradientAnchor?: "head" | "tail";
 }
 
 export const MAX_EDGE_EFFECT_SLOTS = 4;
@@ -145,15 +145,27 @@ export function createEdgeMotionPrimitives(
             (projection.direction === "ping-pong" &&
               projection.travelDirection === "reverse") ||
             (projection.direction === "bidirectional" && index === 1);
-          const visibleLength = Number(
-            Math.min(
-              trailLengthRatio,
-              reversed ? 1 - phase : phase
-            ).toFixed(6)
-          );
+          const travelProgress = reversed ? 1 - phase : phase;
+          const headProgress = travelProgress * (1 + trailLengthRatio);
+          const head = reversed ? 1 - headProgress : headProgress;
           const trailStart = Number(
-            (reversed ? phase : Math.max(0, phase - visibleLength)).toFixed(6)
+            Math.max(0, reversed ? head : head - trailLengthRatio).toFixed(6)
           );
+          const trailEnd = Number(
+            Math.min(1, reversed ? head + trailLengthRatio : head).toFixed(6)
+          );
+          const visibleLength = Number((trailEnd - trailStart).toFixed(6));
+          const tailAnchored = reversed
+            ? trailEnd >= 1 - 0.000001
+            : trailStart === 0;
+          const headAnchored = reversed
+            ? trailStart === 0
+            : trailEnd >= 1 - 0.000001;
+          const gradientAnchor: MotionPrimitive["gradientAnchor"] = tailAnchored
+            ? "tail"
+            : headAnchored
+              ? "head"
+              : undefined;
           return {
             role: "gradient-beam" as const,
             stroke: `url(#${gradientIds[index + 1]})`,
@@ -167,9 +179,7 @@ export function createEdgeMotionPrimitives(
             gradientPhase: trailStart,
             gradientSpan: visibleLength,
             gradientReversed: reversed,
-            gradientAnchored: reversed
-              ? trailStart + visibleLength >= 1 - 0.000001
-              : trailStart === 0,
+            gradientAnchor,
           };
         }),
       ];
@@ -335,12 +345,15 @@ const measuredBeamTrailLengthRatio = (
   );
 };
 
-const gradientStops = (colors: [string, string], anchored = false) =>
+const gradientStops = (
+  colors: [string, string],
+  anchor?: "head" | "tail"
+) =>
   [
-    ["0", colors[0], 0],
+    ["0", colors[0], anchor === "head" ? undefined : 0],
     ["0", colors[0], undefined],
     ["0.325", colors[1], undefined],
-    ["1", colors[1], anchored ? undefined : 0],
+    ["1", colors[1], anchor === "tail" ? undefined : 0],
   ] as const;
 
 const applyGradient = (
@@ -349,7 +362,7 @@ const applyGradient = (
   id: string,
   vector: EdgeGradientVector,
   colors: [string, string],
-  anchored = false
+  anchor?: "head" | "tail"
 ) => {
   writeAttribute(gradient, "id", id);
   writeAttribute(gradient, "gradientUnits", "userSpaceOnUse");
@@ -357,7 +370,7 @@ const applyGradient = (
   writeAttribute(gradient, "y1", vector.y1);
   writeAttribute(gradient, "x2", vector.x2);
   writeAttribute(gradient, "y2", vector.y2);
-  const values = gradientStops(colors, anchored);
+  const values = gradientStops(colors, anchor);
   for (let index = 0; index < stops.length; index += 1) {
     const [offset, color, opacity] = values[index] ?? values[values.length - 1];
     writeAttribute(stops[index], "offset", offset);
@@ -419,7 +432,7 @@ const applyProjectionToSlot = (
       gradientIds[index],
       vector,
       colors,
-      primitive.gradientAnchored
+      primitive.gradientAnchor
     );
     writeAttribute(path, "display", undefined);
     writeAttribute(path, "data-edge-layer", "motion");
@@ -628,7 +641,7 @@ export function EdgeMotionLayer({
                     >
                       {gradientStops(
                         colors,
-                        primitive?.gradientAnchored
+                        primitive?.gradientAnchor
                       ).map(
                         ([offset, color, opacity], stopIndex) => (
                           <stop
