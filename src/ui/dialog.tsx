@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { X } from "@/ui/icons";
 import { cn } from "@/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
@@ -32,14 +32,14 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-card p-6 text-card-foreground shadow-xl data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out",
+        "dialog-surface fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-border/60 bg-popover p-5 text-popover-foreground shadow-2xl data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out",
         className
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none">
-        <X className="h-4 w-4" />
+      <DialogPrimitive.Close className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none">
+        <X className="h-3.5 w-3.5" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -61,7 +61,7 @@ export const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      "text-sm font-semibold leading-none tracking-tight",
       className
     )}
     {...props}
@@ -75,7 +75,7 @@ export const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-xs text-muted-foreground", className)}
     {...props}
   />
 ));
@@ -86,7 +86,7 @@ export const DialogFooter = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex justify-end gap-2 pt-2", className)}
+    className={cn("grid grid-cols-2 gap-2 pt-2", className)}
     {...props}
   />
 );
