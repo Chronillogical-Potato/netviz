@@ -107,6 +107,7 @@ function computeDimsToTarget(sel: AppNode, target: AppNode) {
 
 type DragPayload =
   | { kind: "infra"; blockId: string }
+  | { kind: "template"; templateId: string }
   | { kind: "shape"; shape: ShapeKind }
   | { kind: "text" }
   | { kind: "step" }
@@ -393,6 +394,7 @@ function CanvasInner() {
   const addLineNode = useFlowStore((s) => s.addLineNode);
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const customBlocks = useFlowStore((s) => s.customBlocks);
+  const insertTemplate = useFlowStore((s) => s.insertTemplate);
   const turbo = useFlowStore((s) => s.turbo);
   const turboColors = useFlowStore((s) => s.turboColors);
   const showControls = useFlowStore((s) => s.showControls);
@@ -623,6 +625,8 @@ function CanvasInner() {
         const block = registry.find((b) => b.id === payload.blockId);
         if (!block) return;
         addInfraNode(block, position);
+      } else if (payload.kind === "template") {
+        insertTemplate(payload.templateId, position);
       } else if (payload.kind === "shape") {
         addShapeNode(payload.shape, position);
       } else if (payload.kind === "text") {
@@ -639,6 +643,7 @@ function CanvasInner() {
       registry,
       screenToFlowPosition,
       addInfraNode,
+      insertTemplate,
       addShapeNode,
       addTextNode,
       addStepNode,

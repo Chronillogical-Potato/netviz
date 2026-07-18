@@ -5,6 +5,7 @@ import {
   Minus,
   Plus,
   Search,
+  Sparkles,
   Trash2,
   Type,
   type AppIcon,
@@ -21,14 +22,16 @@ import { resolveIcon } from "@/blocks/icons";
 import { Input } from "@/ui/input";
 import { CustomBlockDialog } from "./custom-block-dialog";
 import { cn } from "@/lib/utils";
+import { TEMPLATES } from "@/templates/registry";
 
 const DRAG_MIME = "application/x-netviz";
 
-type CategoryKey = "core" | "annotations" | "custom";
+type CategoryKey = "templates" | "core" | "annotations" | "custom";
 type Filter = "all" | CategoryKey;
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "templates", label: "Templates" },
   { key: "core", label: "Core" },
   { key: "annotations", label: "Annotations" },
   { key: "custom", label: "Custom" },
@@ -67,12 +70,14 @@ function AccentTile({
 function BlockRow({
   payload,
   label,
+  description,
   onAdd,
   onDelete,
   children,
 }: {
   payload: object;
   label: string;
+  description?: string;
   onAdd: () => void;
   onDelete?: () => void;
   children: React.ReactNode;
@@ -90,9 +95,16 @@ function BlockRow({
       className="group flex cursor-grab items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted active:cursor-grabbing"
     >
       {children}
-      <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-        {label}
-      </p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-foreground">
+          {label}
+        </p>
+        {description ? (
+          <p className="truncate pt-0.5 text-[10px] text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
       {onDelete && (
         <button
           onClick={(e) => {
@@ -120,6 +132,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 type Item = {
   key: string;
   label: string;
+  description?: string;
   payload: object;
   tile: React.ReactNode;
   add: () => void;
@@ -130,6 +143,7 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const deleteCustomBlock = useFlowStore((s) => s.deleteCustomBlock);
   const addInfraNode = useFlowStore((s) => s.addInfraNode);
+  const insertTemplate = useFlowStore((s) => s.insertTemplate);
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const addStepNode = useFlowStore((s) => s.addStepNode);
   const addLineNode = useFlowStore((s) => s.addLineNode);
@@ -185,7 +199,27 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
     },
   });
 
+  const templateItems: Item[] = TEMPLATES.map((template) => ({
+    key: template.id,
+    label: template.name,
+    description: template.description,
+    payload: { kind: "template", templateId: template.id },
+    tile: <AccentTile icon={Sparkles} accent="emerald" />,
+    add: () => {
+      insertTemplate(
+        template.id,
+        viewportCenter({ x: template.width / 2, y: template.height / 2 })
+      );
+      onAdded();
+    },
+  }));
+
   const sections: { key: CategoryKey; title: string; items: Item[] }[] = [
+    {
+      key: "templates",
+      title: "Templates",
+      items: templateItems,
+    },
     {
       key: "core",
       title: "Core",
@@ -277,6 +311,7 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
                     key={it.key}
                     payload={it.payload}
                     label={it.label}
+                    description={it.description}
                     onAdd={it.add}
                     onDelete={it.onDelete}
                   >

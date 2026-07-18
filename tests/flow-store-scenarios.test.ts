@@ -186,6 +186,31 @@ describe("page-owned animation state", () => {
 });
 
 describe("animation target lifecycle", () => {
+  test("inserts a code-owned template with configured animations", () => {
+    useFlowStore.getState().insertTemplate("load-balanced-web-app", {
+      x: 120,
+      y: 240,
+    });
+
+    const state = useFlowStore.getState();
+    expect(state.nodes).toHaveLength(5);
+    expect(state.edges).toHaveLength(5);
+    expect(Math.min(...state.nodes.map((item) => item.position.x))).toBe(120);
+    expect(Math.min(...state.nodes.map((item) => item.position.y))).toBe(240);
+    expect(state.scenarioDocument.scenarios.map((scenario) => scenario.name)).toEqual([
+      "Request via Server A",
+      "Request via Server B",
+    ]);
+    expect(
+      state.scenarioDocument.scenarios.map(
+        (scenario) =>
+          scenario.tracks.filter(
+            (track) => track.property === "connection-effect"
+          ).length
+      )
+    ).toEqual([3, 3]);
+  });
+
   test("animates every connection with one short gradient beam", () => {
     useFlowStore.setState({
       nodes: [node("a"), node("b"), node("c")],

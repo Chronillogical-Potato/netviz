@@ -23,6 +23,7 @@ import type { IconName } from "@/blocks/icons";
 import type {
   PageScenarioDocumentV1,
   ScenarioEffectV1,
+  ScenarioV1,
 } from "@/animation/model";
 import {
   applyEdgeEffect,
@@ -62,6 +63,7 @@ import {
   buildRequestFlow,
   buildSelectedRequestFlow,
 } from "@/animation/request-flow";
+import { findTemplate } from "@/templates/registry";
 
 export type InfraVariant = "row" | "card";
 export type IconPosition = "left" | "right" | "top" | "bottom";
@@ -300,6 +302,10 @@ type FlowState = Snapshot & {
     position: { x: number; y: number },
     size: { width: number; height: number }
   ) => void;
+  insertTemplate: (
+    templateId: string,
+    position: { x: number; y: number }
+  ) => void;
   updateNodeData: (id: string, patch: NodeDataPatch) => void;
   duplicateNodes: (
     ids: string[],
@@ -450,6 +456,55 @@ function animationPathAppearance(
         ? params.glowBlurPx
         : defaults.glowBlurPx,
   };
+}
+
+function buildAnimationPathScenario(input: {
+  id?: string;
+  name: string;
+  nodeIds: readonly string[];
+  edgeIds: readonly string[];
+  edges: readonly LabeledEdge[];
+  appearance: AnimationPathAppearance;
+}): ScenarioV1 | null {
+  const edgeEffect = createGradientBeamEffect();
+  edgeEffect.params = {
+    ...edgeEffect.params,
+    colors: [...input.appearance.colors],
+    widthPx: input.appearance.widthPx,
+    opacity: input.appearance.opacity,
+    glowBlurPx: input.appearance.glowBlurPx,
+  };
+  let document = createDefaultScenarioDocument({
+    id: input.id,
+    name: input.name,
+  });
+  input.edgeIds.forEach((edgeId, index) => {
+    document = applyEdgeEffect(document, {
+      edgeIds: [edgeId],
+      effect: edgeEffect,
+      clip: createGradientBeamClip(
+        REQUEST_FLOW_EDGE_DELAY_MS + index * REQUEST_FLOW_HOP_DELAY_MS
+      ),
+    });
+  });
+  input.nodeIds.forEach((nodeId, index) => {
+    const incomingEdge =
+      index === 0
+        ? undefined
+        : input.edges.find((edge) => edge.id === input.edgeIds[index - 1]);
+    const nodeEffect = createNodeBorderEffect(nodeEntrySide(incomingEdge));
+    nodeEffect.params = {
+      ...nodeEffect.params,
+      colors: [...input.appearance.colors],
+    };
+    document = applyNodeEffect(document, {
+      nodeIds: [nodeId],
+      effect: nodeEffect,
+      append: true,
+      clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
+    });
+  });
+  return document.scenarios[0] ?? null;
 }
 
 function activateScenarioForEdges(
@@ -807,6 +862,109 @@ export const useFlowStore = create<FlowState>()(
     });
     return id;
   },
+
+  insertTemplate: (templateId, position) =>
+    set((s) => {
+      const template = findTemplate(templateId);
+      if (!template) return s;
+      const nodeIds = new Map<string, string>();
+      const templateNodes = template.nodes.flatMap((item) => {
+        const block = CORE_BLOCKS.find((candidate) => candidate.id === item.blockId);
+        if (!block) return [];
+        const id = nextNodeId();
+        nodeIds.set(item.key, id);
+        const variant: InfraVariant = block.variant ?? "row";
+        return [
+          {
+            id,
+            type: "infra" as const,
+            position: {
+              x: position.x + item.position.x,
+              y: position.y + item.position.y,
+            },
+            style: infraSize(variant),
+            zIndex: 0,
+            data: {
+              blockId: block.id,
+              label: item.label ?? block.label,
+              subtitle: item.subtitle ?? block.subtitle,
+              variant,
+              bgColor: block.bgColor,
+              titleColor: block.titleColor,
+              subtitleColor: block.subtitleColor,
+              borderColor: block.borderColor,
+              iconPosition: block.iconPosition,
+              textAlign: block.textAlign,
+              customIcon: block.customIcon,
+            },
+          } satisfies AppNode,
+        ];
+      });
+      const edgeIds = new Map<string, string>();
+      const templateEdges = template.edges.flatMap((item) => {
+        const source = nodeIds.get(item.source);
+        const target = nodeIds.get(item.target);
+        if (!source || !target) return [];
+        const id = nextEdgeId();
+        edgeIds.set(item.key, id);
+        return [
+          {
+            id,
+            type: "labeled" as const,
+            source,
+            target,
+            sourceHandle: item.sourceHandle,
+            targetHandle: item.targetHandle,
+            animated: false,
+            markerEnd: s.turbo ? undefined : DEFAULT_MARKER,
+            data: {
+              label: "",
+              turbo: s.turbo,
+              color: s.edgeColor,
+              lineStyle: s.edgeLineStyle,
+              dashGap: s.edgeDashGap,
+            },
+          } satisfies LabeledEdge,
+        ];
+      });
+      const edgeByNodes = new Map(
+        template.edges.map((item) => [
+          `${item.source}:${item.target}`,
+          edgeIds.get(item.key),
+        ])
+      );
+      const scenarios = template.animations.flatMap((animation) => {
+        const pathNodeIds = animation.nodeKeys.map((key) => nodeIds.get(key));
+        if (pathNodeIds.some((id) => !id)) return [];
+        const pathEdgeIds = animation.nodeKeys.slice(0, -1).map((key, index) =>
+          edgeByNodes.get(`${key}:${animation.nodeKeys[index + 1]}`)
+        );
+        if (pathEdgeIds.some((id) => !id)) return [];
+        const scenario = buildAnimationPathScenario({
+          name: animation.name,
+          nodeIds: pathNodeIds as string[],
+          edgeIds: pathEdgeIds as string[],
+          edges: templateEdges,
+          appearance: {
+            ...defaultAnimationPathAppearance(),
+            colors: animation.colors,
+            widthPx: 3,
+            glowBlurPx: 4,
+          },
+        });
+        return scenario ? [scenario] : [];
+      });
+      return {
+        nodes: [...s.nodes, ...templateNodes],
+        edges: [...s.edges, ...templateEdges],
+        scenarioDocument: {
+          ...s.scenarioDocument,
+          scenarios: [...s.scenarioDocument.scenarios, ...scenarios],
+          defaultScenarioId:
+            scenarios[0]?.id ?? s.scenarioDocument.defaultScenarioId,
+        },
+      };
+    }),
 
   addShapeNode: (shape, position, size) => {
     const id = nextNodeId();
@@ -1502,49 +1660,14 @@ export const useFlowStore = create<FlowState>()(
         draft?.name.trim() ||
         `Custom path ${findAuthoredCustomPaths(s.scenarioDocument, s.edges).length + 1}`;
       const appearance = draft?.appearance ?? defaultAnimationPathAppearance();
-      const edgeEffect = createGradientBeamEffect();
-      edgeEffect.params = {
-        ...edgeEffect.params,
-        colors: [...appearance.colors],
-        widthPx: appearance.widthPx,
-        opacity: appearance.opacity,
-        glowBlurPx: appearance.glowBlurPx,
-      };
-
-      let scenarioDocument = createDefaultScenarioDocument({
+      const savedScenario = buildAnimationPathScenario({
         id: draft?.scenarioId ?? undefined,
         name,
+        nodeIds,
+        edgeIds,
+        edges: s.edges,
+        appearance,
       });
-      edgeIds.forEach((edgeId, index) => {
-        scenarioDocument = applyEdgeEffect(scenarioDocument, {
-          edgeIds: [edgeId],
-          effect: edgeEffect,
-          clip: createGradientBeamClip(
-            REQUEST_FLOW_EDGE_DELAY_MS +
-              index * REQUEST_FLOW_HOP_DELAY_MS
-          ),
-        });
-      });
-      nodeIds.forEach((nodeId, index) => {
-        const incomingEdge =
-          index === 0
-            ? undefined
-            : s.edges.find((edge) => edge.id === edgeIds[index - 1]);
-        const nodeEffect = createNodeBorderEffect(
-          nodeEntrySide(incomingEdge)
-        );
-        nodeEffect.params = {
-          ...nodeEffect.params,
-          colors: [...appearance.colors],
-        };
-        scenarioDocument = applyNodeEffect(scenarioDocument, {
-          nodeIds: [nodeId],
-          effect: nodeEffect,
-          append: true,
-          clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
-        });
-      });
-      const savedScenario = scenarioDocument.scenarios[0];
       if (!savedScenario) return s;
       const existingIndex = s.scenarioDocument.scenarios.findIndex(
         (scenario) => scenario.id === savedScenario.id
