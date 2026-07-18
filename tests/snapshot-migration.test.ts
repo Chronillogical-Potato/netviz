@@ -219,6 +219,36 @@ describe("version 2 normalization", () => {
         scenarioDocument: { schemaVersion: 2, scenarios: [] },
       })
     ).toThrow("Unsupported scenario schema version");
+
+    expect(() =>
+      normalizeFlowSnapshotV2({
+        ...snapshot,
+        scenarioDocument: {
+          schemaVersion: 1,
+          defaultScenarioId: "broken",
+          scenarios: [
+            {
+              id: "broken",
+              name: "Broken",
+              tracks: [],
+              markers: [],
+              triggers: [],
+            },
+          ],
+        },
+      })
+    ).toThrow("Invalid scenario document shape");
+
+    expect(() =>
+      normalizeFlowSnapshotV2({
+        ...snapshot,
+        scenarioDocument: {
+          schemaVersion: 1,
+          defaultScenarioId: "missing",
+          scenarios: [],
+        },
+      })
+    ).toThrow("Invalid scenario document shape");
   });
 
   test("rejects empty page lists and missing active pages", () => {

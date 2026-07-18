@@ -68,6 +68,27 @@ function assertCollection(value: unknown, message = "Invalid snapshot shape") {
   if (!Array.isArray(value)) throw new Error(message);
 }
 
+function invalidScenario(): never {
+  throw new Error("Invalid scenario document shape");
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    isFiniteNumber(value)
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
 function normalizeScenarioDocument(
   value: unknown
 ): PageScenarioDocumentV1 {
@@ -79,25 +100,117 @@ function normalizeScenarioDocument(
     value.defaultScenarioId !== null &&
     typeof value.defaultScenarioId !== "string"
   ) {
-    throw new Error("Invalid scenario document shape");
+    invalidScenario();
   }
+  const scenarioIds = new Set<string>();
   for (const scenario of value.scenarios as unknown[]) {
-    if (!isRecord(scenario)) throw new Error("Invalid scenario document shape");
+    if (
+      !isRecord(scenario) ||
+      typeof scenario.id !== "string" ||
+      scenario.id.trim().length === 0 ||
+      typeof scenario.name !== "string" ||
+      !isFiniteNumber(scenario.durationMs) ||
+      scenario.durationMs <= 0 ||
+      !isRecord(scenario.playback) ||
+      !isFiniteNumber(scenario.playback.rate) ||
+      scenario.playback.rate <= 0 ||
+      !isRecord(scenario.playback.loop)
+    ) {
+      invalidScenario();
+    }
+    const loop = scenario.playback.loop;
+    if (
+      (loop.mode !== "none" && loop.mode !== "repeat") ||
+      !isFiniteNumber(loop.startMs) ||
+      !isFiniteNumber(loop.endMs) ||
+      loop.startMs < 0 ||
+      loop.endMs <= loop.startMs ||
+      loop.endMs > scenario.durationMs ||
+      scenarioIds.has(scenario.id)
+    ) {
+      invalidScenario();
+    }
+    scenarioIds.add(scenario.id);
     assertCollection(scenario.tracks, "Invalid scenario document shape");
     assertCollection(scenario.markers, "Invalid scenario document shape");
     assertCollection(scenario.triggers, "Invalid scenario document shape");
     for (const track of scenario.tracks as unknown[]) {
-      if (!isRecord(track)) throw new Error("Invalid scenario document shape");
+      if (
+        !isRecord(track) ||
+        typeof track.id !== "string" ||
+        track.id.trim().length === 0 ||
+        !isRecord(track.target) ||
+        typeof track.target.type !== "string" ||
+        track.target.type.trim().length === 0 ||
+        ((track.target.type !== "camera" &&
+          track.target.type !== "scenario") &&
+          (typeof track.target.id !== "string" ||
+            track.target.id.trim().length === 0)) ||
+        typeof track.property !== "string" ||
+        track.property.trim().length === 0 ||
+        typeof track.enabled !== "boolean"
+      ) {
+        invalidScenario();
+      }
       assertCollection(track.clips, "Invalid scenario document shape");
       for (const clip of track.clips as unknown[]) {
-        if (!isRecord(clip) || !isRecord(clip.effect)) {
-          throw new Error("Invalid scenario document shape");
-        }
-        if (typeof clip.effect.type !== "string" || !isRecord(clip.effect.params)) {
-          throw new Error("Invalid scenario document shape");
+        if (
+          !isRecord(clip) ||
+          typeof clip.id !== "string" ||
+          clip.id.trim().length === 0 ||
+          !isFiniteNumber(clip.startMs) ||
+          clip.startMs < 0 ||
+          !isFiniteNumber(clip.durationMs) ||
+          clip.durationMs <= 0 ||
+          typeof clip.easing !== "string" ||
+          clip.easing.trim().length === 0 ||
+          !(
+            clip.repeatCount === "infinite" ||
+            (isFiniteNumber(clip.repeatCount) &&
+              Number.isInteger(clip.repeatCount) &&
+              clip.repeatCount >= 0)
+          ) ||
+          !isFiniteNumber(clip.repeatDelayMs) ||
+          clip.repeatDelayMs < 0 ||
+          !isRecord(clip.effect) ||
+          typeof clip.effect.type !== "string" ||
+          clip.effect.type.trim().length === 0 ||
+          !isRecord(clip.effect.params) ||
+          !isJsonValue(clip.effect.params)
+        ) {
+          invalidScenario();
         }
       }
     }
+    for (const marker of scenario.markers as unknown[]) {
+      if (
+        !isRecord(marker) ||
+        typeof marker.id !== "string" ||
+        typeof marker.name !== "string" ||
+        !isFiniteNumber(marker.atMs) ||
+        marker.atMs < 0 ||
+        marker.atMs > scenario.durationMs
+      ) {
+        invalidScenario();
+      }
+    }
+    for (const trigger of scenario.triggers as unknown[]) {
+      if (
+        !isRecord(trigger) ||
+        typeof trigger.id !== "string" ||
+        typeof trigger.type !== "string" ||
+        !isRecord(trigger.params) ||
+        !isJsonValue(trigger.params)
+      ) {
+        invalidScenario();
+      }
+    }
+  }
+  if (
+    value.defaultScenarioId !== null &&
+    !scenarioIds.has(value.defaultScenarioId)
+  ) {
+    invalidScenario();
   }
   return value as unknown as PageScenarioDocumentV1;
 }
