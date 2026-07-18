@@ -67,7 +67,9 @@ interface MotionPrimitive {
   linecap?: "butt" | "round";
   particleCount?: number;
   gradientPhase?: number;
+  gradientSpan?: number;
   gradientReversed?: boolean;
+  gradientAnchored?: boolean;
 }
 
 export const MAX_EDGE_EFFECT_SLOTS = 4;
@@ -143,21 +145,31 @@ export function createEdgeMotionPrimitives(
             (projection.direction === "ping-pong" &&
               projection.travelDirection === "reverse") ||
             (projection.direction === "bidirectional" && index === 1);
-          const trailStart = reversed
-            ? Math.max(0, phase - trailLengthRatio)
-            : phase;
+          const visibleLength = Number(
+            Math.min(
+              trailLengthRatio,
+              reversed ? 1 - phase : phase
+            ).toFixed(6)
+          );
+          const trailStart = Number(
+            (reversed ? phase : Math.max(0, phase - visibleLength)).toFixed(6)
+          );
           return {
             role: "gradient-beam" as const,
             stroke: `url(#${gradientIds[index + 1]})`,
             strokeWidth: projection.widthPx,
             opacity: projection.opacity,
-            dasharray: `${trailLengthRatio} ${Number(
-              (1 - trailLengthRatio).toFixed(6)
+            dasharray: `${visibleLength} ${Number(
+              (1 - visibleLength).toFixed(6)
             )}`,
             dashoffset: Number((1 - trailStart).toFixed(6)),
             linecap: "round" as const,
-            gradientPhase: phase,
+            gradientPhase: trailStart,
+            gradientSpan: visibleLength,
             gradientReversed: reversed,
+            gradientAnchored: reversed
+              ? trailStart + visibleLength >= 1 - 0.000001
+              : trailStart === 0,
           };
         }),
       ];
@@ -271,34 +283,35 @@ const pointOnVector = (vector: EdgeGradientVector, ratio: number) => ({
 
 const beamGradientVector = (
   vector: EdgeGradientVector,
-  phase: number,
+  start: number,
   span: number,
   reversed: boolean
 ): EdgeGradientVector => {
-  const head = pointOnVector(vector, reversed ? phase - span : phase + span);
-  const tail = pointOnVector(vector, phase);
+  const startPoint = pointOnVector(vector, start);
+  const endPoint = pointOnVector(vector, start + span);
+  const head = reversed ? startPoint : endPoint;
+  const tail = reversed ? endPoint : startPoint;
   return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
 };
 
 const pathBeamGradientVector = (
   path: SvgAttributeTarget | null,
   fallback: EdgeGradientVector,
-  phase: number,
+  start: number,
   span: number,
   reversed: boolean
 ): EdgeGradientVector => {
   if (!path?.getTotalLength || !path.getPointAtLength) {
-    return beamGradientVector(fallback, phase, span, reversed);
+    return beamGradientVector(fallback, start, span, reversed);
   }
   const length = path.getTotalLength();
   if (!Number.isFinite(length) || length <= 0) {
-    return beamGradientVector(fallback, phase, span, reversed);
+    return beamGradientVector(fallback, start, span, reversed);
   }
-  const headRatio = Math.min(
-    1,
-    Math.max(0, reversed ? phase - span : phase + span)
-  );
-  const tailRatio = Math.min(1, Math.max(0, phase));
+  const startRatio = Math.min(1, Math.max(0, start));
+  const endRatio = Math.min(1, Math.max(0, start + span));
+  const headRatio = reversed ? startRatio : endRatio;
+  const tailRatio = reversed ? endRatio : startRatio;
   const head = path.getPointAtLength(length * headRatio);
   const tail = path.getPointAtLength(length * tailRatio);
   return { x1: head.x, y1: head.y, x2: tail.x, y2: tail.y };
@@ -322,12 +335,12 @@ const measuredBeamTrailLengthRatio = (
   );
 };
 
-const gradientStops = (colors: [string, string]) =>
+const gradientStops = (colors: [string, string], anchored = false) =>
   [
     ["0", colors[0], 0],
     ["0", colors[0], undefined],
     ["0.325", colors[1], undefined],
-    ["1", colors[1], 0],
+    ["1", colors[1], anchored ? undefined : 0],
   ] as const;
 
 const applyGradient = (
@@ -335,7 +348,8 @@ const applyGradient = (
   stops: Array<SvgAttributeTarget | null>,
   id: string,
   vector: EdgeGradientVector,
-  colors: [string, string]
+  colors: [string, string],
+  anchored = false
 ) => {
   writeAttribute(gradient, "id", id);
   writeAttribute(gradient, "gradientUnits", "userSpaceOnUse");
@@ -343,7 +357,7 @@ const applyGradient = (
   writeAttribute(gradient, "y1", vector.y1);
   writeAttribute(gradient, "x2", vector.x2);
   writeAttribute(gradient, "y2", vector.y2);
-  const values = gradientStops(colors);
+  const values = gradientStops(colors, anchored);
   for (let index = 0; index < stops.length; index += 1) {
     const [offset, color, opacity] = values[index] ?? values[values.length - 1];
     writeAttribute(stops[index], "offset", offset);
@@ -396,7 +410,7 @@ const applyProjectionToSlot = (
             path,
             context.gradientVector,
             primitive.gradientPhase,
-            beamSpan,
+            primitive.gradientSpan ?? beamSpan,
             primitive.gradientReversed ?? false
           );
     applyGradient(
@@ -404,7 +418,8 @@ const applyProjectionToSlot = (
       slot.gradientStops[index] ?? [],
       gradientIds[index],
       vector,
-      colors
+      colors,
+      primitive.gradientAnchored
     );
     writeAttribute(path, "display", undefined);
     writeAttribute(path, "data-edge-layer", "motion");
@@ -592,7 +607,7 @@ export function EdgeMotionLayer({
                       : beamGradientVector(
                           gradientVector,
                           primitive.gradientPhase,
-                          beamSpan,
+                          primitive.gradientSpan ?? beamSpan,
                           primitive.gradientReversed ?? false
                         );
                   return (
@@ -611,7 +626,10 @@ export function EdgeMotionLayer({
                       x2={vector.x2}
                       y2={vector.y2}
                     >
-                      {gradientStops(colors).map(
+                      {gradientStops(
+                        colors,
+                        primitive?.gradientAnchored
+                      ).map(
                         ([offset, color, opacity], stopIndex) => (
                           <stop
                             key={stopIndex}

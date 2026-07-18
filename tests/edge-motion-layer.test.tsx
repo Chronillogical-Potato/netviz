@@ -107,16 +107,17 @@ class FakeTransportRuntime extends FakeTargetRuntime {
 
 const targetFrame = (
   clips: ScenarioClipV1[],
-  clear = false
+  clear = false,
+  timeMs = 250
 ): TargetFrame => ({
   pageId: "page-1",
   scenarioId: "scenario-1",
   targetId: "edge:/one",
-  timeMs: 250,
+  timeMs,
   clips: clips.map((authored, index) => ({
     trackId: `track-${index}`,
     clip: authored,
-    timing: evaluateClipTiming(authored, 250),
+    timing: evaluateClipTiming(authored, timeMs),
   })),
   clear,
 });
@@ -204,10 +205,33 @@ describe("EdgeMotionLayer", () => {
 
     runtime.listener?.(targetFrame([clip("edge.gradient-beam")]));
 
-    expect(slot.gradients[1]?.getAttribute("x1")).toBe("73");
-    expect(slot.gradients[1]?.getAttribute("y1")).toBe("146");
-    expect(slot.gradients[1]?.getAttribute("x2")).toBe("25");
-    expect(slot.gradients[1]?.getAttribute("y2")).toBe("50");
+    expect(slot.gradients[1]?.getAttribute("x1")).toBe("25");
+    expect(slot.gradients[1]?.getAttribute("y1")).toBe("50");
+    expect(slot.gradients[1]?.getAttribute("x2")).toBe("0");
+    expect(slot.gradients[1]?.getAttribute("y2")).toBe("0");
+  });
+
+  test("grows the beam out of the source block before detaching", () => {
+    const runtime = new FakeTargetRuntime();
+    const slot = fakeSlot();
+    slot.paths[1] = new FakeMeasuredPath(100);
+    subscribeEdgeMotionTarget(runtime, "edge:/one", [slot], () => ({
+      motionState: "playing",
+      gradientVector: { x1: 0, y1: 0, x2: 100, y2: 0 },
+    }));
+    const authored = clip("edge.gradient-beam", { beamLengthPx: 40 });
+
+    runtime.listener?.(targetFrame([authored], false, 50));
+
+    expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.05 0.95");
+    expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("1");
+    expect(slot.gradientStops[1][3]?.getAttribute("stop-opacity")).toBeNull();
+
+    runtime.listener?.(targetFrame([authored], false, 500));
+
+    expect(slot.paths[1]?.getAttribute("stroke-dasharray")).toBe("0.4 0.6");
+    expect(slot.paths[1]?.getAttribute("stroke-dashoffset")).toBe("0.9");
+    expect(slot.gradientStops[1][3]?.getAttribute("stop-opacity")).toBe("0");
   });
 
   test("keeps an authored beam length consistent across different edge lengths", () => {
@@ -228,8 +252,8 @@ describe("EdgeMotionLayer", () => {
     }));
 
     const authored = clip("edge.gradient-beam", { beamLengthPx: 40 });
-    shortRuntime.listener?.(targetFrame([authored]));
-    longRuntime.listener?.(targetFrame([authored]));
+    shortRuntime.listener?.(targetFrame([authored], false, 500));
+    longRuntime.listener?.(targetFrame([authored], false, 500));
 
     expect(shortSlot.paths[1]?.getAttribute("stroke-dasharray")).toBe(
       "0.4 0.6"
@@ -296,7 +320,7 @@ describe("EdgeMotionLayer", () => {
       /<path[^>]*data-motion-role="gradient-beam"[^>]*>/
     )?.[0];
 
-    expect(beam).toContain('stroke-dasharray="0.1 0.9"');
+    expect(beam).toContain('stroke-dasharray="0 1"');
     expect(beam).toContain('stroke-dashoffset="1"');
   });
 
@@ -309,8 +333,8 @@ describe("EdgeMotionLayer", () => {
       /<path[^>]*data-motion-role="gradient-beam"[^>]*>/
     )?.[0];
 
-    expect(beam).toContain('stroke-dasharray="0.1 0.9"');
-    expect(beam).toContain('stroke-dashoffset="0.1"');
+    expect(beam).toContain('stroke-dasharray="0 1"');
+    expect(beam).toContain('stroke-dashoffset="0"');
   });
 
   test("renders materially distinct bounded primitives for all five presets", () => {
@@ -327,10 +351,10 @@ describe("EdgeMotionLayer", () => {
     expect(beam).toContain('opacity="0.2"');
     expect(beam).toContain('data-motion-role="gradient-beam"');
     expect(beam).toContain('gradientUnits="userSpaceOnUse"');
-    expect(beam).toContain('x1="18"');
-    expect(beam).toContain('y1="6"');
-    expect(beam).toContain('x2="15"');
-    expect(beam).toContain('y2="5"');
+    expect(beam).toContain('x1="15"');
+    expect(beam).toContain('y1="5"');
+    expect(beam).toContain('x2="12"');
+    expect(beam).toContain('y2="4"');
     expect(beam).toContain(
       '<stop offset="0" stop-color="#ffaa40" stop-opacity="0"'
     );
