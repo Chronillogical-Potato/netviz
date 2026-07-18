@@ -10,9 +10,12 @@ import type {
 
 export const GRADIENT_BEAM_DURATION_MS = 1_500;
 export const NODE_BORDER_DURATION_MS = 800;
+export const REQUEST_FLOW_ARRIVAL_LEAD_MS = 200;
 export const REQUEST_FLOW_EDGE_DELAY_MS = NODE_BORDER_DURATION_MS;
 export const REQUEST_FLOW_HOP_DELAY_MS =
-  NODE_BORDER_DURATION_MS + GRADIENT_BEAM_DURATION_MS;
+  NODE_BORDER_DURATION_MS +
+  GRADIENT_BEAM_DURATION_MS -
+  REQUEST_FLOW_ARRIVAL_LEAD_MS;
 
 export function createGradientBeamEffect(): ScenarioEffectV1 {
   return {
@@ -74,7 +77,7 @@ const uniqueStarts = (
     ),
   ].sort((left, right) => left - right);
 
-const repairOverlappingRequestFlow = (scenario: ScenarioV1): ScenarioV1 => {
+const normalizeRequestFlowSchedule = (scenario: ScenarioV1): ScenarioV1 => {
   const edgeStarts = uniqueStarts(
     scenario,
     "connection-effect",
@@ -85,11 +88,9 @@ const repairOverlappingRequestFlow = (scenario: ScenarioV1): ScenarioV1 => {
     "node-effect",
     "node.border-beam"
   );
-  const nodeStartSet = new Set(nodeStarts);
   if (
     edgeStarts.length === 0 ||
-    nodeStarts.length !== edgeStarts.length + 1 ||
-    !edgeStarts.every((startMs) => nodeStartSet.has(startMs))
+    nodeStarts.length !== edgeStarts.length + 1
   ) {
     return scenario;
   }
@@ -106,9 +107,9 @@ const repairOverlappingRequestFlow = (scenario: ScenarioV1): ScenarioV1 => {
       index * REQUEST_FLOW_HOP_DELAY_MS,
     ])
   );
-  const tracks = scenario.tracks.map((track) => ({
-    ...track,
-    clips: track.clips.map((clip) => {
+  let changed = false;
+  const tracks = scenario.tracks.map((track) => {
+    const clips = track.clips.map((clip) => {
       const schedule =
         track.property === "connection-effect" &&
         clip.effect.type === "edge.gradient-beam"
@@ -118,13 +119,14 @@ const repairOverlappingRequestFlow = (scenario: ScenarioV1): ScenarioV1 => {
             ? nodeSchedule
             : null;
       const startMs = schedule?.get(clip.startMs);
-      return startMs === undefined || startMs === clip.startMs
-        ? clip
-        : { ...clip, startMs };
-    }),
-  }));
+      if (startMs === undefined || startMs === clip.startMs) return clip;
+      changed = true;
+      return { ...clip, startMs };
+    });
+    return { ...track, clips };
+  });
 
-  return fitScenarioToClips({ ...scenario, tracks });
+  return changed ? fitScenarioToClips({ ...scenario, tracks }) : scenario;
 };
 
 export function normalizeGradientBeamDefaults(
@@ -151,7 +153,7 @@ export function normalizeGradientBeamDefaults(
       }),
     }));
     const normalized = fitScenarioToClips({ ...scenario, tracks });
-    const repaired = repairOverlappingRequestFlow(normalized);
+    const repaired = normalizeRequestFlowSchedule(normalized);
     if (repaired !== normalized) changed = true;
     return repaired;
   });

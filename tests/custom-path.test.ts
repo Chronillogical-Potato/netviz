@@ -108,12 +108,12 @@ describe("authored custom paths", () => {
       scenario.tracks
         .filter((item) => item.property === "connection-effect")
         .map((item) => item.clips[0].startMs)
-    ).toEqual([800, 3_100]);
+    ).toEqual([800, 2_900]);
     expect(
       scenario.tracks
         .filter((item) => item.property === "node-effect")
         .map((item) => item.clips[0].startMs)
-    ).toEqual([0, 2_300, 4_600]);
-    expect(scenario.durationMs).toBe(5_400);
+    ).toEqual([0, 2_100, 4_200]);
+    expect(scenario.durationMs).toBe(5_000);
   });
 });

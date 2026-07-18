@@ -227,7 +227,7 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().animateRequestFlow("user");
 
     const scenario = useFlowStore.getState().scenarioDocument.scenarios[0];
-    expect(scenario.durationMs).toBe(7_700);
+    expect(scenario.durationMs).toBe(7_100);
     expect(
       scenario.tracks
         .filter((track) => track.property === "connection-effect")
@@ -237,8 +237,8 @@ describe("animation target lifecycle", () => {
         ])
     ).toEqual([
       ["user-firewall", 800],
-      ["firewall-proxy", 3_100],
-      ["proxy-server", 5_400],
+      ["firewall-proxy", 2_900],
+      ["proxy-server", 5_000],
     ]);
     expect(
       scenario.tracks
@@ -249,9 +249,9 @@ describe("animation target lifecycle", () => {
         ])
     ).toEqual([
       ["user", 0],
-      ["firewall", 2_300],
-      ["proxy", 4_600],
-      ["server", 6_900],
+      ["firewall", 2_100],
+      ["proxy", 4_200],
+      ["server", 6_300],
     ]);
   });
 
@@ -342,7 +342,7 @@ describe("animation target lifecycle", () => {
       ])
     ).toEqual([
       ["user-firewall", 800],
-      ["firewall-proxy", 3_100],
+      ["firewall-proxy", 2_900],
     ]);
     expect(
       scenario.tracks
@@ -354,10 +354,10 @@ describe("animation target lifecycle", () => {
         ])
     ).toEqual([
       ["user", 0, 800],
-      ["firewall", 2_300, 800],
-      ["proxy", 4_600, 800],
+      ["firewall", 2_100, 800],
+      ["proxy", 4_200, 800],
     ]);
-    expect(scenario.durationMs).toBe(5_400);
+    expect(scenario.durationMs).toBe(5_000);
     expect(useFlowStore.getState().animationPathDraft).toBeNull();
 
     useFlowStore.getState().editAnimationPath();
