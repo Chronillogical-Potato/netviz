@@ -1,0 +1,273 @@
+import type {
+  ScenarioClipV1,
+  ScenarioTrackV1,
+  ScenarioV1,
+} from "./model";
+import {
+  ScenarioClock,
+  type AnimationFrameScheduler,
+  type ClockSnapshot,
+  type TransportDirection,
+} from "./clock";
+import { evaluateClipTiming, type ClipTimingResult } from "./timing";
+
+export interface ActiveClipFrame {
+  trackId: string;
+  clip: ScenarioClipV1;
+  timing: ClipTimingResult;
+}
+
+export interface TargetFrame {
+  pageId: string | null;
+  scenarioId: string | null;
+  targetId: string;
+  timeMs: number;
+  clips: ActiveClipFrame[];
+  clear: boolean;
+}
+
+export interface TransportSnapshot extends ClockSnapshot {
+  pageId: string | null;
+  scenarioId: string | null;
+}
+
+type TargetListener = (frame: TargetFrame) => void;
+type TransportListener = (snapshot: TransportSnapshot) => void;
+
+export class ScenarioRuntime {
+  private readonly clock: ScenarioClock;
+  private readonly tracksByTarget = new Map<string, ScenarioTrackV1[]>();
+  private readonly targetListeners = new Map<string, Set<TargetListener>>();
+  private readonly transportListeners = new Set<TransportListener>();
+  private readonly activeTargets = new Set<string>();
+  private readonly unsubscribeClock: () => boolean;
+  private pageId: string | null = null;
+  private scenario: ScenarioV1 | null = null;
+  private projectionEnabled = false;
+  private destroyed = false;
+  private clockSnapshot: ClockSnapshot;
+
+  constructor(scheduler?: AnimationFrameScheduler) {
+    this.clock = new ScenarioClock(scheduler);
+    this.clockSnapshot = this.clock.getSnapshot();
+    this.unsubscribeClock = this.clock.subscribe(this.onClockUpdate);
+  }
+
+  getTransportSnapshot = (): TransportSnapshot => ({
+    ...this.clockSnapshot,
+    pageId: this.pageId,
+    scenarioId: this.scenario?.id ?? null,
+  });
+
+  subscribeTransport = (listener: TransportListener) => {
+    this.assertAlive();
+    this.transportListeners.add(listener);
+    listener(this.getTransportSnapshot());
+    return () => this.transportListeners.delete(listener);
+  };
+
+  subscribeTarget = (targetId: string, listener: TargetListener) => {
+    this.assertAlive();
+    const listeners = this.targetListeners.get(targetId) ?? new Set<TargetListener>();
+    listeners.add(listener);
+    this.targetListeners.set(targetId, listeners);
+
+    const frame = this.createTargetFrame(targetId, this.clockSnapshot.currentTimeMs);
+    if (this.projectionEnabled && frame.clips.length > 0) listener(frame);
+
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) this.targetListeners.delete(targetId);
+    };
+  };
+
+  activate = (pageId: string, scenario: ScenarioV1 | null) => {
+    this.assertAlive();
+    this.clearActiveTargets();
+    this.pageId = pageId;
+    this.scenario = scenario;
+    this.projectionEnabled = false;
+    this.indexTracks(scenario);
+    this.clock.configure(
+      scenario
+        ? {
+            durationMs: scenario.durationMs,
+            playbackRate: scenario.playback.rate,
+            loop: {
+              enabled: scenario.playback.loop.mode === "repeat",
+              startMs: scenario.playback.loop.startMs,
+              endMs: scenario.playback.loop.endMs,
+            },
+          }
+        : { durationMs: 0 }
+    );
+  };
+
+  play = () => {
+    this.assertAlive();
+    if (!this.scenario) return;
+    this.projectionEnabled = true;
+    this.clock.play();
+  };
+
+  pause = () => {
+    this.assertAlive();
+    this.clock.pause();
+  };
+
+  restart = () => {
+    this.assertAlive();
+    if (!this.scenario) return;
+    this.projectionEnabled = true;
+    this.clock.restart();
+  };
+
+  seek = (timeMs: number) => {
+    this.assertAlive();
+    if (!this.scenario) return;
+    this.projectionEnabled = true;
+    this.clock.seek(timeMs);
+  };
+
+  setPlaybackRate = (rate: number) => {
+    this.assertAlive();
+    this.clock.setPlaybackRate(rate);
+  };
+
+  setDirection = (direction: TransportDirection) => {
+    this.assertAlive();
+    this.clock.setDirection(direction);
+  };
+
+  setLoop = (enabled: boolean) => {
+    this.assertAlive();
+    const authoredLoop = this.scenario?.playback.loop;
+    this.clock.setLoop(
+      enabled
+        ? {
+            enabled: true,
+            startMs:
+              authoredLoop?.mode === "repeat" ? authoredLoop.startMs : 0,
+            endMs:
+              authoredLoop?.mode === "repeat"
+                ? authoredLoop.endMs
+                : this.clockSnapshot.durationMs,
+          }
+        : false
+    );
+  };
+
+  /** Stops playback, clears all runtime projections, and resets to time zero. */
+  stop = () => {
+    this.assertAlive();
+    this.projectionEnabled = false;
+    this.clock.stop();
+  };
+
+  destroy = () => {
+    if (this.destroyed) return;
+    this.projectionEnabled = false;
+    this.clearActiveTargets();
+    this.unsubscribeClock();
+    this.clock.destroy();
+    this.targetListeners.clear();
+    this.transportListeners.clear();
+    this.tracksByTarget.clear();
+    this.destroyed = true;
+  };
+
+  private onClockUpdate = (snapshot: ClockSnapshot) => {
+    this.clockSnapshot = snapshot;
+    this.notifyTransport();
+    this.evaluateTargets(snapshot.currentTimeMs);
+  };
+
+  private notifyTransport() {
+    const snapshot = this.getTransportSnapshot();
+    for (const listener of this.transportListeners) listener(snapshot);
+  }
+
+  private evaluateTargets(timeMs: number) {
+    if (!this.projectionEnabled || !this.scenario) {
+      this.clearActiveTargets();
+      return;
+    }
+
+    const nextActiveTargets = new Set<string>();
+    for (const targetId of this.tracksByTarget.keys()) {
+      const frame = this.createTargetFrame(targetId, timeMs);
+      if (frame.clips.length === 0) continue;
+      nextActiveTargets.add(targetId);
+      this.notifyTarget(targetId, frame);
+    }
+
+    for (const targetId of this.activeTargets) {
+      if (!nextActiveTargets.has(targetId)) this.notifyClear(targetId, timeMs);
+    }
+
+    this.activeTargets.clear();
+    for (const targetId of nextActiveTargets) this.activeTargets.add(targetId);
+  }
+
+  private createTargetFrame(targetId: string, timeMs: number): TargetFrame {
+    const clips: ActiveClipFrame[] = [];
+    for (const track of this.tracksByTarget.get(targetId) ?? []) {
+      for (const clip of track.clips) {
+        const timing = evaluateClipTiming(clip, timeMs);
+        if (timing.active) clips.push({ trackId: track.id, clip, timing });
+      }
+    }
+    return {
+      pageId: this.pageId,
+      scenarioId: this.scenario?.id ?? null,
+      targetId,
+      timeMs,
+      clips,
+      clear: false,
+    };
+  }
+
+  private indexTracks(scenario: ScenarioV1 | null) {
+    this.tracksByTarget.clear();
+    if (!scenario) return;
+    for (const track of scenario.tracks) {
+      if (
+        !track.enabled ||
+        track.property !== "connection-effect" ||
+        track.target.type !== "edge" ||
+        !("id" in track.target)
+      ) {
+        continue;
+      }
+      const tracks = this.tracksByTarget.get(track.target.id) ?? [];
+      tracks.push(track);
+      this.tracksByTarget.set(track.target.id, tracks);
+    }
+  }
+
+  private clearActiveTargets() {
+    for (const targetId of this.activeTargets) {
+      this.notifyClear(targetId, this.clockSnapshot.currentTimeMs);
+    }
+    this.activeTargets.clear();
+  }
+
+  private notifyClear(targetId: string, timeMs: number) {
+    this.notifyTarget(targetId, {
+      pageId: this.pageId,
+      scenarioId: this.scenario?.id ?? null,
+      targetId,
+      timeMs,
+      clips: [],
+      clear: true,
+    });
+  }
+
+  private notifyTarget(targetId: string, frame: TargetFrame) {
+    for (const listener of this.targetListeners.get(targetId) ?? []) listener(frame);
+  }
+
+  private assertAlive() {
+    if (this.destroyed) throw new Error("ScenarioRuntime has been destroyed");
+  }
+}
