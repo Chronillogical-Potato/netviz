@@ -1,12 +1,22 @@
 import type { BlockDef } from "@/blocks/registry";
-import type { AppNode, Group, LabeledEdge } from "@/store/flow-store";
+import type {
+  AppNode,
+  Group,
+  LabeledEdge,
+  Page,
+  PageContent,
+} from "@/store/flow-store";
 
 export type FlowSnapshot = {
   version: 1;
+  projectName?: string;
   nodes: AppNode[];
   edges: LabeledEdge[];
   customBlocks: BlockDef[];
   groups?: Group[];
+  pages?: Page[];
+  activePageId?: string;
+  pageContents?: Record<string, PageContent>;
   turbo?: boolean;
   animateEdges?: boolean;
   animationSpeed?: number;

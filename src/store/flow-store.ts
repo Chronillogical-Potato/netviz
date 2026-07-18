@@ -143,6 +143,13 @@ export type Group = {
   collapsed?: boolean;
 };
 
+export type Page = { id: string; name: string; bgColor?: string };
+export type PageContent = {
+  nodes: AppNode[];
+  edges: LabeledEdge[];
+  groups: Group[];
+};
+
 export type EdgeLineStyle = "solid" | "dashed" | "dotted";
 export type LabeledEdgeData = {
   label?: string;
@@ -166,10 +173,16 @@ export const DEFAULT_MARKER: EdgeMarker = {
 export const DEFAULT_TURBO_COLORS: [string, string] = ["#ec4899", "#3b82f6"];
 
 type Snapshot = {
+  projectName: string;
   nodes: AppNode[];
   edges: LabeledEdge[];
   customBlocks: BlockDef[];
   groups: Group[];
+  pages: Page[];
+  activePageId: string;
+  // Content of every page except the active one (active lives in
+  // nodes/edges/groups above).
+  pageContents: Record<string, PageContent>;
   turbo: boolean;
   animateEdges: boolean;
   animationSpeed: number;
@@ -269,6 +282,12 @@ type FlowState = Snapshot & {
     beforeGroupId: string | null,
     parentGroupId: string | null
   ) => void;
+  setProjectName: (name: string) => void;
+  setPageBackground: (color: string | undefined) => void;
+  addPage: () => string;
+  renamePage: (id: string, name: string) => void;
+  deletePage: (id: string) => void;
+  setActivePage: (id: string) => void;
   clear: () => void;
   resetWorkspace: () => Promise<void>;
   replace: (snapshot: Partial<Snapshot>) => void;
@@ -290,6 +309,20 @@ let edgeSeq = 0;
 const nextEdgeId = () =>
   `e${Date.now().toString(36)}${(edgeSeq++).toString(36)}`;
 const nextBlockId = () => `custom-${Math.random().toString(36).slice(2, 10)}`;
+const nextPageId = () =>
+  `p${Date.now().toString(36)}${(nodeSeq++).toString(36)}`;
+
+const EMPTY_PAGE_CONTENT: PageContent = { nodes: [], edges: [], groups: [] };
+
+// Page switches swap nodes/edges/groups wholesale; recording that in the
+// undo stack would let undo leak one page's content into another.
+function withHistoryReset(fn: () => void) {
+  const t = useFlowStore.temporal.getState();
+  t.pause();
+  fn();
+  t.clear();
+  t.resume();
+}
 
 const infraSize = (variant: InfraVariant) =>
   variant === "card" ? { width: 180, height: 150 } : { width: 220, height: 72 };
@@ -377,10 +410,14 @@ export const useFlowStore = create<FlowState>()(
   persist(
     temporal(
     (set) => ({
+  projectName: "Untitled",
   nodes: [],
   edges: [],
   customBlocks: [],
   groups: [],
+  pages: [{ id: "page-1", name: "Page 1" }],
+  activePageId: "page-1",
+  pageContents: {},
   turbo: false,
   animateEdges: false,
   animationSpeed: 0.8,
@@ -1079,6 +1116,85 @@ export const useFlowStore = create<FlowState>()(
       return { groups: next };
     }),
 
+  setProjectName: (name) =>
+    set({ projectName: name.trim() || "Untitled" }),
+
+  setPageBackground: (color) =>
+    set((s) => ({
+      pages: s.pages.map((p) =>
+        p.id === s.activePageId ? { ...p, bgColor: color } : p
+      ),
+    })),
+
+  addPage: () => {
+    const id = nextPageId();
+    withHistoryReset(() =>
+      set((s) => ({
+        pages: [...s.pages, { id, name: `Page ${s.pages.length + 1}` }],
+        activePageId: id,
+        pageContents: {
+          ...s.pageContents,
+          [s.activePageId]: { nodes: s.nodes, edges: s.edges, groups: s.groups },
+        },
+        nodes: [],
+        edges: [],
+        groups: [],
+      }))
+    );
+    return id;
+  },
+
+  renamePage: (id, name) =>
+    set((s) => ({
+      pages: s.pages.map((p) => (p.id === id ? { ...p, name } : p)),
+    })),
+
+  deletePage: (id) =>
+    withHistoryReset(() =>
+      set((s) => {
+        if (s.pages.length <= 1 || !s.pages.some((p) => p.id === id)) return s;
+        const pages = s.pages.filter((p) => p.id !== id);
+        const contents = { ...s.pageContents };
+        if (id !== s.activePageId) {
+          delete contents[id];
+          return { pages, pageContents: contents };
+        }
+        const oldIdx = s.pages.findIndex((p) => p.id === id);
+        const next = pages[Math.max(0, oldIdx - 1)];
+        const target = contents[next.id] ?? EMPTY_PAGE_CONTENT;
+        delete contents[next.id];
+        return {
+          pages,
+          activePageId: next.id,
+          pageContents: contents,
+          nodes: target.nodes,
+          edges: target.edges,
+          groups: target.groups,
+        };
+      })
+    ),
+
+  setActivePage: (id) =>
+    withHistoryReset(() =>
+      set((s) => {
+        if (id === s.activePageId || !s.pages.some((p) => p.id === id))
+          return s;
+        const contents = {
+          ...s.pageContents,
+          [s.activePageId]: { nodes: s.nodes, edges: s.edges, groups: s.groups },
+        };
+        const target = contents[id] ?? EMPTY_PAGE_CONTENT;
+        delete contents[id];
+        return {
+          activePageId: id,
+          pageContents: contents,
+          nodes: target.nodes,
+          edges: target.edges,
+          groups: target.groups,
+        };
+      })
+    ),
+
   clear: () => set({ nodes: [], edges: [], groups: [] }),
 
   resetWorkspace: async () => {
@@ -1149,10 +1265,14 @@ export const useFlowStore = create<FlowState>()(
       name: "netviz-store-v1",
       storage: idbStorage,
       partialize: (s) => ({
+        projectName: s.projectName,
         nodes: s.nodes,
         edges: s.edges,
         customBlocks: s.customBlocks,
         groups: s.groups,
+        pages: s.pages,
+        activePageId: s.activePageId,
+        pageContents: s.pageContents,
         turbo: s.turbo,
         animateEdges: s.animateEdges,
         animationSpeed: s.animationSpeed,
