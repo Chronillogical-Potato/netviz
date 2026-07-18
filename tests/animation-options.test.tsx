@@ -60,7 +60,9 @@ describe("AnimationOptions", () => {
     const markup = renderToStaticMarkup(<AnimationPathBuilder />);
     expect(markup).toContain("Click connected blocks in order");
     expect(markup).toContain("Click the first block on the canvas");
-    expect(markup).toContain("Play path");
+    expect(markup).toContain("Path name");
+    expect(markup).toContain('aria-label="Path name"');
+    expect(markup).toContain("Save &amp; play");
     expect(markup).toContain("Undo last");
   });
 

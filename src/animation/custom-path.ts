@@ -1,4 +1,4 @@
-import type { PageScenarioDocumentV1 } from "./model";
+import type { PageScenarioDocumentV1, ScenarioV1 } from "./model";
 import type { RequestFlowEdge } from "./request-flow";
 
 export interface AuthoredCustomPath {
@@ -6,16 +6,15 @@ export interface AuthoredCustomPath {
   edgeIds: string[];
 }
 
-export function findAuthoredCustomPath(
-  document: PageScenarioDocumentV1,
+export interface NamedAuthoredCustomPath extends AuthoredCustomPath {
+  scenarioId: string;
+  name: string;
+}
+
+function findPathInScenario(
+  scenario: ScenarioV1,
   edges: readonly RequestFlowEdge[]
 ): AuthoredCustomPath | null {
-  const scenario =
-    document.scenarios.find(
-      (candidate) => candidate.id === document.defaultScenarioId
-    ) ?? document.scenarios[0];
-  if (!scenario) return null;
-
   const authored = scenario.tracks
     .filter(
       (track) =>
@@ -56,4 +55,28 @@ export function findAuthoredCustomPath(
     edgeIds: orderedEdges.map((edge) => edge!.id),
     nodeIds: [first.source, ...orderedEdges.map((edge) => edge!.target)],
   };
+}
+
+export function findAuthoredCustomPaths(
+  document: PageScenarioDocumentV1,
+  edges: readonly RequestFlowEdge[]
+): NamedAuthoredCustomPath[] {
+  return document.scenarios.flatMap((scenario) => {
+    const path = findPathInScenario(scenario, edges);
+    return path
+      ? [{ ...path, scenarioId: scenario.id, name: scenario.name }]
+      : [];
+  });
+}
+
+export function findAuthoredCustomPath(
+  document: PageScenarioDocumentV1,
+  edges: readonly RequestFlowEdge[]
+): AuthoredCustomPath | null {
+  const scenario =
+    document.scenarios.find(
+      (candidate) => candidate.id === document.defaultScenarioId
+    ) ?? document.scenarios[0];
+  if (!scenario) return null;
+  return findPathInScenario(scenario, edges);
 }

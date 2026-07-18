@@ -304,6 +304,8 @@ describe("animation target lifecycle", () => {
     useFlowStore.getState().appendAnimationPathNode("server");
 
     expect(useFlowStore.getState().animationPathDraft).toEqual({
+      scenarioId: null,
+      name: "Custom path 1",
       nodeIds: ["user", "firewall"],
       edgeIds: ["user-firewall"],
       error: "Choose a directly connected outgoing block.",
@@ -363,10 +365,59 @@ describe("animation target lifecycle", () => {
 
     useFlowStore.getState().editAnimationPath();
     expect(useFlowStore.getState().animationPathDraft).toEqual({
+      scenarioId: scenario.id,
+      name: "Custom path 1",
       nodeIds: ["user", "firewall", "proxy"],
       edgeIds: ["user-firewall", "firewall-proxy"],
       error: null,
     });
+  });
+
+  test("saves multiple named custom paths without replacing earlier paths", () => {
+    useFlowStore.setState({
+      nodes: [node("user"), node("firewall"), node("proxy"), node("server")],
+      edges: [
+        edge("user-firewall", "user", "firewall"),
+        edge("proxy-server", "proxy", "server"),
+      ],
+    });
+
+    useFlowStore.getState().beginAnimationPath("user");
+    useFlowStore.getState().setAnimationPathName("Login");
+    useFlowStore.getState().appendAnimationPathNode("firewall");
+    useFlowStore.getState().animateDraftPath();
+    const firstScenarioId = useFlowStore.getState().scenarioDocument.defaultScenarioId;
+
+    useFlowStore.getState().beginAnimationPath("proxy");
+    useFlowStore.getState().setAnimationPathName("Checkout");
+    useFlowStore.getState().appendAnimationPathNode("server");
+    useFlowStore.getState().animateDraftPath();
+
+    const document = useFlowStore.getState().scenarioDocument;
+    expect(document.scenarios.map((scenario) => scenario.name)).toEqual([
+      "Login",
+      "Checkout",
+    ]);
+    expect(document.scenarios.map((scenario) =>
+      scenario.tracks
+        .filter((track) => track.property === "connection-effect")
+        .map((track) => "id" in track.target ? track.target.id : null)
+    )).toEqual([["user-firewall"], ["proxy-server"]]);
+    expect(document.defaultScenarioId).not.toBe(firstScenarioId);
+
+    useFlowStore.getState().editAnimationPath(firstScenarioId ?? undefined);
+    useFlowStore.getState().setAnimationPathName("Authentication");
+    useFlowStore.getState().animateDraftPath();
+
+    const edited = useFlowStore.getState().scenarioDocument;
+    expect(edited.scenarios.map((scenario) => scenario.name)).toEqual([
+      "Authentication",
+      "Checkout",
+    ]);
+    expect(edited.scenarios[1].tracks
+      .filter((track) => track.property === "connection-effect")
+      .map((track) => "id" in track.target ? track.target.id : null)
+    ).toEqual(["proxy-server"]);
   });
 
   test("duplicates internal edge tracks with fresh target, track, and clip IDs", () => {

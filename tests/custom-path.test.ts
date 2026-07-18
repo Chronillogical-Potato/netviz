@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { PageScenarioDocumentV1, ScenarioTrackV1 } from "../src/animation/model";
-import { findAuthoredCustomPath } from "../src/animation/custom-path";
+import {
+  findAuthoredCustomPath,
+  findAuthoredCustomPaths,
+} from "../src/animation/custom-path";
 import {
   applyNodeBorderEntrySides,
   normalizeGradientBeamDefaults,
@@ -59,6 +62,42 @@ const document = (tracks: ScenarioTrackV1[]): PageScenarioDocumentV1 => ({
 });
 
 describe("authored custom paths", () => {
+  test("reconstructs every named path from its own scenario", () => {
+    const first = document([track("user-firewall", 0)]).scenarios[0];
+    const second = {
+      ...document([track("proxy-server", 0)]).scenarios[0],
+      id: "scenario-2",
+      name: "Checkout",
+    };
+
+    expect(
+      findAuthoredCustomPaths(
+        {
+          schemaVersion: 1,
+          defaultScenarioId: second.id,
+          scenarios: [{ ...first, name: "Login" }, second],
+        },
+        [
+          { id: "user-firewall", source: "user", target: "firewall" },
+          { id: "proxy-server", source: "proxy", target: "server" },
+        ]
+      )
+    ).toEqual([
+      {
+        scenarioId: "scenario-1",
+        name: "Login",
+        nodeIds: ["user", "firewall"],
+        edgeIds: ["user-firewall"],
+      },
+      {
+        scenarioId: "scenario-2",
+        name: "Checkout",
+        nodeIds: ["proxy", "server"],
+        edgeIds: ["proxy-server"],
+      },
+    ]);
+  });
+
   test("reconstructs a connected path from persisted scenario timing", () => {
     expect(
       findAuthoredCustomPath(

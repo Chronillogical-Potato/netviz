@@ -22,10 +22,11 @@ import {
   createGradientBeamEffect,
 } from "@/animation/gradient-beam";
 import { buildRequestFlow } from "@/animation/request-flow";
-import { findAuthoredCustomPath } from "@/animation/custom-path";
+import { findAuthoredCustomPaths } from "@/animation/custom-path";
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
+import { Input } from "@/ui/input";
 import { Check, ChevronDown, X } from "@/ui/icons";
 import { Slider } from "@/ui/slider";
 import { cn } from "@/lib/utils";
@@ -431,6 +432,8 @@ function playAllAnimations() {
 }
 
 const EMPTY_ANIMATION_PATH_DRAFT = {
+  scenarioId: null,
+  name: "",
   nodeIds: [],
   edgeIds: [],
   error: null,
@@ -482,16 +485,14 @@ export function ExistingAnimationPath() {
   const edges = useFlowStore((state) => state.edges);
   const nodes = useFlowStore((state) => state.nodes);
   const editAnimationPath = useFlowStore((state) => state.editAnimationPath);
-  const path = useMemo(
-    () => findAuthoredCustomPath(document, edges),
+  const activateAnimationPath = useFlowStore(
+    (state) => state.activateAnimationPath
+  );
+  const paths = useMemo(
+    () => findAuthoredCustomPaths(document, edges),
     [document, edges]
   );
-  if (!path) return null;
-
-  const names = path.nodeIds
-    .map((id) => nodes.find((node) => node.id === id))
-    .filter((node) => node !== undefined)
-    .map(getNodeDisplayName);
+  if (paths.length === 0) return null;
 
   return (
     <div
@@ -499,43 +500,52 @@ export function ExistingAnimationPath() {
       data-existing-animation-path
     >
       <p className="text-xs font-semibold text-foreground">Animations</p>
-      <div className="mt-2 rounded-lg bg-input p-2.5">
-        <div className="flex items-center gap-2">
-          <span className="h-[2px] w-5 shrink-0 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
-          <span className="truncate text-[11px] font-medium text-foreground">
-            Custom path
-          </span>
-          <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
-            {path.nodeIds.length} blocks
-          </span>
-        </div>
-        <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
-          {names.join(" → ")}
-        </p>
-        <div className="mt-2 grid grid-cols-2 gap-1.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 rounded-md text-[10px]"
-            onClick={editAnimationPath}
-          >
-            Edit
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-6 rounded-md text-[10px]"
-            onClick={() => {
-              editAnimationPath();
-              useFlowStore.getState().animateDraftPath();
-              playAllAnimations();
-            }}
-          >
-            Play
-          </Button>
-        </div>
+      <div className="mt-2 space-y-2">
+        {paths.map((path) => {
+          const names = path.nodeIds
+            .map((id) => nodes.find((node) => node.id === id))
+            .filter((node) => node !== undefined)
+            .map(getNodeDisplayName);
+          return (
+            <div key={path.scenarioId} className="rounded-lg bg-input p-2.5">
+              <div className="flex items-center gap-2">
+                <span className="h-[2px] w-5 shrink-0 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
+                <span className="truncate text-[11px] font-medium text-foreground">
+                  {path.name === "Default scenario" ? "Custom path" : path.name}
+                </span>
+                <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
+                  {path.nodeIds.length} blocks
+                </span>
+              </div>
+              <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
+                {names.join(" → ")}
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 rounded-md text-[10px]"
+                  onClick={() => editAnimationPath(path.scenarioId)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 rounded-md text-[10px]"
+                  onClick={() => {
+                    activateAnimationPath(path.scenarioId);
+                    playAllAnimations();
+                  }}
+                >
+                  Play
+                </Button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -612,6 +622,9 @@ export function AnimationPathBuilder() {
   const cancelAnimationPath = useFlowStore(
     (state) => state.cancelAnimationPath
   );
+  const setAnimationPathName = useFlowStore(
+    (state) => state.setAnimationPathName
+  );
   const animateDraftPath = useFlowStore((state) => state.animateDraftPath);
 
   const pathNodes = draft.nodeIds
@@ -626,6 +639,17 @@ export function AnimationPathBuilder() {
           Click connected blocks in order. Each click adds the next request
           hop; connection lines cannot be selected while building.
         </p>
+
+        <label className="mb-3 block text-[10px] text-muted-foreground">
+          Path name
+          <Input
+            aria-label="Path name"
+            className="mt-1 h-7 text-xs"
+            value={draft.name}
+            placeholder="Custom path"
+            onChange={(event) => setAnimationPathName(event.target.value)}
+          />
+        </label>
 
         {pathNodes.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[10px] text-muted-foreground">
@@ -699,7 +723,7 @@ export function AnimationPathBuilder() {
             playAllAnimations();
           }}
         >
-          Play path
+          Save &amp; play
         </Button>
       </div>
     </div>

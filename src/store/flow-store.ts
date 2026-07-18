@@ -28,6 +28,7 @@ import {
   applyEdgeEffect,
   applyNodeEffect,
   cloneScenarioTargets,
+  createDefaultScenarioDocument,
   createEmptyScenarioDocument,
   patchEdgeEffects,
   pruneScenarioTargets,
@@ -56,7 +57,9 @@ import {
   REQUEST_FLOW_HOP_DELAY_MS,
   type NodeBorderEntrySide,
 } from "@/animation/gradient-beam";
-import { findAuthoredCustomPath } from "@/animation/custom-path";
+import {
+  findAuthoredCustomPaths,
+} from "@/animation/custom-path";
 import {
   buildRequestFlow,
   buildSelectedRequestFlow,
@@ -245,6 +248,8 @@ type Snapshot = {
 export type WorkMode = "design" | "animation" | "preview";
 export type MotionPreference = "system" | "full" | "reduced";
 export type AnimationPathDraft = {
+  scenarioId: string | null;
+  name: string;
   nodeIds: string[];
   edgeIds: string[];
   error: string | null;
@@ -353,10 +358,12 @@ type FlowState = Snapshot & {
   animateRequestFlow: (startNodeId: string) => void;
   animateSelectedPath: () => void;
   beginAnimationPath: (startNodeId?: string) => void;
+  setAnimationPathName: (name: string) => void;
   appendAnimationPathNode: (nodeId: string) => void;
   undoAnimationPathNode: () => void;
   cancelAnimationPath: () => void;
-  editAnimationPath: () => void;
+  editAnimationPath: (scenarioId?: string) => void;
+  activateAnimationPath: (scenarioId: string) => void;
   animateDraftPath: () => void;
   deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
@@ -1225,8 +1232,15 @@ export const useFlowStore = create<FlowState>()(
     set((s) => {
       const hasStart =
         !!startNodeId && s.nodes.some((node) => node.id === startNodeId);
+      const existingDraft = s.animationPathDraft;
+      const pathNumber = findAuthoredCustomPaths(
+        s.scenarioDocument,
+        s.edges
+      ).length + 1;
       return {
         animationPathDraft: {
+          scenarioId: existingDraft?.scenarioId ?? null,
+          name: existingDraft?.name ?? `Custom path ${pathNumber}`,
           nodeIds: hasStart ? [startNodeId] : [],
           edgeIds: [],
           error: null,
@@ -1241,6 +1255,13 @@ export const useFlowStore = create<FlowState>()(
     });
   },
 
+  setAnimationPathName: (name) =>
+    set((s) =>
+      s.animationPathDraft
+        ? { animationPathDraft: { ...s.animationPathDraft, name } }
+        : s
+    ),
+
   appendAnimationPathNode: (nodeId) =>
     set((s) => {
       const draft = s.animationPathDraft;
@@ -1248,6 +1269,7 @@ export const useFlowStore = create<FlowState>()(
       if (draft.nodeIds.length === 0) {
         return {
           animationPathDraft: {
+            ...draft,
             nodeIds: [nodeId],
             edgeIds: [],
             error: null,
@@ -1281,6 +1303,7 @@ export const useFlowStore = create<FlowState>()(
 
       return {
         animationPathDraft: {
+          ...draft,
           nodeIds: [...draft.nodeIds, nodeId],
           edgeIds: [...draft.edgeIds, edge.id],
           error: null,
@@ -1294,6 +1317,7 @@ export const useFlowStore = create<FlowState>()(
       if (!draft || draft.nodeIds.length === 0) return s;
       return {
         animationPathDraft: {
+          ...draft,
           nodeIds: draft.nodeIds.slice(0, -1),
           edgeIds: draft.edgeIds.slice(0, -1),
           error: null,
@@ -1303,13 +1327,24 @@ export const useFlowStore = create<FlowState>()(
 
   cancelAnimationPath: () => set({ animationPathDraft: null }),
 
-  editAnimationPath: () => {
+  editAnimationPath: (scenarioId) => {
     scenarioRuntime.pause();
     set((s) => {
-      const path = findAuthoredCustomPath(s.scenarioDocument, s.edges);
+      const paths = findAuthoredCustomPaths(s.scenarioDocument, s.edges);
+      const path = scenarioId
+        ? paths.find((candidate) => candidate.scenarioId === scenarioId)
+        : paths.find(
+            (candidate) =>
+              candidate.scenarioId === s.scenarioDocument.defaultScenarioId
+          ) ?? paths[0];
       if (!path) return s;
       return {
-        animationPathDraft: { ...path, error: null },
+        animationPathDraft: {
+          ...path,
+          name:
+            path.name === "Default scenario" ? "Custom path" : path.name,
+          error: null,
+        },
         nodes: s.nodes.map((node) =>
           node.selected ? { ...node, selected: false } : node
         ),
@@ -1320,14 +1355,33 @@ export const useFlowStore = create<FlowState>()(
     });
   },
 
+  activateAnimationPath: (scenarioId) =>
+    set((s) =>
+      s.scenarioDocument.scenarios.some(
+        (scenario) => scenario.id === scenarioId
+      )
+        ? {
+            scenarioDocument: {
+              ...s.scenarioDocument,
+              defaultScenarioId: scenarioId,
+            },
+          }
+        : s
+    ),
+
   animateDraftPath: () =>
     set((s) => {
-      const edgeIds = s.animationPathDraft?.edgeIds ?? [];
-      const nodeIds = s.animationPathDraft?.nodeIds ?? [];
+      const draft = s.animationPathDraft;
+      const edgeIds = draft?.edgeIds ?? [];
+      const nodeIds = draft?.nodeIds ?? [];
       if (edgeIds.length === 0) return s;
+      const name =
+        draft?.name.trim() ||
+        `Custom path ${findAuthoredCustomPaths(s.scenarioDocument, s.edges).length + 1}`;
 
-      let scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
-        edgeIds: s.edges.map((edge) => edge.id),
+      let scenarioDocument = createDefaultScenarioDocument({
+        id: draft?.scenarioId ?? undefined,
+        name,
       });
       edgeIds.forEach((edgeId, index) => {
         scenarioDocument = applyEdgeEffect(scenarioDocument, {
@@ -1338,9 +1392,6 @@ export const useFlowStore = create<FlowState>()(
               index * REQUEST_FLOW_HOP_DELAY_MS
           ),
         });
-      });
-      scenarioDocument = removeNodeEffects(scenarioDocument, {
-        nodeIds: s.nodes.map((node) => node.id),
       });
       nodeIds.forEach((nodeId, index) => {
         const incomingEdge =
@@ -1353,7 +1404,25 @@ export const useFlowStore = create<FlowState>()(
           clip: createNodeBorderClip(index * REQUEST_FLOW_HOP_DELAY_MS),
         });
       });
-      return { scenarioDocument, animationPathDraft: null };
+      const savedScenario = scenarioDocument.scenarios[0];
+      if (!savedScenario) return s;
+      const existingIndex = s.scenarioDocument.scenarios.findIndex(
+        (scenario) => scenario.id === savedScenario.id
+      );
+      const scenarios =
+        existingIndex === -1
+          ? [...s.scenarioDocument.scenarios, savedScenario]
+          : s.scenarioDocument.scenarios.map((scenario, index) =>
+              index === existingIndex ? savedScenario : scenario
+            );
+      return {
+        scenarioDocument: {
+          ...s.scenarioDocument,
+          scenarios,
+          defaultScenarioId: savedScenario.id,
+        },
+        animationPathDraft: null,
+      };
     }),
 
   setEdgeColor: (color) =>
