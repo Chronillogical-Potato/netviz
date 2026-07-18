@@ -25,7 +25,10 @@ export type InfraVariant = "row" | "card";
 export type IconPosition = "left" | "right" | "top" | "bottom";
 export type TextAlign = "left" | "center" | "right";
 
-type WithGroup = { groupId?: string | null };
+// `name` is the layer's display name (renamed from the Layers panel),
+// kept separate from content fields like `label` so a rename doesn't put
+// text on the shape or overwrite the inspector's Label field.
+type WithGroup = { groupId?: string | null; name?: string };
 type WithColors = {
   bgColor?: string;
   titleColor?: string;
@@ -327,25 +330,86 @@ function withHistoryReset(fn: () => void) {
 const infraSize = (variant: InfraVariant) =>
   variant === "card" ? { width: 180, height: 150 } : { width: 220, height: 72 };
 
+// Renaming a layer sets its dedicated `name` — never the content fields.
 function renamedData(node: AppNode, name: string): AppNode["data"] {
-  const data = node.data;
-  switch (node.type) {
-    case "text":
-      return { ...data, text: name } as TextNodeData;
-    case "line":
-    case "image":
-      return data;
-    case "code":
-      return { ...data, label: name } as CodeNodeData;
-    case "infra":
-    case "shape":
-    case "step":
-      return { ...data, label: name } as AppNode["data"];
-  }
-  return data;
+  return { ...node.data, name } as AppNode["data"];
 }
 
-function descendantGroupIds(groups: Group[], rootId: string): Set<string> {
+// Reorder the given node ids among their group siblings within the flat
+// nodes array, keeping non-siblings in place. Works for a whole selection:
+// front/back move the selected as a block; forward/backward step them one
+// slot past their unselected neighbours. React Flow paints later-in-array
+// on top, and the Layers panel mirrors array order.
+type OrderMode = "front" | "back" | "forward" | "backward";
+function reorderSiblings(
+  sibs: AppNode[],
+  sel: Set<string>,
+  mode: OrderMode
+): AppNode[] {
+  if (mode === "front") {
+    return [...sibs.filter((n) => !sel.has(n.id)), ...sibs.filter((n) => sel.has(n.id))];
+  }
+  if (mode === "back") {
+    return [...sibs.filter((n) => sel.has(n.id)), ...sibs.filter((n) => !sel.has(n.id))];
+  }
+  const next = [...sibs];
+  if (mode === "forward") {
+    // Move selected toward the end (front), past unselected neighbours.
+    for (let i = next.length - 2; i >= 0; i--) {
+      if (sel.has(next[i].id) && !sel.has(next[i + 1].id)) {
+        [next[i], next[i + 1]] = [next[i + 1], next[i]];
+      }
+    }
+  } else {
+    for (let i = 1; i < next.length; i++) {
+      if (sel.has(next[i].id) && !sel.has(next[i - 1].id)) {
+        [next[i], next[i - 1]] = [next[i - 1], next[i]];
+      }
+    }
+  }
+  return next;
+}
+
+// Order actions target the whole selection when the clicked node is part
+// of a multi-selection; otherwise just that node.
+function orderTargets(s: { nodes: AppNode[] }, id: string): string[] {
+  const selected = s.nodes.filter((n) => n.selected).map((n) => n.id);
+  return selected.length > 1 && selected.includes(id) ? selected : [id];
+}
+
+function reorderNodesInArray(
+  nodes: AppNode[],
+  ids: string[],
+  mode: OrderMode
+): AppNode[] {
+  const sel = new Set(ids);
+  if (sel.size === 0) return nodes;
+  // Reorder each affected group's siblings independently, in place.
+  const groups = new Set<string | null>();
+  nodes.forEach((n) => {
+    if (sel.has(n.id)) groups.add(n.data.groupId ?? null);
+  });
+  let next = nodes;
+  for (const gid of groups) {
+    const slots: number[] = [];
+    const sibs: AppNode[] = [];
+    next.forEach((n, i) => {
+      if ((n.data.groupId ?? null) === gid) {
+        slots.push(i);
+        sibs.push(n);
+      }
+    });
+    const reordered = reorderSiblings(sibs, sel, mode);
+    const copy = [...next];
+    slots.forEach((slotIdx, k) => {
+      copy[slotIdx] = reordered[k];
+    });
+    next = copy;
+  }
+  return next;
+}
+
+export function descendantGroupIds(groups: Group[], rootId: string): Set<string> {
   const result = new Set<string>([rootId]);
   let changed = true;
   while (changed) {
@@ -468,7 +532,7 @@ export const useFlowStore = create<FlowState>()(
             type: "infra",
             position,
             style: infraSize(variant),
-            zIndex: 1,
+            zIndex: 0,
             data: {
               blockId: block.id,
               label: block.label,
@@ -529,7 +593,7 @@ export const useFlowStore = create<FlowState>()(
           id: nextNodeId(),
           type: "code",
           position,
-          zIndex: 1,
+          zIndex: 0,
           data: {
             code: "// your code here\nconst answer = 42;",
             language: "typescript",
@@ -550,7 +614,7 @@ export const useFlowStore = create<FlowState>()(
             type: "step",
             position,
             style: { width: 56, height: 56 },
-            zIndex: 1,
+            zIndex: 0,
             data: { step: nextIndex, accent: "indigo" },
           },
         ],
@@ -566,7 +630,7 @@ export const useFlowStore = create<FlowState>()(
           type: "line",
           position,
           style: { width: 200, height: 60 },
-          zIndex: 1,
+          zIndex: 0,
           data: {
             curvature: 0,
             start: { x: 12, y: 30 },
@@ -616,7 +680,7 @@ export const useFlowStore = create<FlowState>()(
           type: "image",
           position,
           style: size,
-          zIndex: 1,
+          zIndex: 0,
           data: { src },
         },
       ],
@@ -952,38 +1016,16 @@ export const useFlowStore = create<FlowState>()(
     }),
 
   bringToFront: (id) =>
-    set((s) => {
-      const maxZ = s.nodes.reduce((m, n) => Math.max(m, n.zIndex ?? 0), 0);
-      return {
-        nodes: s.nodes.map((n) =>
-          n.id === id ? ({ ...n, zIndex: maxZ + 1 } as AppNode) : n
-        ),
-      };
-    }),
+    set((s) => ({ nodes: reorderNodesInArray(s.nodes, orderTargets(s, id), "front") })),
 
   sendToBack: (id) =>
-    set((s) => {
-      const minZ = s.nodes.reduce((m, n) => Math.min(m, n.zIndex ?? 0), 0);
-      return {
-        nodes: s.nodes.map((n) =>
-          n.id === id ? ({ ...n, zIndex: minZ - 1 } as AppNode) : n
-        ),
-      };
-    }),
+    set((s) => ({ nodes: reorderNodesInArray(s.nodes, orderTargets(s, id), "back") })),
 
   bringForward: (id) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
-        n.id === id ? ({ ...n, zIndex: (n.zIndex ?? 0) + 1 } as AppNode) : n
-      ),
-    })),
+    set((s) => ({ nodes: reorderNodesInArray(s.nodes, orderTargets(s, id), "forward") })),
 
   sendBackward: (id) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
-        n.id === id ? ({ ...n, zIndex: (n.zIndex ?? 0) - 1 } as AppNode) : n
-      ),
-    })),
+    set((s) => ({ nodes: reorderNodesInArray(s.nodes, orderTargets(s, id), "backward") })),
 
   groupSelected: () =>
     set((s) => {
@@ -1264,6 +1306,24 @@ export const useFlowStore = create<FlowState>()(
     {
       name: "netviz-store-v1",
       storage: idbStorage,
+      // Older builds mutated node zIndex for layer ordering, which now
+      // fights the array-order stacking. Strip any persisted zIndex so
+      // paint order follows the array (and the Layers panel) again.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<Snapshot>;
+        const strip = (ns?: AppNode[]) =>
+          ns?.map((n) => ({ ...n, zIndex: 0 }));
+        const nodes = strip(p.nodes) ?? current.nodes;
+        const pageContents = p.pageContents
+          ? Object.fromEntries(
+              Object.entries(p.pageContents).map(([k, c]) => [
+                k,
+                { ...c, nodes: strip(c.nodes) ?? c.nodes },
+              ])
+            )
+          : current.pageContents;
+        return { ...current, ...p, nodes, pageContents };
+      },
       partialize: (s) => ({
         projectName: s.projectName,
         nodes: s.nodes,
@@ -1300,6 +1360,8 @@ export function resolveBlock(
 }
 
 export function getNodeDisplayName(node: AppNode): string {
+  const custom = node.data.name?.trim();
+  if (custom) return custom;
   switch (node.type) {
     case "infra":
       return node.data.label || "Block";
