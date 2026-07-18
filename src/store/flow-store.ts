@@ -20,6 +20,28 @@ import {
 } from "@xyflow/react";
 import { CORE_BLOCKS, type Accent, type BlockDef } from "@/blocks/registry";
 import type { IconName } from "@/blocks/icons";
+import type {
+  PageScenarioDocumentV1,
+  ScenarioEffectV1,
+} from "@/animation/model";
+import {
+  applyEdgeEffect,
+  cloneScenarioTargets,
+  createEmptyScenarioDocument,
+  patchEdgeEffects,
+  pruneScenarioTargets,
+  removeEdgeEffects,
+  type ScenarioClipPatchV1,
+} from "@/animation/scenario-document";
+import {
+  migrateFlowSnapshotV1,
+  type FlowSnapshotV2,
+} from "@/animation/snapshot-migrations";
+import {
+  getDefaultScenario,
+  prefersReducedMotion,
+  scenarioRuntime,
+} from "@/animation/runtime-instance";
 
 export type InfraVariant = "row" | "card";
 export type IconPosition = "left" | "right" | "top" | "bottom";
@@ -151,6 +173,7 @@ export type PageContent = {
   nodes: AppNode[];
   edges: LabeledEdge[];
   groups: Group[];
+  scenarioDocument: PageScenarioDocumentV1;
 };
 
 export type EdgeLineStyle = "solid" | "dashed" | "dotted";
@@ -186,6 +209,7 @@ type Snapshot = {
   // Content of every page except the active one (active lives in
   // nodes/edges/groups above).
   pageContents: Record<string, PageContent>;
+  scenarioDocument: PageScenarioDocumentV1;
   turbo: boolean;
   animateEdges: boolean;
   animationSpeed: number;
@@ -195,12 +219,14 @@ type Snapshot = {
   edgeDashGap: number;
   showControls: boolean;
   showSmartGuides: boolean;
+  motionPreference: MotionPreference;
   workMode: WorkMode;
   renderAllElements: boolean;
   setRenderAllElements: (v: boolean) => void;
 };
 
-export type WorkMode = "design" | "preview";
+export type WorkMode = "design" | "animation" | "preview";
+export type MotionPreference = "system" | "full" | "reduced";
 
 type NodeDataPatch = Partial<InfraNodeData> &
   Partial<ShapeNodeData> &
@@ -295,11 +321,19 @@ type FlowState = Snapshot & {
   setActivePage: (id: string) => void;
   clear: () => void;
   resetWorkspace: () => Promise<void>;
-  replace: (snapshot: Partial<Snapshot>) => void;
+  replaceDocument: (snapshot: FlowSnapshotV2) => void;
+  applySelectedEdgeEffect: (
+    effect: ScenarioEffectV1,
+    clip?: ScenarioClipPatchV1
+  ) => void;
+  patchSelectedEdgeEffects: (patch: ScenarioClipPatchV1) => void;
+  removeSelectedEdgeEffects: () => void;
+  deleteElements: (input: ElementDeletionInput) => void;
   selectAll: () => void;
   deleteSelected: () => void;
   toggleControls: () => void;
   toggleSmartGuides: () => void;
+  setMotionPreference: (preference: MotionPreference) => void;
   setWorkMode: (mode: WorkMode) => void;
 };
 
@@ -315,7 +349,12 @@ const nextBlockId = () => `custom-${Math.random().toString(36).slice(2, 10)}`;
 const nextPageId = () =>
   `p${Date.now().toString(36)}${(nodeSeq++).toString(36)}`;
 
-const EMPTY_PAGE_CONTENT: PageContent = { nodes: [], edges: [], groups: [] };
+const createEmptyPageContent = (): PageContent => ({
+  nodes: [],
+  edges: [],
+  groups: [],
+  scenarioDocument: createEmptyScenarioDocument(),
+});
 
 // Page switches swap nodes/edges/groups wholesale; recording that in the
 // undo stack would let undo leak one page's content into another.
@@ -325,6 +364,36 @@ function withHistoryReset(fn: () => void) {
   fn();
   t.clear();
   t.resume();
+}
+
+type ElementDeletionInput = {
+  nodeIds?: readonly string[];
+  edgeIds?: readonly string[];
+  groupIds?: readonly string[];
+};
+
+function deleteAuthoredElements(
+  state: Pick<Snapshot, "nodes" | "edges" | "groups" | "scenarioDocument">,
+  input: ElementDeletionInput
+) {
+  const nodeIds = new Set(input.nodeIds ?? []);
+  const groupIds = new Set(input.groupIds ?? []);
+  const edgeIds = new Set(input.edgeIds ?? []);
+  for (const edge of state.edges) {
+    if (nodeIds.has(edge.source) || nodeIds.has(edge.target)) {
+      edgeIds.add(edge.id);
+    }
+  }
+  return {
+    nodes: state.nodes.filter((node) => !nodeIds.has(node.id)),
+    edges: state.edges.filter((edge) => !edgeIds.has(edge.id)),
+    groups: state.groups.filter((group) => !groupIds.has(group.id)),
+    scenarioDocument: pruneScenarioTargets(state.scenarioDocument, [
+      ...[...nodeIds].map((id) => ({ type: "node", id } as const)),
+      ...[...edgeIds].map((id) => ({ type: "edge", id } as const)),
+      ...[...groupIds].map((id) => ({ type: "group", id } as const)),
+    ]),
+  };
 }
 
 // Per-node identity fields that must NOT be broadcast across a
@@ -493,6 +562,7 @@ export const useFlowStore = create<FlowState>()(
   pages: [{ id: "page-1", name: "Page 1" }],
   activePageId: "page-1",
   pageContents: {},
+  scenarioDocument: createEmptyScenarioDocument(),
   turbo: false,
   animateEdges: false,
   animationSpeed: 0.8,
@@ -501,13 +571,48 @@ export const useFlowStore = create<FlowState>()(
   edgeDashGap: 6,
   showControls: true,
   showSmartGuides: true,
+  motionPreference: "system" as MotionPreference,
   workMode: "design" as WorkMode,
 
   onNodesChange: (changes) =>
-    set((s) => ({ nodes: applyNodeChanges(changes, s.nodes) })),
+    set((s) => {
+      const removedNodeIds = changes
+        .filter((change) => change.type === "remove")
+        .map((change) => change.id);
+      if (removedNodeIds.length === 0) {
+        return { nodes: applyNodeChanges(changes, s.nodes) };
+      }
+      const retainedChanges = changes.filter(
+        (change) => change.type !== "remove"
+      );
+      return deleteAuthoredElements(
+        {
+          ...s,
+          nodes: applyNodeChanges(retainedChanges, s.nodes),
+        },
+        { nodeIds: removedNodeIds }
+      );
+    }),
 
   onEdgesChange: (changes) =>
-    set((s) => ({ edges: applyEdgeChanges(changes, s.edges) })),
+    set((s) => {
+      const removedEdgeIds = changes
+        .filter((change) => change.type === "remove")
+        .map((change) => change.id);
+      if (removedEdgeIds.length === 0) {
+        return { edges: applyEdgeChanges(changes, s.edges) };
+      }
+      const retainedChanges = changes.filter(
+        (change) => change.type !== "remove"
+      );
+      return deleteAuthoredElements(
+        {
+          ...s,
+          edges: applyEdgeChanges(retainedChanges, s.edges),
+        },
+        { edgeIds: removedEdgeIds }
+      );
+    }),
 
   onConnect: (conn) =>
     set((s) => ({
@@ -522,7 +627,7 @@ export const useFlowStore = create<FlowState>()(
             lineStyle: s.edgeLineStyle,
             dashGap: s.edgeDashGap,
           },
-          animated: s.animateEdges,
+          animated: false,
           markerEnd: s.turbo ? undefined : DEFAULT_MARKER,
         },
         s.edges
@@ -727,20 +832,39 @@ export const useFlowStore = create<FlowState>()(
       });
       const edgeClones = s.edges
         .filter((e) => idSet.has(e.source) && idSet.has(e.target))
-        .map((e) => ({
-          ...e,
-          id: nextEdgeId(),
-          source: idMap.get(e.source)!,
-          target: idMap.get(e.target)!,
-          selected: false,
-          data: e.data ? { ...e.data } : undefined,
-        }));
+        .map((e) => {
+          const id = nextEdgeId();
+          return {
+            ...e,
+            id,
+            source: idMap.get(e.source)!,
+            target: idMap.get(e.target)!,
+            selected: false,
+            data: e.data ? { ...e.data } : undefined,
+          };
+        });
+      const sourceEdges = s.edges.filter(
+        (e) => idSet.has(e.source) && idSet.has(e.target)
+      );
       const deselected = s.nodes.map((n) =>
         n.selected ? { ...n, selected: false } : n
       );
       return {
         nodes: [...deselected, ...clones],
         edges: [...s.edges, ...edgeClones],
+        scenarioDocument: cloneScenarioTargets(
+          s.scenarioDocument,
+          [
+            ...[...idMap.entries()].map(([sourceId, targetId]) => ({
+              source: { type: "node", id: sourceId },
+              target: { type: "node", id: targetId },
+            })),
+            ...sourceEdges.map((sourceEdge, index) => ({
+              source: { type: "edge", id: sourceEdge.id },
+              target: { type: "edge", id: edgeClones[index].id },
+            })),
+          ]
+        ),
       };
     }),
 
@@ -792,10 +916,7 @@ export const useFlowStore = create<FlowState>()(
     })),
 
   deleteNode: (id) =>
-    set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
-      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-    })),
+    set((s) => deleteAuthoredElements(s, { nodeIds: [id] })),
 
   selectNodes: (ids) =>
     set((s) => {
@@ -968,6 +1089,48 @@ export const useFlowStore = create<FlowState>()(
 
   setAnimationSpeed: (speed) => set({ animationSpeed: speed }),
 
+  applySelectedEdgeEffect: (effect, clip) =>
+    set((s) => {
+      const edgeIds = s.edges
+        .filter((edge) => edge.selected)
+        .map((edge) => edge.id);
+      const scenarioDocument = applyEdgeEffect(s.scenarioDocument, {
+        edgeIds,
+        effect,
+        clip,
+      });
+      return scenarioDocument === s.scenarioDocument
+        ? s
+        : { scenarioDocument };
+    }),
+
+  patchSelectedEdgeEffects: (patch) =>
+    set((s) => {
+      const edgeIds = s.edges
+        .filter((edge) => edge.selected)
+        .map((edge) => edge.id);
+      const scenarioDocument = patchEdgeEffects(s.scenarioDocument, {
+        edgeIds,
+        patch,
+      });
+      return scenarioDocument === s.scenarioDocument
+        ? s
+        : { scenarioDocument };
+    }),
+
+  removeSelectedEdgeEffects: () =>
+    set((s) => {
+      const edgeIds = s.edges
+        .filter((edge) => edge.selected)
+        .map((edge) => edge.id);
+      const scenarioDocument = removeEdgeEffects(s.scenarioDocument, {
+        edgeIds,
+      });
+      return scenarioDocument === s.scenarioDocument
+        ? s
+        : { scenarioDocument };
+    }),
+
   setEdgeColor: (color) =>
     set((s) => {
       const selected = s.edges.filter((e) => e.selected);
@@ -1125,6 +1288,10 @@ export const useFlowStore = create<FlowState>()(
           }
           return n;
         }),
+        scenarioDocument: pruneScenarioTargets(
+          s.scenarioDocument,
+          [...toRemove].map((groupId) => ({ type: "group", id: groupId }))
+        ),
       };
     }),
 
@@ -1219,11 +1386,17 @@ export const useFlowStore = create<FlowState>()(
         activePageId: id,
         pageContents: {
           ...s.pageContents,
-          [s.activePageId]: { nodes: s.nodes, edges: s.edges, groups: s.groups },
+          [s.activePageId]: {
+            nodes: s.nodes,
+            edges: s.edges,
+            groups: s.groups,
+            scenarioDocument: s.scenarioDocument,
+          },
         },
         nodes: [],
         edges: [],
         groups: [],
+        scenarioDocument: createEmptyScenarioDocument(),
       }))
     );
     return id;
@@ -1246,7 +1419,7 @@ export const useFlowStore = create<FlowState>()(
         }
         const oldIdx = s.pages.findIndex((p) => p.id === id);
         const next = pages[Math.max(0, oldIdx - 1)];
-        const target = contents[next.id] ?? EMPTY_PAGE_CONTENT;
+        const target = contents[next.id] ?? createEmptyPageContent();
         delete contents[next.id];
         return {
           pages,
@@ -1255,6 +1428,7 @@ export const useFlowStore = create<FlowState>()(
           nodes: target.nodes,
           edges: target.edges,
           groups: target.groups,
+          scenarioDocument: target.scenarioDocument,
         };
       })
     ),
@@ -1266,9 +1440,14 @@ export const useFlowStore = create<FlowState>()(
           return s;
         const contents = {
           ...s.pageContents,
-          [s.activePageId]: { nodes: s.nodes, edges: s.edges, groups: s.groups },
+          [s.activePageId]: {
+            nodes: s.nodes,
+            edges: s.edges,
+            groups: s.groups,
+            scenarioDocument: s.scenarioDocument,
+          },
         };
-        const target = contents[id] ?? EMPTY_PAGE_CONTENT;
+        const target = contents[id] ?? createEmptyPageContent();
         delete contents[id];
         return {
           activePageId: id,
@@ -1276,11 +1455,18 @@ export const useFlowStore = create<FlowState>()(
           nodes: target.nodes,
           edges: target.edges,
           groups: target.groups,
+          scenarioDocument: target.scenarioDocument,
         };
       })
     ),
 
-  clear: () => set({ nodes: [], edges: [], groups: [] }),
+  clear: () =>
+    set({
+      nodes: [],
+      edges: [],
+      groups: [],
+      scenarioDocument: createEmptyScenarioDocument(),
+    }),
 
   resetWorkspace: async () => {
     try {
@@ -1291,7 +1477,26 @@ export const useFlowStore = create<FlowState>()(
     window.location.reload();
   },
 
-  replace: (snapshot) => set((s) => ({ ...s, ...snapshot })),
+  replaceDocument: (snapshot) =>
+    withHistoryReset(() =>
+      set({
+        projectName: snapshot.projectName,
+        nodes: snapshot.nodes,
+        edges: snapshot.edges,
+        customBlocks: snapshot.customBlocks,
+        groups: snapshot.groups,
+        pages: snapshot.pages,
+        activePageId: snapshot.activePageId,
+        pageContents: snapshot.pageContents,
+        scenarioDocument: snapshot.scenarioDocument,
+        turbo: snapshot.turbo,
+        turboColors: snapshot.turboColors,
+        workMode: "design",
+      })
+    ),
+
+  deleteElements: (input) =>
+    set((s) => deleteAuthoredElements(s, input)),
 
   selectAll: () =>
     set((s) => ({
@@ -1299,25 +1504,18 @@ export const useFlowStore = create<FlowState>()(
       edges: s.edges.map((e) => ({ ...e, selected: true })),
     })),
 
-  deleteSelected: () =>
-    set((s) => {
-      const removedNodeIds = new Set(
-        s.nodes.filter((n) => n.selected).map((n) => n.id)
-      );
-      return {
-        nodes: s.nodes.filter((n) => !n.selected),
-        edges: s.edges.filter(
-          (e) =>
-            !e.selected &&
-            !removedNodeIds.has(e.source) &&
-            !removedNodeIds.has(e.target)
-        ),
-      };
-    }),
+  deleteSelected: () => {
+    const state = useFlowStore.getState();
+    state.deleteElements({
+      nodeIds: state.nodes.filter((node) => node.selected).map((node) => node.id),
+      edgeIds: state.edges.filter((edge) => edge.selected).map((edge) => edge.id),
+    });
+  },
 
   toggleControls: () => set((s) => ({ showControls: !s.showControls })),
   toggleSmartGuides: () =>
     set((s) => ({ showSmartGuides: !s.showSmartGuides })),
+  setMotionPreference: (motionPreference) => set({ motionPreference }),
   renderAllElements: false,
   setRenderAllElements: (v) => set({ renderAllElements: v }),
   setWorkMode: (mode) => set({ workMode: mode }),
@@ -1328,13 +1526,15 @@ export const useFlowStore = create<FlowState>()(
         edges: state.edges,
         groups: state.groups,
         customBlocks: state.customBlocks,
+        scenarioDocument: state.scenarioDocument,
       }),
       limit: 100,
       equality: (a, b) =>
         a.nodes === b.nodes &&
         a.edges === b.edges &&
         a.groups === b.groups &&
-        a.customBlocks === b.customBlocks,
+        a.customBlocks === b.customBlocks &&
+        a.scenarioDocument === b.scenarioDocument,
       handleSet: (handleSet) => {
         let t: ReturnType<typeof setTimeout> | null = null;
         return ((...args: Parameters<typeof handleSet>) => {
@@ -1347,6 +1547,34 @@ export const useFlowStore = create<FlowState>()(
     {
       name: "netviz-store-v1",
       storage: idbStorage,
+      version: 2,
+      migrate: (persisted, version) => {
+        const previous = (persisted ?? {}) as Partial<Snapshot> & {
+          animationSpeed?: number;
+        };
+        if (version >= 2) return previous;
+        const migrated = migrateFlowSnapshotV1({
+          version: 1,
+          projectName: previous.projectName,
+          nodes: previous.nodes ?? [],
+          edges: previous.edges ?? [],
+          customBlocks: previous.customBlocks ?? [],
+          groups: previous.groups ?? [],
+          pages: previous.pages,
+          activePageId: previous.activePageId,
+          pageContents: previous.pageContents,
+          turbo: previous.turbo,
+          animateEdges: previous.animateEdges,
+          animationSpeed: previous.animationSpeed,
+          turboColors: previous.turboColors,
+        });
+        const { version: _snapshotVersion, ...authored } = migrated;
+        return {
+          ...previous,
+          ...authored,
+          motionPreference: previous.motionPreference ?? "system",
+        };
+      },
       // Older builds mutated node zIndex for layer ordering, which now
       // fights the array-order stacking. Strip any persisted zIndex so
       // paint order follows the array (and the Layers panel) again.
@@ -1359,11 +1587,25 @@ export const useFlowStore = create<FlowState>()(
           ? Object.fromEntries(
               Object.entries(p.pageContents).map(([k, c]) => [
                 k,
-                { ...c, nodes: strip(c.nodes) ?? c.nodes },
+                {
+                  ...c,
+                  nodes: strip(c.nodes) ?? c.nodes,
+                  scenarioDocument:
+                    c.scenarioDocument ?? createEmptyScenarioDocument(),
+                },
               ])
             )
           : current.pageContents;
-        return { ...current, ...p, nodes, pageContents };
+        return {
+          ...current,
+          ...p,
+          nodes,
+          pageContents,
+          scenarioDocument:
+            p.scenarioDocument ?? createEmptyScenarioDocument(),
+          motionPreference: p.motionPreference ?? "system",
+          turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
+        };
       },
       partialize: (s) => ({
         projectName: s.projectName,
@@ -1374,19 +1616,82 @@ export const useFlowStore = create<FlowState>()(
         pages: s.pages,
         activePageId: s.activePageId,
         pageContents: s.pageContents,
+        scenarioDocument: s.scenarioDocument,
         turbo: s.turbo,
-        animateEdges: s.animateEdges,
-        animationSpeed: s.animationSpeed,
         turboColors: s.turboColors,
         edgeColor: s.edgeColor,
         edgeLineStyle: s.edgeLineStyle,
         edgeDashGap: s.edgeDashGap,
         showControls: s.showControls,
         showSmartGuides: s.showSmartGuides,
+        motionPreference: s.motionPreference,
       }),
     }
   )
 );
+
+scenarioRuntime.activate("page-1", null);
+function syncScenarioRuntime(
+  state: FlowState,
+  previous: FlowState,
+  environmentChanged = false
+) {
+  if (
+    !environmentChanged &&
+    state.activePageId === previous.activePageId &&
+    state.scenarioDocument === previous.scenarioDocument &&
+    state.workMode === previous.workMode &&
+    state.motionPreference === previous.motionPreference
+  ) {
+    return;
+  }
+
+  if (state.workMode === "design") {
+    scenarioRuntime.activate(state.activePageId, null);
+    return;
+  }
+
+  const scenario = getDefaultScenario(state.scenarioDocument);
+  const lifecycleChanged =
+    state.activePageId !== previous.activePageId ||
+    state.workMode !== previous.workMode;
+  if (lifecycleChanged) {
+    scenarioRuntime.activate(state.activePageId, scenario);
+  } else if (state.scenarioDocument !== previous.scenarioDocument) {
+    scenarioRuntime.reconcile(state.activePageId, scenario);
+  }
+
+  const reduced = prefersReducedMotion(state.motionPreference);
+  if (reduced) {
+    scenarioRuntime.stop();
+    scenarioRuntime.setLoop(false);
+    return;
+  }
+
+  if (
+    environmentChanged ||
+    state.motionPreference !== previous.motionPreference
+  ) {
+    scenarioRuntime.setLoop(scenario?.playback.loop.mode === "repeat");
+  }
+  if (state.workMode === "preview" && scenario !== null) {
+    scenarioRuntime.play();
+  }
+}
+
+useFlowStore.subscribe((state, previous) =>
+  syncScenarioRuntime(state, previous)
+);
+
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  const motionMedia = window.matchMedia("(prefers-reduced-motion: reduce)");
+  motionMedia.addEventListener("change", () => {
+    const state = useFlowStore.getState();
+    if (state.motionPreference === "system") {
+      syncScenarioRuntime(state, state, true);
+    }
+  });
+}
 
 export function resolveBlock(
   blockId: string,

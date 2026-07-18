@@ -18,6 +18,7 @@ import {
   type FinalConnectionState,
   type NodeChange,
   type NodeTypes,
+  type OnBeforeDelete,
 } from "@xyflow/react";
 import { resolveIcon } from "@/blocks/icons";
 import "@xyflow/react/dist/style.css";
@@ -25,6 +26,7 @@ import {
   DEFAULT_MARKER,
   useFlowStore,
   type AppNode,
+  type LabeledEdge as LabeledEdgeModel,
   type ShapeKind,
 } from "@/store/flow-store";
 import { ACCENT_CLASSES, CORE_BLOCKS } from "@/blocks/registry";
@@ -383,6 +385,7 @@ function CanvasInner() {
   const onNodesChange = useFlowStore((s) => s.onNodesChange);
   const onEdgesChange = useFlowStore((s) => s.onEdgesChange);
   const onConnect = useFlowStore((s) => s.onConnect);
+  const deleteElements = useFlowStore((s) => s.deleteElements);
   const addInfraNode = useFlowStore((s) => s.addInfraNode);
   const addShapeNode = useFlowStore((s) => s.addShapeNode);
   const addTextNode = useFlowStore((s) => s.addTextNode);
@@ -413,6 +416,19 @@ function CanvasInner() {
   const [altDown, setAltDown] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const activeSnaps = useRef<Map<string, ActiveSnap>>(new Map());
+
+  const handleBeforeDelete = useCallback<
+    OnBeforeDelete<AppNode, LabeledEdgeModel>
+  >(
+    async ({ nodes: deletedNodes, edges: deletedEdges }) => {
+      deleteElements({
+        nodeIds: deletedNodes.map((node) => node.id),
+        edgeIds: deletedEdges.map((edge) => edge.id),
+      });
+      return false;
+    },
+    [deleteElements]
+  );
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -687,6 +703,7 @@ function CanvasInner() {
         onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
         onNodeMouseLeave={() => setHoveredId(null)}
         onEdgesChange={onEdgesChange}
+        onBeforeDelete={handleBeforeDelete}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         nodeTypes={nodeTypes}
