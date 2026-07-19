@@ -298,6 +298,7 @@ type NodeDataPatch = Partial<InfraNodeData> &
 type FlowState = Snapshot & {
   previewReturnMode: EditorMode;
   animationPathDraft: AnimationPathDraft | null;
+  editingTextNodeId: string | null;
   onNodesChange: OnNodesChange<AppNode>;
   onEdgesChange: OnEdgesChange<LabeledEdge>;
   onConnect: OnConnect;
@@ -308,6 +309,7 @@ type FlowState = Snapshot & {
     size?: { width: number; height: number }
   ) => string;
   addTextNode: (position: { x: number; y: number }) => string;
+  setEditingTextNode: (id: string | null) => void;
   addCodeNode: (position: { x: number; y: number }) => void;
   addStepNode: (position: { x: number; y: number }) => void;
   addLineNode: (position: { x: number; y: number }) => void;
@@ -1100,6 +1102,7 @@ export const useFlowStore = create<FlowState>()(
   workMode: "design" as WorkMode,
   previewReturnMode: "design" as EditorMode,
   animationPathDraft: null,
+  editingTextNodeId: null,
 
   onNodesChange: (changes) =>
     set((s) => {
@@ -1358,9 +1361,12 @@ export const useFlowStore = create<FlowState>()(
           data: { text: "Text", accent: "amber", bgColor: "transparent" },
         },
       ],
+      editingTextNodeId: id,
     }));
     return id;
   },
+
+  setEditingTextNode: (editingTextNodeId) => set({ editingTextNodeId }),
 
   addCodeNode: (position) =>
     set((s) => ({
@@ -2628,6 +2634,7 @@ export const useFlowStore = create<FlowState>()(
           groups: target.groups,
           scenarioDocument: target.scenarioDocument,
           animationPathDraft: null,
+          editingTextNodeId: null,
         };
       })
     ),
@@ -2639,6 +2646,7 @@ export const useFlowStore = create<FlowState>()(
       groups: [],
       scenarioDocument: createEmptyScenarioDocument(),
       animationPathDraft: null,
+      editingTextNodeId: null,
     }),
 
   resetWorkspace: async () => {
@@ -2678,6 +2686,7 @@ export const useFlowStore = create<FlowState>()(
         turbo: snapshot.turbo,
         turboColors: snapshot.turboColors,
         animationPathDraft: null,
+        editingTextNodeId: null,
       })
     ),
 
@@ -2714,6 +2723,7 @@ export const useFlowStore = create<FlowState>()(
                 ? state.previewReturnMode
                 : state.workMode,
             animationPathDraft: null,
+            editingTextNodeId: null,
             nodes: state.nodes.map((node) =>
               node.selected ? { ...node, selected: false } : node
             ),
@@ -2725,6 +2735,7 @@ export const useFlowStore = create<FlowState>()(
             workMode: mode,
             previewReturnMode: mode,
             ...(mode === "animation" ? {} : { animationPathDraft: null }),
+            ...(mode === "design" ? {} : { editingTextNodeId: null }),
           }
     ),
   exitPreview: () =>
