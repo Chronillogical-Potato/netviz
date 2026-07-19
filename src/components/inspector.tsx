@@ -122,8 +122,8 @@ export function Inspector() {
     return (
       <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-background">
         <div className="border-b border-border px-4 py-3">
-          <p className="text-xs font-semibold text-foreground">Animation</p>
-          <p className="pt-0.5 text-[11px] font-medium text-muted-foreground">
+          <p className="text-[13px] font-semibold text-foreground">Animation</p>
+          <p className="pt-0.5 text-xs font-medium leading-[18px] text-foreground/70">
             {isBuildingAnimationPath
               ? "Pick blocks in order"
               : hasSelectedEdge

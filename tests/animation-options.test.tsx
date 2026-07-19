@@ -47,7 +47,10 @@ describe("AnimationOptions", () => {
   test("offers all-connections and request-chain authoring states", () => {
     const overview = renderToStaticMarkup(<AnimationOverview />);
     expect(overview).toContain("Animate all connections");
-    expect(overview).toContain("text-[11px] font-medium");
+    expect(overview).toContain("text-[13px] font-semibold");
+    expect(overview).toContain(
+      "text-xs font-medium leading-[18px] text-foreground/70"
+    );
     expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
       "Build custom path"
     );

@@ -192,7 +192,7 @@ export function PlaybackControls({
           className
         )}
       >
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs font-medium text-foreground/70">
           Reduced motion is on
         </span>
         <Button
@@ -219,7 +219,7 @@ export function PlaybackControls({
       )}
     >
       <div className="flex items-center">
-        <span className="text-xs font-semibold text-foreground">Player</span>
+        <span className="text-[13px] font-semibold text-foreground">Player</span>
       </div>
       <div className="flex gap-1 rounded-lg bg-input p-1">
         <Button
@@ -255,7 +255,7 @@ export function PlaybackControls({
         </Button>
       </div>
       <div className="grid min-h-7 grid-cols-[72px_1fr] items-center gap-2">
-        <span className="text-xs text-muted-foreground">Speed</span>
+        <span className="text-xs font-medium text-foreground/70">Speed</span>
         <div
           role="group"
           aria-label="Playback speed"
@@ -270,7 +270,7 @@ export function PlaybackControls({
               disabled={!hasScenario}
               onClick={() => scenarioRuntime.setPlaybackRate(rate)}
               className={cn(
-                "h-6 rounded text-[11px] font-medium text-muted-foreground transition-colors disabled:opacity-45",
+                "h-6 rounded text-xs font-medium text-foreground/70 transition-colors disabled:opacity-45",
                 transport.playbackRate === rate &&
                   "bg-muted text-foreground shadow-sm"
               )}
