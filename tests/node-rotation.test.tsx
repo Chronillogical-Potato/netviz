@@ -29,4 +29,17 @@ describe("node corner rotation", () => {
       expect(source).toContain("data.rotation");
     }
   });
+
+  test("uses invisible Figma-style rotation zones at every corner", async () => {
+    const source = await Bun.file(
+      new URL(
+        "../src/components/nodes/canvas-node-resizer.tsx",
+        import.meta.url
+      )
+    ).text();
+
+    expect(source).toContain("nv-rotation-zone");
+    expect(source).toContain("h-5 w-5");
+    expect(source).not.toContain("showCornerHandles");
+  });
 });

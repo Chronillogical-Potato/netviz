@@ -139,7 +139,6 @@ function TextNodeComponent({
         nodeId={id}
         rotation={data.rotation ?? 0}
         visible={selected && !editing}
-        showCornerHandles
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />

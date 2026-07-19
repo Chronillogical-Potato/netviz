@@ -11,7 +11,6 @@ import {
   useUpdateNodeInternals,
 } from "@xyflow/react";
 import { useFlowStore } from "@/store/flow-store";
-import { cn } from "@/lib/utils";
 
 type CanvasNodeResizerProps = ComponentProps<typeof NodeResizer>;
 
@@ -46,27 +45,19 @@ export function rotationAfterPointerMove(
 const ROTATION_CORNERS = [
   {
     key: "top-left",
-    textPosition: "-left-1.5 -top-1.5",
-    outerPosition: "-left-4 -top-4",
-    arcRotation: "rotate-0",
+    position: "-left-6 -top-6",
   },
   {
     key: "top-right",
-    textPosition: "-right-1.5 -top-1.5",
-    outerPosition: "-right-4 -top-4",
-    arcRotation: "rotate-90",
+    position: "-right-6 -top-6",
   },
   {
     key: "bottom-right",
-    textPosition: "-bottom-1.5 -right-1.5",
-    outerPosition: "-bottom-4 -right-4",
-    arcRotation: "rotate-180",
+    position: "-bottom-6 -right-6",
   },
   {
     key: "bottom-left",
-    textPosition: "-bottom-1.5 -left-1.5",
-    outerPosition: "-bottom-4 -left-4",
-    arcRotation: "-rotate-90",
+    position: "-bottom-6 -left-6",
   },
 ] as const;
 
@@ -74,12 +65,10 @@ export function NodeRotationControls({
   nodeId,
   rotation,
   visible,
-  showCornerHandles = false,
 }: {
   nodeId: string;
   rotation: number;
   visible: boolean;
-  showCornerHandles?: boolean;
 }) {
   const updateNodeData = useFlowStore((state) => state.updateNodeData);
   const updateNodeInternals = useUpdateNodeInternals();
@@ -166,24 +155,12 @@ export function NodeRotationControls({
           type="button"
           aria-label={`Rotate from ${corner.key.replace("-", " ")} corner`}
           title="Drag to rotate · Hold Shift to snap"
-          className={cn(
-            "nodrag nopan group pointer-events-auto absolute z-20 flex h-3 w-3 cursor-grab items-center justify-center touch-none active:cursor-grabbing",
-            showCornerHandles ? corner.textPosition : corner.outerPosition
-          )}
+          className={`nv-rotation-zone nodrag nopan pointer-events-auto absolute z-20 h-5 w-5 touch-none ${corner.position}`}
           onPointerDown={startRotation}
           onPointerMove={rotate}
           onPointerUp={finishRotation}
           onPointerCancel={finishRotation}
-        >
-          <span
-            className={cn(
-              showCornerHandles
-                ? "h-2 w-2 rounded-[2px] border border-ring bg-white shadow-sm"
-                : "h-2.5 w-2.5 rounded-full border border-ring border-b-transparent border-r-transparent opacity-0 transition-opacity group-hover:opacity-100",
-              !showCornerHandles && corner.arcRotation
-            )}
-          />
-        </button>
+        />
       ))}
     </>
   );
