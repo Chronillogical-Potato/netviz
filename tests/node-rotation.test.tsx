@@ -1,0 +1,32 @@
+import { describe, expect, test } from "bun:test";
+import * as NodeControls from "../src/components/nodes/canvas-node-resizer";
+
+describe("node corner rotation", () => {
+  test("accumulates rotation smoothly across the angle boundary", () => {
+    const advance = (
+      NodeControls as unknown as {
+        rotationAfterPointerMove?: (
+          rotation: number,
+          previousPointerAngle: number,
+          pointerAngle: number,
+          snap: boolean
+        ) => number;
+      }
+    ).rotationAfterPointerMove;
+
+    expect(typeof advance).toBe("function");
+    if (!advance) return;
+    expect(advance(350, 170, -170, false)).toBe(10);
+    expect(advance(7, 0, 3, true)).toBe(15);
+  });
+
+  test("adds corner rotation controls to shapes and text", async () => {
+    for (const file of ["shape-node", "text-node"]) {
+      const source = await Bun.file(
+        new URL(`../src/components/nodes/${file}.tsx`, import.meta.url)
+      ).text();
+      expect(source).toContain("NodeRotationControls");
+      expect(source).toContain("data.rotation");
+    }
+  });
+});

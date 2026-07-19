@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useFlowStore, type TextNode } from "@/store/flow-store";
 import { ACCENT_CLASSES } from "@/blocks/registry";
 import { cn } from "@/lib/utils";
+import { NodeRotationControls } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -91,6 +92,10 @@ function TextNodeComponent({
   if (data.titleColor) style.color = data.titleColor;
   if (typeof data.borderRadius === "number")
     style.borderRadius = data.borderRadius;
+  if (data.rotation) {
+    style.transform = `rotate(${data.rotation}deg)`;
+    style.transformOrigin = "center";
+  }
   const hasFontSize = typeof data.fontSize === "number";
   if (hasFontSize) {
     const fs = data.fontSize as number;
@@ -130,6 +135,12 @@ function TextNodeComponent({
         setEditingTextNode(id);
       }}
     >
+      <NodeRotationControls
+        nodeId={id}
+        rotation={data.rotation ?? 0}
+        visible={selected && !editing}
+        showCornerHandles
+      />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />
       ))}

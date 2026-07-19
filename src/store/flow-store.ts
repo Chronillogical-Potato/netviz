@@ -86,6 +86,7 @@ type WithColors = {
   borderWidth?: number;
   turbo?: boolean;
 };
+type WithRotation = { rotation?: number };
 
 export type InfraNodeData = WithGroup &
   WithColors & {
@@ -104,7 +105,8 @@ export type InfraNode = Node<InfraNodeData, "infra">;
 export type ShapeKind = "rectangle" | "circle";
 export type BorderStyle = "solid" | "dashed" | "dotted";
 export type ShapeNodeData = WithGroup &
-  WithColors & {
+  WithColors &
+  WithRotation & {
     shape: ShapeKind;
     label?: string;
     accent?: Accent;
@@ -113,7 +115,8 @@ export type ShapeNodeData = WithGroup &
 export type ShapeNode = Node<ShapeNodeData, "shape">;
 
 export type TextNodeData = WithGroup &
-  WithColors & {
+  WithColors &
+  WithRotation & {
     text: string;
     accent?: Accent;
     fontSize?: number;

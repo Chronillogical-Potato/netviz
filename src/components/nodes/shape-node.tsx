@@ -7,7 +7,10 @@ import {
 import type { ShapeNode } from "@/store/flow-store";
 import { ACCENT_CLASSES } from "@/blocks/registry";
 import { cn } from "@/lib/utils";
-import { CanvasNodeResizer } from "./canvas-node-resizer";
+import {
+  CanvasNodeResizer,
+  NodeRotationControls,
+} from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -22,7 +25,7 @@ const BORDER_STYLE_CLASS = {
   dotted: "border-dotted",
 } as const;
 
-function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
+function ShapeNodeComponent({ id, data, selected }: NodeProps<ShapeNode>) {
   const accentKey = data.accent ?? "slate";
   const accent = ACCENT_CLASSES[accentKey];
   const isCircle = data.shape === "circle";
@@ -44,6 +47,12 @@ function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
         ...(data.borderColor ? { borderColor: data.borderColor } : {}),
         ...(!isCircle && typeof data.borderRadius === "number"
           ? { borderRadius: data.borderRadius }
+          : {}),
+        ...(data.rotation
+          ? {
+              transform: `rotate(${data.rotation}deg)`,
+              transformOrigin: "center",
+            }
           : {}),
       }}
     >
@@ -81,7 +90,12 @@ function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
         isVisible={selected}
         keepAspectRatio={isCircle}
         lineClassName="!border-ring/70"
-        handleClassName="!h-2.5 !w-2.5 !rounded-[3px] !border !border-ring !bg-white !shadow-sm"
+        handleClassName="!h-2 !w-2 !rounded-[2px] !border !border-ring !bg-white !shadow-sm"
+      />
+      <NodeRotationControls
+        nodeId={id}
+        rotation={data.rotation ?? 0}
+        visible={selected}
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />
