@@ -1,13 +1,13 @@
 import { memo } from "react";
 import {
   Handle,
-  NodeResizer,
   Position,
   type NodeProps,
 } from "@xyflow/react";
 import type { StepNode } from "@/store/flow-store";
 import { ACCENT_CLASSES } from "@/blocks/registry";
 import { cn } from "@/lib/utils";
+import { CanvasNodeResizer } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -35,7 +35,7 @@ function StepNodeComponent({ data, selected }: NodeProps<StepNode>) {
       )}
       style={style}
     >
-      <NodeResizer
+      <CanvasNodeResizer
         isVisible={selected}
 
         keepAspectRatio

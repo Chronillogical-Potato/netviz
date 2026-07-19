@@ -1,13 +1,13 @@
 import { memo } from "react";
 import {
   Handle,
-  NodeResizer,
   Position,
   type NodeProps,
 } from "@xyflow/react";
 import type { ShapeNode } from "@/store/flow-store";
 import { ACCENT_CLASSES } from "@/blocks/registry";
 import { cn } from "@/lib/utils";
+import { CanvasNodeResizer } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -77,7 +77,7 @@ function ShapeNodeComponent({ data, selected }: NodeProps<ShapeNode>) {
           />
         )}
       </svg>
-      <NodeResizer
+      <CanvasNodeResizer
         isVisible={selected}
         keepAspectRatio={isCircle}
         lineClassName="!border-ring/70"

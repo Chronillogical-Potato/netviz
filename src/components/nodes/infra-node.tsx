@@ -1,7 +1,6 @@
 import { memo } from "react";
 import {
   Handle,
-  NodeResizer,
   Position,
   type NodeProps,
 } from "@xyflow/react";
@@ -10,6 +9,7 @@ import { ACCENT_CLASSES, CORE_BLOCKS } from "@/blocks/registry";
 import { resolveIcon } from "@/blocks/icons";
 import { cn } from "@/lib/utils";
 import { NodeMotionBorder } from "./node-motion-border";
+import { CanvasNodeResizer } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -106,7 +106,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
       }}
     >
       <NodeMotionBorder nodeId={id} />
-      <NodeResizer
+      <CanvasNodeResizer
         isVisible={selected}
 
         lineClassName="!border-ring/70"

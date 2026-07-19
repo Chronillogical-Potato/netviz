@@ -1,12 +1,12 @@
 import { memo } from "react";
 import {
   Handle,
-  NodeResizer,
   Position,
   type NodeProps,
 } from "@xyflow/react";
 import type { ImageNode } from "@/store/flow-store";
 import { cn } from "@/lib/utils";
+import { CanvasNodeResizer } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -33,7 +33,7 @@ function ImageNodeComponent({ data, selected }: NodeProps<ImageNode>) {
           : {}),
       }}
     >
-      <NodeResizer
+      <CanvasNodeResizer
         isVisible={selected}
 
         keepAspectRatio
