@@ -28,13 +28,19 @@ export function InlineTextEditor({
     .reduce((length, line) => Math.max(length, line.length), 0);
 
   useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
+    const focusEditor = () => {
+      ref.current?.focus({ preventScroll: true });
+      ref.current?.select();
+    };
+    focusEditor();
+    const frame = requestAnimationFrame(focusEditor);
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   return (
     <textarea
       ref={ref}
+      autoFocus
       aria-label="Edit text"
       value={value}
       rows={Math.max(1, value.split("\n").length)}

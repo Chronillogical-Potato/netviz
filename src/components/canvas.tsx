@@ -448,6 +448,7 @@ function CanvasInner() {
     return sel.length === 1 ? sel[0] : null;
   });
   const workMode = useFlowStore((s) => s.workMode);
+  const editingTextNodeId = useFlowStore((s) => s.editingTextNodeId);
   const animationPathDraft = useFlowStore((s) => s.animationPathDraft);
   const appendAnimationPathNode = useFlowStore(
     (s) => s.appendAnimationPathNode
@@ -840,7 +841,7 @@ function CanvasInner() {
         nodesDraggable={elementsInteractive}
         nodesConnectable={elementsInteractive}
         elementsSelectable={elementsInteractive}
-        nodesFocusable={elementsInteractive}
+        nodesFocusable={elementsInteractive && editingTextNodeId === null}
         edgesFocusable={elementsInteractive}
         deleteKeyCode={
           isPreview || isPickingAnimationPath ? null : ["Backspace", "Delete"]

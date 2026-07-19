@@ -52,6 +52,7 @@ describe("TextNodeView", () => {
 
     expect(markup).toContain("<textarea");
     expect(markup).toContain('aria-label="Edit text"');
+    expect(markup.toLowerCase()).toContain("autofocus");
     expect(markup).toContain("Editable text");
   });
 
