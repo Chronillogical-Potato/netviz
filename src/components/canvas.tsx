@@ -63,6 +63,9 @@ const DRAG_MIME = "application/x-netviz";
 
 type DimSeg = { from: number; to: number; along: number; value: number };
 
+export const DIMENSION_BADGE_CLASS =
+  "rounded-[2px] bg-primary px-1.5 py-0.5 text-xs font-semibold leading-none text-white whitespace-nowrap shadow-sm";
+
 function computeDimsToTarget(sel: AppNode, target: AppNode) {
   const { w: sw, h: sh } = nodeDims(sel);
   const { w: tw, h: th } = nodeDims(target);
@@ -192,7 +195,7 @@ function MeasureOverlay({
       : null;
   const d = hovered ? computeDimsToTarget(selected, hovered) : null;
   const measureLabel =
-    "absolute -translate-x-1/2 -translate-y-1/2 rounded-sm bg-primary px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap";
+    `absolute -translate-x-1/2 -translate-y-1/2 ${DIMENSION_BADGE_CLASS}`;
   const hLine = (seg: DimSeg) => (
     <line
       x1={sx(seg.from)}
@@ -218,7 +221,7 @@ function MeasureOverlay({
       className={measureLabel}
       style={{
         left: (sx(seg.from) + sx(seg.to)) / 2,
-        top: sy(seg.along) - 10,
+        top: sy(seg.along) - 12,
       }}
     >
       {Math.round(seg.value)}
@@ -228,7 +231,7 @@ function MeasureOverlay({
     <span
       className={measureLabel}
       style={{
-        left: sx(seg.along) + 14,
+        left: sx(seg.along) + 16,
         top: (sy(seg.from) + sy(seg.to)) / 2,
       }}
     >
@@ -248,8 +251,11 @@ function MeasureOverlay({
         </svg>
       )}
       <span
-        className="absolute -translate-x-1/2 rounded-sm bg-primary px-1 py-px text-[10px] font-semibold leading-none text-white whitespace-nowrap"
-        style={{ left: cx, top: sy(sB) + 6 }}
+        className={cn(
+          "absolute -translate-x-1/2",
+          DIMENSION_BADGE_CLASS
+        )}
+        style={{ left: cx, top: sy(sB) + 8 }}
       >
         {Math.round(sw)} × {Math.round(sh)}
       </span>

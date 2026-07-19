@@ -9,6 +9,7 @@ describe("canvas node resize selector", () => {
         new URL(`../src/components/nodes/${file}.tsx`, import.meta.url)
       ).text();
       expect(source).toContain("CanvasNodeResizer");
+      expect(source).toContain("!h-2 !w-2");
     }
 
     const css = await Bun.file(

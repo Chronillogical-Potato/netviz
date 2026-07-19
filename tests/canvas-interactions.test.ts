@@ -2,6 +2,17 @@ import { describe, expect, test } from "bun:test";
 import * as CanvasComponents from "../src/components/canvas";
 
 describe("canvas tool interactions", () => {
+  test("uses a larger, sharper dimension badge", () => {
+    const badgeClass = (
+      CanvasComponents as unknown as { DIMENSION_BADGE_CLASS?: string }
+    ).DIMENSION_BADGE_CLASS;
+
+    expect(typeof badgeClass).toBe("string");
+    expect(badgeClass).toContain("text-xs");
+    expect(badgeClass).toContain("rounded-[2px]");
+    expect(badgeClass).toContain("px-1.5");
+  });
+
   test("disables element interaction while the hand tool is active", () => {
     const isEnabled = (
       CanvasComponents as unknown as {
