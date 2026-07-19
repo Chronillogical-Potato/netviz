@@ -162,6 +162,20 @@
   pointer-events: all !important;
 }
 
+/* The hand tool pans through blocks and edges instead of manipulating them. */
+.hand-tool .react-flow__node,
+.hand-tool .react-flow__node *,
+.hand-tool .react-flow__edge,
+.hand-tool .react-flow__edge * {
+  pointer-events: none !important;
+}
+.hand-tool .react-flow__pane {
+  cursor: grab;
+}
+.hand-tool .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
 .react-flow__handle {
   width: 9px;
   height: 9px;

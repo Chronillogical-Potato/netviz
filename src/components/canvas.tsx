@@ -265,6 +265,36 @@ function MeasureOverlay({
 
 type DrawTool = "rect" | "circle" | "text";
 
+export function isCanvasElementInteractionEnabled(
+  tool: string,
+  isPreview: boolean,
+  isPickingAnimationPath: boolean
+) {
+  return !isPreview && !isPickingAnimationPath && tool !== "hand";
+}
+
+export function getDrawBounds(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  toFlow: (point: { x: number; y: number }) => { x: number; y: number }
+) {
+  const first = toFlow({
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+  });
+  const last = toFlow({
+    x: Math.max(start.x, end.x),
+    y: Math.max(start.y, end.y),
+  });
+  return {
+    position: first,
+    size: {
+      width: last.x - first.x,
+      height: last.y - first.y,
+    },
+  };
+}
+
 // Figma-style draw tools: drag out a freeform rect/circle (or click for a
 // default-size one), click to place text. Covers the flow pane while a
 // draw tool is active so existing nodes don't swallow the gesture.
@@ -274,6 +304,12 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const selectNodes = useFlowStore((s) => s.selectNodes);
   const ref = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+  } | null>(null);
   const [draft, setDraft] = useState<{
     x0: number;
     y0: number;
@@ -301,46 +337,53 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
     if (e.button !== 0) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const p = toLocal(e);
-    setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+    const next = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    draftRef.current = next;
+    setDraft(next);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!draft) return;
+    if (!draftRef.current) return;
     const p = toLocal(e);
-    setDraft((d) => (d ? { ...d, x1: p.x, y1: p.y } : d));
+    const next = { ...draftRef.current, x1: p.x, y1: p.y };
+    draftRef.current = next;
+    setDraft(next);
   };
 
-  const onPointerUp = () => {
-    if (!draft || !ref.current) return;
+  const onPointerUp = (e: React.PointerEvent) => {
+    const current = draftRef.current;
+    if (!current || !ref.current) return;
     const r = ref.current.getBoundingClientRect();
-    const start = screenToFlowPosition({
-      x: r.left + Math.min(draft.x0, draft.x1),
-      y: r.top + Math.min(draft.y0, draft.y1),
-    });
-    const end = screenToFlowPosition({
-      x: r.left + Math.max(draft.x0, draft.x1),
-      y: r.top + Math.max(draft.y0, draft.y1),
-    });
-    const w = end.x - start.x;
-    const h = end.y - start.y;
+    const pointerUp = toLocal(e);
+    const toFlow = (point: { x: number; y: number }) =>
+      screenToFlowPosition({
+        x: r.left + point.x,
+        y: r.top + point.y,
+      });
+    const { position: start, size } = getDrawBounds(
+      { x: current.x0, y: current.y0 },
+      pointerUp,
+      toFlow
+    );
+    const origin = toFlow({ x: current.x0, y: current.y0 });
+    const dragged =
+      Math.abs(pointerUp.x - current.x0) >= 8 &&
+      Math.abs(pointerUp.y - current.y0) >= 8;
+    draftRef.current = null;
     setDraft(null);
     let id: string;
     if (tool === "text") {
-      id = addTextNode(
-        screenToFlowPosition({ x: r.left + draft.x0, y: r.top + draft.y0 })
-      );
+      id = addTextNode(origin);
     } else {
       const shape: ShapeKind = tool === "circle" ? "circle" : "rectangle";
-      const dragged = w >= 8 && h >= 8;
       id = dragged
         ? addShapeNode(shape, start, {
-            width: Math.round(w),
-            height: Math.round(h),
+            width: Math.round(size.width),
+            height: Math.round(size.height),
           })
-        : // Plain click: default-size shape centered on the click point.
-          addShapeNode(shape, {
-            x: start.x - (shape === "circle" ? 110 : 150),
-            y: start.y - (shape === "circle" ? 110 : 100),
+        : addShapeNode(shape, {
+            x: origin.x - (shape === "circle" ? 110 : 150),
+            y: origin.y - (shape === "circle" ? 110 : 100),
           });
     }
     selectNodes([id]);
@@ -424,6 +467,11 @@ function CanvasInner() {
   const [altDown, setAltDown] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const activeSnaps = useRef<Map<string, ActiveSnap>>(new Map());
+  const elementsInteractive = isCanvasElementInteractionEnabled(
+    tool,
+    isPreview,
+    isPickingAnimationPath
+  );
 
   const handleBeforeDelete = useCallback<
     OnBeforeDelete<AppNode, LabeledEdgeModel>
@@ -755,6 +803,7 @@ function CanvasInner() {
         "relative h-full w-full",
         turbo && "turbo",
         isPreview && "preview-canvas",
+        tool === "hand" && "hand-tool",
         isPickingAnimationPath && "animation-path-picking"
       )}
       style={wrapperStyle}
@@ -788,11 +837,11 @@ function CanvasInner() {
         panOnDrag={isPreview || tool === "hand" ? true : [1]}
         panOnScroll
         selectionMode={SelectionMode.Partial}
-        nodesDraggable={!isPreview && !isPickingAnimationPath}
-        nodesConnectable={!isPreview && !isPickingAnimationPath}
-        elementsSelectable={!isPreview && !isPickingAnimationPath}
-        nodesFocusable={!isPreview}
-        edgesFocusable={!isPreview}
+        nodesDraggable={elementsInteractive}
+        nodesConnectable={elementsInteractive}
+        elementsSelectable={elementsInteractive}
+        nodesFocusable={elementsInteractive}
+        edgesFocusable={elementsInteractive}
         deleteKeyCode={
           isPreview || isPickingAnimationPath ? null : ["Backspace", "Delete"]
         }
