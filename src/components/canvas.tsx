@@ -295,6 +295,21 @@ export function getDrawBounds(
   };
 }
 
+export function constrainDrawEnd(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  lockAspect: boolean
+) {
+  if (!lockAspect) return end;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  return {
+    x: start.x + side * (Math.sign(dx) || 1),
+    y: start.y + side * (Math.sign(dy) || 1),
+  };
+}
+
 // Figma-style draw tools: drag out a freeform rect/circle (or click for a
 // default-size one), click to place text. Covers the flow pane while a
 // draw tool is active so existing nodes don't swallow the gesture.
@@ -344,7 +359,11 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (!draftRef.current) return;
-    const p = toLocal(e);
+    const p = constrainDrawEnd(
+      { x: draftRef.current.x0, y: draftRef.current.y0 },
+      toLocal(e),
+      e.shiftKey && tool !== "text"
+    );
     const next = { ...draftRef.current, x1: p.x, y1: p.y };
     draftRef.current = next;
     setDraft(next);
@@ -354,7 +373,11 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
     const current = draftRef.current;
     if (!current || !ref.current) return;
     const r = ref.current.getBoundingClientRect();
-    const pointerUp = toLocal(e);
+    const pointerUp = constrainDrawEnd(
+      { x: current.x0, y: current.y0 },
+      toLocal(e),
+      e.shiftKey && tool !== "text"
+    );
     const toFlow = (point: { x: number; y: number }) =>
       screenToFlowPosition({
         x: r.left + point.x,

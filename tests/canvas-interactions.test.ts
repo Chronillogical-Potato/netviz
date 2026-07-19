@@ -49,4 +49,31 @@ describe("canvas tool interactions", () => {
       size: { width: 60, height: 40 },
     });
   });
+
+  test("constrains shape drawing to equal dimensions while Shift is held", () => {
+    const constrainEnd = (
+      CanvasComponents as unknown as {
+        constrainDrawEnd?: (
+          start: { x: number; y: number },
+          end: { x: number; y: number },
+          lockAspect: boolean
+        ) => { x: number; y: number };
+      }
+    ).constrainDrawEnd;
+
+    expect(typeof constrainEnd).toBe("function");
+    if (!constrainEnd) return;
+    expect(constrainEnd({ x: 10, y: 10 }, { x: 80, y: 40 }, true)).toEqual({
+      x: 80,
+      y: 80,
+    });
+    expect(constrainEnd({ x: 80, y: 80 }, { x: 30, y: 60 }, true)).toEqual({
+      x: 30,
+      y: 30,
+    });
+    expect(constrainEnd({ x: 10, y: 10 }, { x: 80, y: 40 }, false)).toEqual({
+      x: 80,
+      y: 40,
+    });
+  });
 });
