@@ -56,6 +56,35 @@ describe("TextNodeView", () => {
     expect(markup).toContain("Editable text");
   });
 
+  test("waits for React Flow to measure a new text node before focusing", () => {
+    const InlineTextEditor = (
+      TextNodeComponents as unknown as {
+        InlineTextEditor?: (props: {
+          value: string;
+          focusWhenReady?: boolean;
+          onChange: (value: string) => void;
+          onCommit: () => void;
+          onCancel: () => void;
+        }) => React.ReactNode;
+      }
+    ).InlineTextEditor;
+    expect(typeof InlineTextEditor).toBe("function");
+    if (!InlineTextEditor) return;
+    const renderEditor = (focusWhenReady: boolean) =>
+      renderToStaticMarkup(
+        <InlineTextEditor
+          value="Text"
+          focusWhenReady={focusWhenReady}
+          onChange={() => {}}
+          onCommit={() => {}}
+          onCancel={() => {}}
+        />
+      );
+
+    expect(renderEditor(false).toLowerCase()).not.toContain("autofocus");
+    expect(renderEditor(true).toLowerCase()).toContain("autofocus");
+  });
+
   test("advertises double-click editing when displaying text", () => {
     const markup = renderToStaticMarkup(
       <ReactFlowProvider>

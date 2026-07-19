@@ -13,11 +13,13 @@ const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
 
 export function InlineTextEditor({
   value,
+  focusWhenReady = true,
   onChange,
   onCommit,
   onCancel,
 }: {
   value: string;
+  focusWhenReady?: boolean;
   onChange: (value: string) => void;
   onCommit: () => void;
   onCancel: () => void;
@@ -28,6 +30,7 @@ export function InlineTextEditor({
     .reduce((length, line) => Math.max(length, line.length), 0);
 
   useEffect(() => {
+    if (!focusWhenReady) return;
     const focusEditor = () => {
       ref.current?.focus({ preventScroll: true });
       ref.current?.select();
@@ -35,12 +38,12 @@ export function InlineTextEditor({
     focusEditor();
     const frame = requestAnimationFrame(focusEditor);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [focusWhenReady]);
 
   return (
     <textarea
       ref={ref}
-      autoFocus
+      autoFocus={focusWhenReady}
       aria-label="Edit text"
       value={value}
       rows={Math.max(1, value.split("\n").length)}
@@ -67,7 +70,13 @@ export function InlineTextEditor({
   );
 }
 
-function TextNodeComponent({ id, data, selected }: NodeProps<TextNode>) {
+function TextNodeComponent({
+  id,
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps<TextNode>) {
   const editingTextNodeId = useFlowStore((state) => state.editingTextNodeId);
   const setEditingTextNode = useFlowStore((state) => state.setEditingTextNode);
   const updateNodeData = useFlowStore((state) => state.updateNodeData);
@@ -127,6 +136,7 @@ function TextNodeComponent({ id, data, selected }: NodeProps<TextNode>) {
       {editing ? (
         <InlineTextEditor
           value={draft}
+          focusWhenReady={(width ?? 0) > 0 && (height ?? 0) > 0}
           onChange={setDraft}
           onCommit={commit}
           onCancel={() => {
