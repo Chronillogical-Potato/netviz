@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "next-themes";
-import { ChevronDown, X } from "@/ui/icons";
+import { Check, ChevronDown, X } from "@/ui/icons";
 import {
   useFlowStore,
   type EdgeCurveStyle,
   type EdgeLineStyle,
 } from "@/store/flow-store";
 import { COLOR_PRESETS } from "@/blocks/registry";
+import { Input } from "@/ui/input";
 import { Slider } from "@/ui/slider";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +93,16 @@ export function CanvasOptions() {
   const setEdgeCurveStyle = useFlowStore((s) => s.setEdgeCurveStyle);
   const setEdgeLineStyle = useFlowStore((s) => s.setEdgeLineStyle);
   const setEdgeDashGap = useFlowStore((s) => s.setEdgeDashGap);
+  const setEdgeLabel = useFlowStore((s) => s.setEdgeLabel);
   const setEdgeLabelColor = useFlowStore((s) => s.setEdgeLabelColor);
+  const edgeLabel = useFlowStore((s) => {
+    const selected = s.edges.filter((edge) => edge.selected);
+    if (selected.length === 0) return "";
+    const first = selected[0].data?.label ?? "";
+    return selected.every((edge) => (edge.data?.label ?? "") === first)
+      ? first
+      : undefined;
+  });
   const labelTextColor = useFlowStore((s) => {
     const selected = s.edges.filter((edge) => edge.selected);
     if (selected.length === 0) return undefined;
@@ -116,12 +127,6 @@ export function CanvasOptions() {
       ? first
       : undefined;
   });
-  const [labelKey, setLabelKey] = useState<LabelColorKey>("text");
-  const labelColors: Record<LabelColorKey, string | undefined> = {
-    text: labelTextColor,
-    bg: labelBgColor,
-    border: labelBorderColor,
-  };
   const edgeDashGap = useFlowStore((s) => {
     const selected = s.edges.filter((edge) => edge.selected);
     if (selected.length === 0) return s.edgeDashGap;
@@ -172,28 +177,17 @@ export function CanvasOptions() {
           />
         </InspectorRow>
         <InspectorRow label="Style">
-          <div className="grid h-7 min-w-0 flex-1 grid-cols-3 rounded-md bg-input p-0.5">
-            {(["solid", "dashed", "dotted"] as EdgeLineStyle[]).map(
-              (style) => (
-                <button
-                  key={style}
-                  type="button"
-                  aria-label={`${style} edge line`}
-                  aria-pressed={edgeLineStyle === style}
-                  title={style[0].toUpperCase() + style.slice(1)}
-                  onClick={() => setEdgeLineStyle(style)}
-                  className={cn(
-                    "flex min-w-0 items-center rounded-[5px] px-1.5 transition-colors",
-                    edgeLineStyle === style
-                      ? "bg-accent text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <LineStylePreview kind={style} />
-                </button>
-              )
+          <DropdownControl
+            label="Edge style"
+            value={edgeLineStyle}
+            options={EDGE_LINE_OPTIONS}
+            onChange={setEdgeLineStyle}
+            renderPreview={(style) => (
+              <span className="w-10 shrink-0">
+                <LineStylePreview kind={style} />
+              </span>
             )}
-          </div>
+          />
         </InspectorRow>
         {(edgeLineStyle === "dashed" || edgeLineStyle === "dotted") && (
           <InspectorRow label="Spacing">
@@ -212,59 +206,53 @@ export function CanvasOptions() {
           </InspectorRow>
         )}
         <InspectorRow label="Curve">
-          <div className="grid min-w-0 flex-1 grid-cols-2 rounded-md bg-input p-0.5">
-            {(["stepped", "smooth"] as EdgeCurveStyle[]).map((style) => {
-              const label = style === "stepped" ? "Stepped" : "Smooth";
-              return (
-                <button
-                  key={style}
-                  type="button"
-                  aria-label={`${label} edge curve`}
-                  aria-pressed={edgeCurveStyle === style}
-                  onClick={() => setEdgeCurveStyle(style)}
-                  className={cn(
-                    "flex min-w-0 flex-col items-center rounded-[5px] px-1.5 py-1 text-[10px] font-medium leading-none transition-colors",
-                    edgeCurveStyle === style
-                      ? "bg-accent text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <EdgeCurvePreview style={style} />
-                  <span className="pt-1">{label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <DropdownControl
+            label="Edge curve"
+            value={edgeCurveStyle}
+            options={EDGE_CURVE_OPTIONS}
+            onChange={setEdgeCurveStyle}
+            renderPreview={(style) => (
+              <span className="w-10 shrink-0">
+                <EdgeCurvePreview style={style} />
+              </span>
+            )}
+          />
         </InspectorRow>
       </InspectorSection>
 
       <InspectorSection title="Label">
-        <InspectorRow label="Target">
-          <div className="grid h-7 min-w-0 flex-1 grid-cols-3 rounded-md bg-input p-0.5">
-            {LABEL_TARGETS.map((target) => (
-              <button
-                key={target.key}
-                type="button"
-                aria-pressed={labelKey === target.key}
-                onClick={() => setLabelKey(target.key)}
-                className={cn(
-                  "truncate rounded-[5px] px-1 text-[10px] font-medium transition-colors",
-                  labelKey === target.key
-                    ? "bg-accent text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {target.label}
-              </button>
-            ))}
-          </div>
+        <InspectorRow label="Text">
+          <Input
+            value={edgeLabel ?? ""}
+            placeholder={edgeLabel === undefined ? "Mixed" : "Label"}
+            onChange={(event) => setEdgeLabel(event.target.value)}
+            aria-label="Edge label"
+            className="h-7 min-w-0 flex-1 rounded-md px-2 text-xs"
+          />
         </InspectorRow>
-        <InspectorRow label="Color">
+        <InspectorRow label="Text color">
           <PaletteControl
-            value={labelColors[labelKey]}
+            label="Text color"
+            value={labelTextColor}
+            includeTransparent
+            onChange={(value) => setEdgeLabelColor("text", value)}
+          />
+        </InspectorRow>
+        <InspectorRow label="Background">
+          <PaletteControl
+            label="Background color"
+            value={labelBgColor}
+            includeTransparent
+            onChange={(value) => setEdgeLabelColor("bg", value)}
+          />
+        </InspectorRow>
+        <InspectorRow label="Border">
+          <PaletteControl
+            label="Border color"
+            value={labelBorderColor}
             includeTransparent
             dropUp
-            onChange={(value) => setEdgeLabelColor(labelKey, value)}
+            onChange={(value) => setEdgeLabelColor("border", value)}
           />
         </InspectorRow>
       </InspectorSection>
@@ -272,12 +260,21 @@ export function CanvasOptions() {
   );
 }
 
-type LabelColorKey = "text" | "bg" | "border";
+const EDGE_LINE_OPTIONS: Array<{
+  value: EdgeLineStyle;
+  label: string;
+}> = [
+  { value: "solid", label: "Solid" },
+  { value: "dashed", label: "Dashed" },
+  { value: "dotted", label: "Dotted" },
+];
 
-const LABEL_TARGETS: { key: LabelColorKey; label: string }[] = [
-  { key: "text", label: "Text" },
-  { key: "bg", label: "Fill" },
-  { key: "border", label: "Border" },
+const EDGE_CURVE_OPTIONS: Array<{
+  value: EdgeCurveStyle;
+  label: string;
+}> = [
+  { value: "stepped", label: "Stepped" },
+  { value: "smooth", label: "Smooth" },
 ];
 
 const TRANSPARENT_BACKGROUND =
@@ -313,12 +310,146 @@ function InspectorRow({
   );
 }
 
+function DropdownControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  renderPreview,
+}: {
+  label: string;
+  value: T | undefined;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  renderPreview: (value: T) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    width: number;
+  } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        triggerRef.current?.contains(target) ||
+        panelRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const closeOnScroll = () => setOpen(false);
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("scroll", closeOnScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("scroll", closeOnScroll, true);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(176, rect.width);
+    const left = Math.max(
+      8,
+      Math.min(rect.left, window.innerWidth - width - 8)
+    );
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setPosition(
+      spaceBelow < 150
+        ? { left, bottom: window.innerHeight - rect.top + 4, width }
+        : { left, top: rect.bottom + 4, width }
+    );
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggle}
+        className={cn(
+          "flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-input px-2 text-left text-xs text-foreground transition-colors hover:bg-muted",
+          open && "ring-1 ring-ring"
+        )}
+      >
+        {value ? renderPreview(value) : null}
+        <span className="truncate">{selected?.label ?? "Mixed"}</span>
+        <ChevronDown className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
+      </button>
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="listbox"
+            aria-label={`${label} options`}
+            className="fixed z-50 rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
+            style={position}
+          >
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-xs transition-colors hover:bg-muted",
+                  option.value === value
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                )}
+              >
+                <span className="w-10 shrink-0">
+                  {renderPreview(option.value)}
+                </span>
+                <span className="truncate">{option.label}</span>
+                {option.value === value ? (
+                  <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                ) : null}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
 function PaletteControl({
+  label = "Choose color",
   value,
   includeTransparent,
   dropUp = false,
   onChange,
 }: {
+  label?: string;
   value: string | undefined;
   includeTransparent: boolean;
   dropUp?: boolean;
@@ -356,7 +487,7 @@ function PaletteControl({
     <div ref={ref} className="relative min-w-0 flex-1">
       <button
         type="button"
-        aria-label="Choose color"
+        aria-label={label}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className={cn(
