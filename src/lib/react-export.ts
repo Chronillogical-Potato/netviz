@@ -1,4 +1,4 @@
-import { getSmoothStepPath, Position } from "@xyflow/react";
+import { getBezierPath, getSmoothStepPath, Position } from "@xyflow/react";
 import { CORE_BLOCKS, type Accent, type BlockDef } from "@/blocks/registry";
 import type { PageScenarioDocumentV1 } from "@/animation/model";
 import type { AppNode, LabeledEdge } from "@/store/flow-store";
@@ -168,15 +168,18 @@ function buildEdges(
     const targetPosition = side(edge.targetHandle, targetFallback);
     const sourcePoint = point(source, sourcePosition);
     const targetPoint = point(target, targetPosition);
-    const [path, labelX, labelY] = getSmoothStepPath({
+    const pathArgs = {
       sourceX: sourcePoint.x,
       sourceY: sourcePoint.y,
       targetX: targetPoint.x,
       targetY: targetPoint.y,
       sourcePosition,
       targetPosition,
-      borderRadius: 16,
-    });
+    };
+    const [path, labelX, labelY] =
+      edge.data?.curveStyle === "smooth"
+        ? getBezierPath(pathArgs)
+        : getSmoothStepPath({ ...pathArgs, borderRadius: 16 });
     const style = edge.data?.lineStyle ?? "solid";
     const gap = edge.data?.dashGap ?? 6;
     return [

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
+  getBezierPath,
   getSmoothStepPath,
   type EdgeProps,
 } from "@xyflow/react";
@@ -24,15 +25,18 @@ export function LabeledEdge({
   style,
   interactionWidth = 20,
 }: EdgeProps<LabeledEdgeType>) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const pathArgs = {
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
-    borderRadius: 16,
-  });
+  };
+  const [edgePath, labelX, labelY] =
+    data?.curveStyle === "smooth"
+      ? getBezierPath(pathArgs)
+      : getSmoothStepPath({ ...pathArgs, borderRadius: 16 });
   const updateEdgeLabel = useFlowStore((s) => s.updateEdgeLabel);
   const workMode = useFlowStore((s) => s.workMode);
   const [editing, setEditing] = useState(false);

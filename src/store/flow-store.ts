@@ -203,11 +203,13 @@ export type PageContent = {
 };
 
 export type EdgeLineStyle = "solid" | "dashed" | "dotted";
+export type EdgeCurveStyle = "stepped" | "smooth";
 export type LabeledEdgeData = {
   label?: string;
   turbo?: boolean;
   color?: string;
   lineStyle?: EdgeLineStyle;
+  curveStyle?: EdgeCurveStyle;
   dashGap?: number;
   labelTextColor?: string;
   labelBgColor?: string;
@@ -221,6 +223,17 @@ export const DEFAULT_MARKER: EdgeMarker = {
   height: 18,
   color: "#94a3b8",
 };
+
+const edgeMarker = (color?: string): EdgeMarker => ({
+  ...DEFAULT_MARKER,
+  color: color ?? DEFAULT_MARKER.color,
+});
+
+const normalizeEdgeAppearance = (edges: readonly LabeledEdge[]) =>
+  clearLegacyAnimatedFlags(edges).map((edge) => ({
+    ...edge,
+    markerEnd: edge.data?.turbo ? undefined : edgeMarker(edge.data?.color),
+  }));
 
 export const DEFAULT_TURBO_COLORS: [string, string] = ["#ec4899", "#3b82f6"];
 
@@ -239,6 +252,7 @@ type Snapshot = {
   turbo: boolean;
   turboColors: [string, string];
   edgeColor?: string;
+  edgeCurveStyle: EdgeCurveStyle;
   edgeLineStyle: EdgeLineStyle;
   edgeDashGap: number;
   showControls: boolean;
@@ -335,6 +349,7 @@ type FlowState = Snapshot & {
   toggleTurbo: () => void;
   setTurboColor: (index: 0 | 1, color: string) => void;
   setEdgeColor: (color: string | undefined) => void;
+  setEdgeCurveStyle: (style: EdgeCurveStyle) => void;
   setEdgeLabelColor: (
     key: "text" | "bg" | "border",
     color: string | undefined
@@ -1076,6 +1091,7 @@ export const useFlowStore = create<FlowState>()(
   scenarioDocument: createEmptyScenarioDocument(),
   turbo: false,
   turboColors: DEFAULT_TURBO_COLORS,
+  edgeCurveStyle: "stepped" as EdgeCurveStyle,
   edgeLineStyle: "solid" as EdgeLineStyle,
   edgeDashGap: 6,
   showControls: true,
@@ -1145,11 +1161,12 @@ export const useFlowStore = create<FlowState>()(
             label: "",
             turbo: s.turbo,
             color: s.edgeColor,
+            curveStyle: s.edgeCurveStyle,
             lineStyle: s.edgeLineStyle,
             dashGap: s.edgeDashGap,
           },
           animated: false,
-          markerEnd: s.turbo ? undefined : DEFAULT_MARKER,
+          markerEnd: s.turbo ? undefined : edgeMarker(s.edgeColor),
         },
         s.edges
       ) as LabeledEdge[],
@@ -1241,11 +1258,12 @@ export const useFlowStore = create<FlowState>()(
             sourceHandle: item.sourceHandle,
             targetHandle: item.targetHandle,
             animated: false,
-            markerEnd: s.turbo ? undefined : DEFAULT_MARKER,
+            markerEnd: s.turbo ? undefined : edgeMarker(s.edgeColor),
             data: {
               label: "",
               turbo: s.turbo,
               color: s.edgeColor,
+              curveStyle: s.edgeCurveStyle,
               lineStyle: s.edgeLineStyle,
               dashGap: s.edgeDashGap,
             },
@@ -1650,7 +1668,9 @@ export const useFlowStore = create<FlowState>()(
               ? {
                   ...e,
                   data: { ...(e.data ?? {}), turbo: nextFlag },
-                  markerEnd: nextFlag ? undefined : DEFAULT_MARKER,
+                  markerEnd: nextFlag
+                    ? undefined
+                    : edgeMarker(e.data?.color),
                 }
               : e
           ),
@@ -1670,7 +1690,7 @@ export const useFlowStore = create<FlowState>()(
         edges: s.edges.map((e) => ({
           ...e,
           data: { ...(e.data ?? {}), turbo: next },
-          markerEnd: next ? undefined : DEFAULT_MARKER,
+          markerEnd: next ? undefined : edgeMarker(e.data?.color),
         })),
         nodes: s.nodes.map((n) =>
           ({ ...n, data: { ...n.data, turbo: next } } as AppNode)
@@ -2260,7 +2280,11 @@ export const useFlowStore = create<FlowState>()(
         return {
           edges: s.edges.map((e) =>
             e.selected
-              ? { ...e, data: { ...(e.data ?? {}), color } }
+              ? {
+                  ...e,
+                  data: { ...(e.data ?? {}), color },
+                  markerEnd: e.data?.turbo ? undefined : edgeMarker(color),
+                }
               : e
           ),
         };
@@ -2270,6 +2294,31 @@ export const useFlowStore = create<FlowState>()(
         edges: s.edges.map((e) => ({
           ...e,
           data: { ...(e.data ?? {}), color },
+          markerEnd: e.data?.turbo ? undefined : edgeMarker(color),
+        })),
+      };
+    }),
+
+  setEdgeCurveStyle: (style) =>
+    set((s) => {
+      const selected = s.edges.filter((edge) => edge.selected);
+      if (selected.length > 0) {
+        return {
+          edges: s.edges.map((edge) =>
+            edge.selected
+              ? {
+                  ...edge,
+                  data: { ...(edge.data ?? {}), curveStyle: style },
+                }
+              : edge
+          ),
+        };
+      }
+      return {
+        edgeCurveStyle: style,
+        edges: s.edges.map((edge) => ({
+          ...edge,
+          data: { ...(edge.data ?? {}), curveStyle: style },
         })),
       };
     }),
@@ -2606,7 +2655,7 @@ export const useFlowStore = create<FlowState>()(
       set({
         projectName: snapshot.projectName,
         nodes: snapshot.nodes,
-        edges: snapshot.edges,
+        edges: normalizeEdgeAppearance(snapshot.edges),
         customBlocks: snapshot.customBlocks,
         groups: snapshot.groups,
         pages: snapshot.pages,
@@ -2616,6 +2665,7 @@ export const useFlowStore = create<FlowState>()(
             pageId,
             {
               ...content,
+              edges: normalizeEdgeAppearance(content.edges),
               scenarioDocument: ensureTemplatePreviewScenarios(
                 content.scenarioDocument
               ),
@@ -2745,8 +2795,8 @@ export const useFlowStore = create<FlowState>()(
           ns?.map((n) => ({ ...n, zIndex: 0 }));
         const nodes = strip(p.nodes) ?? current.nodes;
         const edges = p.edges
-          ? clearLegacyAnimatedFlags(p.edges)
-          : current.edges;
+          ? normalizeEdgeAppearance(p.edges)
+          : normalizeEdgeAppearance(current.edges);
         const pageContents = p.pageContents
           ? Object.fromEntries(
               Object.entries(p.pageContents).map(([k, c]) => [
@@ -2754,7 +2804,7 @@ export const useFlowStore = create<FlowState>()(
                 {
                   ...c,
                   nodes: strip(c.nodes) ?? c.nodes,
-                  edges: clearLegacyAnimatedFlags(c.edges),
+                  edges: normalizeEdgeAppearance(c.edges),
                   scenarioDocument:
                     ensureTemplatePreviewScenarios(
                       normalizeGradientBeamDefaults(
@@ -2778,6 +2828,7 @@ export const useFlowStore = create<FlowState>()(
           ),
           motionPreference: p.motionPreference ?? "system",
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
+          edgeCurveStyle: p.edgeCurveStyle ?? "stepped",
           workMode: p.workMode === "animation" ? "animation" : "design",
         };
       },
@@ -2794,6 +2845,7 @@ export const useFlowStore = create<FlowState>()(
         turbo: s.turbo,
         turboColors: s.turboColors,
         edgeColor: s.edgeColor,
+        edgeCurveStyle: s.edgeCurveStyle,
         edgeLineStyle: s.edgeLineStyle,
         edgeDashGap: s.edgeDashGap,
         showControls: s.showControls,

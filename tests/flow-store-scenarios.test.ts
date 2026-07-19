@@ -4,6 +4,7 @@ import { scenarioRuntime } from "../src/animation/runtime-instance";
 import { findAuthoredCustomPaths } from "../src/animation/custom-path";
 import type { FlowSnapshotV2 } from "../src/animation/snapshot-migrations";
 import {
+  DEFAULT_MARKER,
   DEFAULT_TURBO_COLORS,
   isAnimationCanvasMode,
   useFlowStore,
@@ -46,6 +47,7 @@ function resetStore() {
     scenarioDocument: createEmptyScenarioDocument(),
     turbo: false,
     turboColors: DEFAULT_TURBO_COLORS,
+    edgeCurveStyle: "stepped",
     edgeLineStyle: "solid",
     edgeDashGap: 6,
     showControls: true,
@@ -60,6 +62,80 @@ function resetStore() {
 }
 
 beforeEach(resetStore);
+
+describe("edge appearance", () => {
+  test("applies a curve mode to selected edges and uses it for new edges", () => {
+    useFlowStore.setState({
+      edges: [
+        edge("edge-a", "a", "b", true),
+        edge("edge-b", "b", "c"),
+      ],
+    });
+
+    const setEdgeCurveStyle = useFlowStore.getState().setEdgeCurveStyle;
+    expect(typeof setEdgeCurveStyle).toBe("function");
+    setEdgeCurveStyle?.("smooth");
+
+    expect(useFlowStore.getState().edges.map((item) => item.data?.curveStyle)).toEqual([
+      "smooth",
+      undefined,
+    ]);
+
+    useFlowStore.setState((state) => ({
+      edges: state.edges.map((item) => ({ ...item, selected: false })),
+    }));
+    setEdgeCurveStyle?.("smooth");
+    useFlowStore.getState().onConnect({
+      source: "c",
+      target: "d",
+      sourceHandle: null,
+      targetHandle: null,
+    });
+
+    const state = useFlowStore.getState();
+    expect(state.edgeCurveStyle).toBe("smooth");
+    expect(state.edges.every((item) => item.data?.curveStyle === "smooth")).toBe(
+      true
+    );
+  });
+
+  test("keeps the arrow marker color synchronized with the edge color", () => {
+    useFlowStore.setState({
+      edges: [
+        {
+          ...edge("edge-a", "a", "b", true),
+          markerEnd: DEFAULT_MARKER,
+        },
+      ],
+    });
+
+    useFlowStore.getState().setEdgeColor("#f43f5e");
+
+    expect(useFlowStore.getState().edges[0]).toMatchObject({
+      data: { color: "#f43f5e" },
+      markerEnd: { color: "#f43f5e" },
+    });
+  });
+
+  test("restores a color-matched arrow when turbo is disabled", () => {
+    useFlowStore.setState({
+      edges: [
+        {
+          ...edge("edge-a", "a", "b", true),
+          markerEnd: undefined,
+          data: { color: "#22c55e", lineStyle: "solid", turbo: true },
+        },
+      ],
+    });
+
+    useFlowStore.getState().toggleTurbo();
+
+    expect(useFlowStore.getState().edges[0]).toMatchObject({
+      data: { color: "#22c55e", turbo: false },
+      markerEnd: { color: "#22c55e" },
+    });
+  });
+});
 
 describe("page-owned animation state", () => {
   test("uses animation canvas styling in preview mode", () => {

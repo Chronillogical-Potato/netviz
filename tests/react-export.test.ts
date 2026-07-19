@@ -4,6 +4,49 @@ import { generateReactComponent } from "../src/lib/react-export";
 import type { AppNode, LabeledEdge } from "../src/store/flow-store";
 
 describe("React component export", () => {
+  test("preserves smooth connection geometry", () => {
+    const nodes = [
+      {
+        id: "source",
+        type: "shape",
+        position: { x: 0, y: 0 },
+        style: { width: 100, height: 100 },
+        data: { shape: "rectangle" },
+      },
+      {
+        id: "target",
+        type: "shape",
+        position: { x: 300, y: 100 },
+        style: { width: 100, height: 100 },
+        data: { shape: "rectangle" },
+      },
+    ] as AppNode[];
+    const code = generateReactComponent({
+      projectName: "Smooth diagram",
+      nodes,
+      edges: [
+        {
+          id: "smooth-edge",
+          type: "labeled",
+          source: "source",
+          target: "target",
+          sourceHandle: "right",
+          targetHandle: "left",
+          data: { curveStyle: "smooth" },
+        },
+      ] as LabeledEdge[],
+      customBlocks: [],
+      pageBackground: "#000000",
+      scenarioDocument: {
+        schemaVersion: 1,
+        defaultScenarioId: null,
+        scenarios: [],
+      },
+    });
+
+    expect(code).toContain('"path": "M100,50 C200,50 200,150 300,150"');
+  });
+
   test("creates a dependency-free animated TSX component", () => {
     const nodes = [
       {

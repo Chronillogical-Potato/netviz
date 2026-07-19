@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Sparkles, X } from "@/ui/icons";
 import type { AppIcon } from "@/ui/icons";
-import { useFlowStore, type EdgeLineStyle } from "@/store/flow-store";
+import {
+  useFlowStore,
+  type EdgeCurveStyle,
+  type EdgeLineStyle,
+} from "@/store/flow-store";
 import { COLOR_PRESETS } from "@/blocks/registry";
 import { Slider } from "@/ui/slider";
 import { cn } from "@/lib/utils";
@@ -88,6 +92,7 @@ export function CanvasOptions() {
   const toggleTurbo = useFlowStore((s) => s.toggleTurbo);
   const setTurboColor = useFlowStore((s) => s.setTurboColor);
   const setEdgeColor = useFlowStore((s) => s.setEdgeColor);
+  const setEdgeCurveStyle = useFlowStore((s) => s.setEdgeCurveStyle);
   const setEdgeLineStyle = useFlowStore((s) => s.setEdgeLineStyle);
   const setEdgeDashGap = useFlowStore((s) => s.setEdgeDashGap);
   const setEdgeLabelColor = useFlowStore((s) => s.setEdgeLabelColor);
@@ -136,6 +141,16 @@ export function CanvasOptions() {
     if (sel.length === 0) return s.edgeLineStyle;
     const first = sel[0].data?.lineStyle ?? "solid";
     return sel.every((e) => (e.data?.lineStyle ?? "solid") === first)
+      ? first
+      : undefined;
+  });
+  const edgeCurveStyle = useFlowStore((s) => {
+    const selected = s.edges.filter((edge) => edge.selected);
+    if (selected.length === 0) return s.edgeCurveStyle;
+    const first = selected[0].data?.curveStyle ?? "stepped";
+    return selected.every(
+      (edge) => (edge.data?.curveStyle ?? "stepped") === first
+    )
       ? first
       : undefined;
   });
@@ -213,6 +228,35 @@ export function CanvasOptions() {
                 >
                   <LineStylePreview kind={k} />
                   <span className="block pt-0.5">{k}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="px-2 pt-2">
+          <p className="pb-1.5 text-[11px] font-medium text-muted-foreground">
+            Curve
+          </p>
+          <div className="flex items-center rounded-lg bg-muted p-0.5">
+            {(["stepped", "smooth"] as EdgeCurveStyle[]).map((style) => {
+              const active = edgeCurveStyle === style;
+              const label = style === "stepped" ? "Stepped" : "Smooth";
+              return (
+                <button
+                  key={style}
+                  type="button"
+                  aria-label={`${label} edge curve`}
+                  aria-pressed={active}
+                  onClick={() => setEdgeCurveStyle(style)}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1.5 text-[11px] transition-colors",
+                    active
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <EdgeCurvePreview style={style} />
+                  <span className="block pt-0.5">{label}</span>
                 </button>
               );
             })}
@@ -361,6 +405,24 @@ function LineStylePreview({ kind }: { kind: EdgeLineStyle }) {
         strokeWidth="2"
         strokeDasharray={dash}
         strokeLinecap={cap}
+      />
+    </svg>
+  );
+}
+
+function EdgeCurvePreview({ style }: { style: EdgeCurveStyle }) {
+  const path =
+    style === "smooth"
+      ? "M2 2C16 2 24 10 38 10"
+      : "M2 2H16Q20 2 20 6V10H38";
+  return (
+    <svg viewBox="0 0 40 12" className="h-3 w-full">
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
       />
     </svg>
   );
