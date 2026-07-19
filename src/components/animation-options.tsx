@@ -67,7 +67,9 @@ const DIRECTIONS: Array<{ value: AnimationDirectionV1; label: string }> = [
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid min-h-7 grid-cols-[72px_1fr] items-center gap-2">
-      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <span className="truncate text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
       <div className="flex min-w-0 items-center gap-1.5">{children}</div>
     </div>
   );
@@ -255,7 +257,7 @@ function TimingRow({
           }}
           className="h-7 w-full rounded-md bg-input pl-1.5 pr-4 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring disabled:opacity-45"
         />
-        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">
+        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-muted-foreground">
           s
         </span>
       </div>
@@ -598,7 +600,7 @@ export function AnimationOverview() {
   return (
     <div className="border-b border-border px-4 py-3.5">
       <p className="text-xs font-semibold text-foreground">Connections</p>
-      <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+      <p className="pb-3 pt-1 text-[11px] font-medium leading-4 text-muted-foreground">
         Apply one continuous gradient beam to every connection on this page.
       </p>
       <Button
@@ -774,11 +776,11 @@ export function ExistingAnimationPath() {
                 <span className="truncate text-[11px] font-medium text-foreground">
                   {path.name === "Default scenario" ? "Custom path" : path.name}
                 </span>
-                <span className="ml-auto shrink-0 text-[9px] text-muted-foreground">
+                <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground">
                   {new Set(path.nodeIds).size} blocks
                 </span>
               </div>
-              <p className="mt-1.5 line-clamp-2 text-[9px] leading-4 text-muted-foreground">
+              <p className="mt-1.5 line-clamp-2 text-[10px] font-medium leading-4 text-muted-foreground">
                 {route}
               </p>
               <div className="mt-2 grid grid-cols-3 gap-1.5">
@@ -786,7 +788,7 @@ export function ExistingAnimationPath() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 rounded-md text-[10px]"
+                  className="h-6 rounded-md text-[11px]"
                   onClick={() => editAnimationPath(path.scenarioId)}
                 >
                   Edit
@@ -795,7 +797,7 @@ export function ExistingAnimationPath() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 rounded-md text-[10px]"
+                  className="h-6 rounded-md text-[11px]"
                   onClick={() => {
                     activateAnimationPath(path.scenarioId);
                     playAllAnimations();
@@ -812,7 +814,7 @@ export function ExistingAnimationPath() {
                       ? "Custom path"
                       : path.name
                   }`}
-                  className="h-6 rounded-md text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="h-6 rounded-md text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={() =>
                     setDeleteTarget({
                       scenarioId: path.scenarioId,
@@ -875,7 +877,7 @@ export function RequestFlowOptions({
   return (
     <div className="border-b border-border px-4 py-3.5">
       <p className="text-xs font-semibold text-foreground">Request flow</p>
-      <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+      <p className="pb-3 pt-1 text-[11px] font-medium leading-4 text-muted-foreground">
         Start at <span className="text-foreground">{nodeLabel}</span> and
         follow every outgoing connection one hop at a time.
       </p>
@@ -903,7 +905,7 @@ export function RequestFlowOptions({
       >
         Build custom path
       </Button>
-      <p className="pt-2 text-center text-[9px] text-muted-foreground">
+      <p className="pt-2 text-center text-[10px] font-medium text-muted-foreground">
         {connectionCount} reachable connection{connectionCount === 1 ? "" : "s"}
       </p>
     </div>
@@ -969,11 +971,11 @@ export function AnimationPathBuilder() {
     <div className="flex-1 overflow-y-auto pb-4" data-animation-path-builder>
       <div className="border-b border-border px-4 py-3.5">
         <p className="text-xs font-semibold text-foreground">Custom path</p>
-        <p className="pb-3 pt-1 text-[10px] leading-4 text-muted-foreground">
+        <p className="pb-3 pt-1 text-[11px] font-medium leading-4 text-muted-foreground">
           {PATH_PRESET_HELP[draft.preset]}
         </p>
 
-        <label className="mb-3 block text-[10px] text-muted-foreground">
+        <label className="mb-3 block text-[11px] font-medium text-muted-foreground">
           Path name
           <Input
             aria-label="Path name"
@@ -1004,7 +1006,7 @@ export function AnimationPathBuilder() {
         </div>
 
         {pathNodes.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[10px] text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-[11px] font-medium text-muted-foreground">
             {draft.preset === "multiple-inputs"
               ? "Click the receiving block on the canvas"
               : draft.preset === "multiple-outputs" ||
@@ -1024,7 +1026,7 @@ export function AnimationPathBuilder() {
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
                   {index + 1}
                 </span>
-                <span className="truncate text-[11px] text-foreground">
+                <span className="truncate text-[11px] font-medium text-foreground">
                   {getNodeDisplayName(node)}
                 </span>
               </div>
@@ -1033,7 +1035,7 @@ export function AnimationPathBuilder() {
         )}
 
         {draft.error ? (
-          <p className="pt-2 text-[10px] leading-4 text-destructive">
+          <p className="pt-2 text-[11px] font-medium leading-4 text-destructive">
             {draft.error}
           </p>
         ) : null}
@@ -1043,7 +1045,7 @@ export function AnimationPathBuilder() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 rounded-md text-[10px]"
+            className="h-7 rounded-md text-[11px]"
             disabled={draft.nodeIds.length === 0}
             onClick={undoAnimationPathNode}
           >
@@ -1053,7 +1055,7 @@ export function AnimationPathBuilder() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 rounded-md text-[10px]"
+            className="h-7 rounded-md text-[11px]"
             disabled={draft.nodeIds.length === 0}
             onClick={() => beginAnimationPath()}
           >

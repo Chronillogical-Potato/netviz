@@ -45,9 +45,9 @@ beforeEach(() => {
 
 describe("AnimationOptions", () => {
   test("offers all-connections and request-chain authoring states", () => {
-    expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
-      "Animate all connections"
-    );
+    const overview = renderToStaticMarkup(<AnimationOverview />);
+    expect(overview).toContain("Animate all connections");
+    expect(overview).toContain("text-[11px] font-medium");
     expect(renderToStaticMarkup(<AnimationOverview />)).toContain(
       "Build custom path"
     );

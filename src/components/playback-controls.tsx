@@ -270,7 +270,7 @@ export function PlaybackControls({
               disabled={!hasScenario}
               onClick={() => scenarioRuntime.setPlaybackRate(rate)}
               className={cn(
-                "h-6 rounded text-[10px] text-muted-foreground transition-colors disabled:opacity-45",
+                "h-6 rounded text-[11px] font-medium text-muted-foreground transition-colors disabled:opacity-45",
                 transport.playbackRate === rate &&
                   "bg-muted text-foreground shadow-sm"
               )}
