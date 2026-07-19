@@ -64,6 +64,28 @@ function resetStore() {
 beforeEach(resetStore);
 
 describe("edge appearance", () => {
+  test("updates the label on every selected edge", () => {
+    useFlowStore.setState({
+      edges: [
+        edge("edge-a", "a", "b", true),
+        edge("edge-b", "b", "c", true),
+        edge("edge-c", "c", "d"),
+      ],
+    });
+
+    const setEdgeLabel = (
+      useFlowStore.getState() as unknown as {
+        setEdgeLabel?: (label: string) => void;
+      }
+    ).setEdgeLabel;
+    expect(typeof setEdgeLabel).toBe("function");
+    setEdgeLabel?.("Request");
+
+    expect(
+      useFlowStore.getState().edges.map((item) => item.data?.label)
+    ).toEqual(["Request", "Request", undefined]);
+  });
+
   test("applies a curve mode to selected edges and uses it for new edges", () => {
     useFlowStore.setState({
       edges: [

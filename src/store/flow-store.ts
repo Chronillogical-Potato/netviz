@@ -341,6 +341,7 @@ type FlowState = Snapshot & {
     offset?: { x: number; y: number }
   ) => void;
   updateEdgeLabel: (id: string, label: string) => void;
+  setEdgeLabel: (label: string) => void;
   renameNode: (id: string, name: string) => void;
   deleteNode: (id: string) => void;
   selectNodes: (ids: string[]) => void;
@@ -1569,6 +1570,18 @@ export const useFlowStore = create<FlowState>()(
         e.id === id ? { ...e, data: { ...e.data, label } } : e
       ),
     })),
+
+  setEdgeLabel: (label) =>
+    set((s) => {
+      if (!s.edges.some((edge) => edge.selected)) return s;
+      return {
+        edges: s.edges.map((edge) =>
+          edge.selected
+            ? { ...edge, data: { ...(edge.data ?? {}), label } }
+            : edge
+        ),
+      };
+    }),
 
   renameNode: (id, name) =>
     set((s) => ({
