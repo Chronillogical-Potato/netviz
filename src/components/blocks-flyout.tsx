@@ -96,7 +96,7 @@ function BlockRow({
     >
       {children}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-foreground">
+        <p className="truncate text-[13px] font-semibold text-foreground/80">
           {label}
         </p>
         {description ? (
@@ -123,7 +123,7 @@ function BlockRow({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-2 pb-1 pt-3 text-xs font-semibold text-foreground first:pt-1">
+    <p className="px-2 pb-1.5 text-xs font-semibold text-muted-foreground/90">
       {children}
     </p>
   );
@@ -302,25 +302,27 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
             No blocks match{q ? ` “${query.trim()}”` : ""}.
           </p>
         ) : (
-          visibleSections.map((sec) => (
-            <div key={sec.key}>
-              <SectionLabel>{sec.title}</SectionLabel>
-              <div className="flex flex-col gap-0.5">
-                {sec.items.map((it) => (
-                  <BlockRow
-                    key={it.key}
-                    payload={it.payload}
-                    label={it.label}
-                    description={it.description}
-                    onAdd={it.add}
-                    onDelete={it.onDelete}
-                  >
-                    {it.tile}
-                  </BlockRow>
-                ))}
-              </div>
-            </div>
-          ))
+          <div className="flex flex-col gap-3 py-2">
+            {visibleSections.map((sec) => (
+              <section key={sec.key}>
+                <SectionLabel>{sec.title}</SectionLabel>
+                <div className="flex flex-col gap-0.5">
+                  {sec.items.map((it) => (
+                    <BlockRow
+                      key={it.key}
+                      payload={it.payload}
+                      label={it.label}
+                      description={it.description}
+                      onAdd={it.add}
+                      onDelete={it.onDelete}
+                    >
+                      {it.tile}
+                    </BlockRow>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         )}
       </div>
       <CustomBlockDialog open={dialogOpen} onOpenChange={setDialogOpen} />
