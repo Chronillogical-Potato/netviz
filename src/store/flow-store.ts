@@ -858,6 +858,62 @@ function buildSequentialPreviewScenario(
   };
 }
 
+function buildScheduledPreviewScenario(
+  name: string,
+  scenarios: readonly ScenarioV1[],
+  startTimes: readonly (number | undefined)[]
+): ScenarioV1 | null {
+  if (scenarios.length === 0) return null;
+  const starts = scenarios.map((_, index) => {
+    const value = startTimes[index];
+    return typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.round(value))
+      : 0;
+  });
+  const tracks = scenarios.flatMap((scenario, index) =>
+    scenario.tracks.map((track) => ({
+      ...track,
+      clips: track.clips.map((clip) => ({
+        ...clip,
+        startMs: clip.startMs + starts[index],
+      })),
+    }))
+  );
+  const contentEndMs = Math.max(
+    ...scenarios.map((scenario, index) => starts[index] + scenario.durationMs)
+  );
+  const durationMs = contentEndMs + 800;
+  const base = createDefaultScenarioDocument({ name }).scenarios[0];
+  if (!base) return null;
+  return {
+    ...base,
+    durationMs,
+    playback: {
+      ...base.playback,
+      loop: { mode: "repeat", startMs: 0, endMs: durationMs },
+    },
+    tracks,
+    markers: scenarios.map((scenario, index) => ({
+      id: `template-animation-start-${scenario.id}`,
+      name: scenario.name,
+      atMs: starts[index],
+    })),
+  };
+}
+
+function buildTemplatePreviewScenario(
+  template: (typeof TEMPLATES)[number],
+  scenarios: readonly ScenarioV1[]
+): ScenarioV1 | null {
+  if (!template.previewName) return null;
+  const startTimes = template.animations.map(
+    (animation) => animation.previewStartMs
+  );
+  return startTimes.some((startMs) => startMs !== undefined)
+    ? buildScheduledPreviewScenario(template.previewName, scenarios, startTimes)
+    : buildSequentialPreviewScenario(template.previewName, scenarios);
+}
+
 function ensureTemplatePreviewScenarios(
   document: PageScenarioDocumentV1
 ): PageScenarioDocumentV1 {
@@ -873,8 +929,8 @@ function ensureTemplatePreviewScenarios(
       next.scenarios.find((scenario) => scenario.name === animation.name)
     );
     if (paths.some((scenario) => !scenario)) continue;
-    const preview = buildSequentialPreviewScenario(
-      template.previewName,
+    const preview = buildTemplatePreviewScenario(
+      template,
       paths as ScenarioV1[]
     );
     if (!preview) continue;
@@ -1369,15 +1425,17 @@ export const useFlowStore = create<FlowState>()(
           appearance: {
             ...defaultAnimationPathAppearance(),
             colors: animation.colors,
+            responseColors:
+              animation.responseColors ??
+              defaultAnimationPathAppearance().responseColors,
             widthPx: 3,
             glowBlurPx: 4,
           },
+          preset: animation.preset,
         });
         return scenario ? [scenario] : [];
       });
-      const previewScenario = template.previewName
-        ? buildSequentialPreviewScenario(template.previewName, scenarios)
-        : null;
+      const previewScenario = buildTemplatePreviewScenario(template, scenarios);
       const templateScenarios = previewScenario
         ? [previewScenario, ...scenarios]
         : scenarios;

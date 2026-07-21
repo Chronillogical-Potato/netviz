@@ -37,6 +37,24 @@ const productionTemplates = [
       "Autoscaling signal",
     ],
   },
+  {
+    id: "sharded-postgres-platform",
+    labels: [
+      "Authoritative DNS",
+      "Edge Firewall",
+      "Traffic Load Balancer",
+      "Pgpool-II",
+      "Customer Shard",
+      "Orders Shard",
+      "Analytics Shard",
+    ],
+    animations: [
+      "Web profile request / response",
+      "Mobile checkout request / response",
+      "Partner analytics request / response",
+      "Cached session request / response",
+    ],
+  },
 ];
 
 describe("production templates", () => {
@@ -66,11 +84,12 @@ describe("production templates", () => {
     }
   });
 
-  test("offers two complex animated systems alongside the load balancer", () => {
+  test("offers three complex animated systems alongside the load balancer", () => {
     expect(TEMPLATES.map((template) => template.id)).toEqual([
       "load-balanced-web-app",
       "event-driven-commerce",
       "kubernetes-production-platform",
+      "sharded-postgres-platform",
     ]);
 
     for (const expected of productionTemplates) {
@@ -89,6 +108,27 @@ describe("production templates", () => {
         expected.animations.every((animation) => animations.includes(animation))
       ).toBeTrue();
     }
+  });
+
+  test("schedules overlapping request-response traffic for the sharded database", () => {
+    const template = TEMPLATES.find(
+      (item) => item.id === "sharded-postgres-platform"
+    );
+    const requestResponse =
+      template?.animations.filter(
+        (animation) => animation.preset === "request-response"
+      ) ?? [];
+
+    expect(requestResponse).toHaveLength(4);
+    expect(requestResponse.map((animation) => animation.previewStartMs)).toEqual([
+      0,
+      900,
+      1_800,
+      3_100,
+    ]);
+    expect(
+      requestResponse.every((animation) => animation.responseColors?.length === 2)
+    ).toBeTrue();
   });
 
   test("uses valid blocks and connected paths for every template animation", () => {

@@ -473,7 +473,7 @@ describe("animation target lifecycle", () => {
     expect(startsAt(edgeToC?.id)).toBeGreaterThan(startsAt(edgeToB?.id) ?? 0);
   });
 
-  test("inserts both complex production templates with playable previews", () => {
+  test("inserts all complex production templates with playable previews", () => {
     for (const template of [
       {
         id: "event-driven-commerce",
@@ -486,6 +486,12 @@ describe("animation target lifecycle", () => {
         preview: "Kubernetes production flows",
         minimumNodes: 14,
         minimumEdges: 16,
+      },
+      {
+        id: "sharded-postgres-platform",
+        preview: "Concurrent database traffic",
+        minimumNodes: 18,
+        minimumEdges: 24,
       },
     ]) {
       resetStore();
@@ -506,6 +512,54 @@ describe("animation target lifecycle", () => {
         findAuthoredCustomPaths(state.scenarioDocument, state.edges).length
       ).toBe(state.scenarioDocument.scenarios.length - 1);
     }
+  });
+
+  test("overlaps sharded requests and sends each response back to its client", () => {
+    useFlowStore.getState().insertTemplate("sharded-postgres-platform", {
+      x: 0,
+      y: 0,
+    });
+    const state = useFlowStore.getState();
+    const preview = state.scenarioDocument.scenarios.find(
+      (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
+    );
+    const requestNames = [
+      "Web profile request / response",
+      "Mobile checkout request / response",
+      "Partner analytics request / response",
+      "Cached session request / response",
+    ];
+
+    expect(preview?.name).toBe("Concurrent database traffic");
+    expect(preview?.markers.slice(0, 4).map((marker) => marker.atMs)).toEqual([
+      0,
+      900,
+      1_800,
+      3_100,
+    ]);
+    for (const name of requestNames) {
+      const scenario = state.scenarioDocument.scenarios.find(
+        (item) => item.name === name
+      );
+      const directions = scenario?.tracks
+        .filter((track) => track.property === "connection-effect")
+        .flatMap((track) =>
+          track.clips.map((clip) => clip.effect.params.direction)
+        );
+      expect(directions).toContain("forward");
+      expect(directions).toContain("reverse");
+    }
+    const activeForwardBeams =
+      preview?.tracks
+        .filter((track) => track.property === "connection-effect")
+        .flatMap((track) => track.clips)
+        .filter(
+          (clip) =>
+            clip.effect.params.direction === "forward" &&
+            clip.startMs <= 2_000 &&
+            clip.startMs + clip.durationMs > 2_000
+        ) ?? [];
+    expect(activeForwardBeams.length).toBeGreaterThanOrEqual(2);
   });
 
   test("reorders custom paths without moving the template preview scenario", () => {
