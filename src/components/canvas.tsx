@@ -21,7 +21,7 @@ import {
   type NodeTypes,
   type OnBeforeDelete,
 } from "@xyflow/react";
-import { cancelFrame, frame, motionValue, springValue } from "motion";
+import { cancelFrame, frame } from "motion";
 import { resolveIcon } from "@/blocks/icons";
 import "@xyflow/react/dist/style.css";
 import {
@@ -51,7 +51,11 @@ import {
 } from "@/lib/snapping";
 import { findLineBindingAtPoint } from "@/lib/line-bindings";
 import { scenarioRuntime } from "@/animation/runtime-instance";
-import type { TargetFrame } from "@/animation/runtime";
+import {
+  buildVideoCameraTrack,
+  sampleVideoCameraTrack,
+  videoViewportTransform,
+} from "@/animation/video-camera";
 
 const nodeTypes: NodeTypes = {
   infra: InfraNodeView,
@@ -319,91 +323,6 @@ const nodeCenter = (node: AppNode) => {
   };
 };
 
-export function resolveVideoFollowPoint(
-  frames: readonly TargetFrame[],
-  nodes: readonly AppNode[],
-  edges: readonly LabeledEdgeModel[]
-) {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-  const edgesById = new Map(edges.map((edge) => [edge.id, edge]));
-  const edgePoints: Array<{ x: number; y: number }> = [];
-
-  for (const frame of frames) {
-    const edge = edgesById.get(frame.targetId);
-    if (!edge) continue;
-    const source = nodesById.get(edge.source);
-    const target = nodesById.get(edge.target);
-    if (!source || !target) continue;
-    for (const clip of frame.clips) {
-      if (clip.timing.progresses.length > 1) {
-        edgePoints.push(nodeCenter(source), nodeCenter(target));
-      } else {
-        edgePoints.push(
-          nodeCenter(
-            clip.timing.travelDirection === "reverse" ? source : target
-          )
-        );
-      }
-    }
-  }
-
-  const points =
-    edgePoints.length > 0
-      ? edgePoints
-      : frames.flatMap((frame) => {
-          const node = nodesById.get(frame.targetId);
-          return node ? [nodeCenter(node)] : [];
-        });
-  if (points.length === 0) return null;
-  return points.reduce(
-    (center, point) => ({
-      x: center.x + point.x / points.length,
-      y: center.y + point.y / points.length,
-    }),
-    { x: 0, y: 0 }
-  );
-}
-
-export function getVideoCameraViewport({
-  contentBounds,
-  viewport,
-  frame,
-  focus,
-}: {
-  contentBounds: { x: number; y: number; width: number; height: number };
-  viewport: { x: number; y: number; zoom: number };
-  frame: { width: number; height: number };
-  focus: { x: number; y: number };
-}) {
-  const overflowX = contentBounds.width * viewport.zoom > frame.width * 0.9;
-  const overflowY = contentBounds.height * viewport.zoom > frame.height * 0.9;
-  if (!overflowX && !overflowY) return null;
-
-  return {
-    x: overflowX ? frame.width * 0.45 - focus.x * viewport.zoom : viewport.x,
-    y: overflowY ? frame.height * 0.5 - focus.y * viewport.zoom : viewport.y,
-    zoom: viewport.zoom,
-  };
-}
-
-function videoFocusKey(
-  frames: readonly TargetFrame[],
-  edges: readonly LabeledEdgeModel[]
-) {
-  const edgeIds = new Set(edges.map((edge) => edge.id));
-  const edgeFrames = frames.filter((frame) => edgeIds.has(frame.targetId));
-  const relevantFrames = edgeFrames.length > 0 ? edgeFrames : frames;
-  return relevantFrames
-    .flatMap((frame) =>
-      frame.clips.map(
-        (clip) =>
-          `${frame.targetId}:${clip.trackId}:${clip.timing.travelDirection}`
-      )
-    )
-    .sort()
-    .join("|");
-}
-
 export function getDrawBounds(
   start: { x: number; y: number },
   end: { x: number; y: number },
@@ -650,79 +569,66 @@ function VideoFollowOverlay({
 
   useEffect(() => {
     const visibleNodes = nodes.filter((node) => !node.hidden);
-    if (!enabled || !transport.isPlaying || visibleNodes.length === 0) return;
-    let activeFocusKey = "";
+    const scenario = scenarioRuntime.getActiveScenario();
+    if (!enabled || !scenario || visibleNodes.length === 0) return;
+    const flow = document.querySelector(".react-flow");
+    const viewportElement = flow?.querySelector(".react-flow__viewport");
+    if (!(flow instanceof HTMLElement) || !(viewportElement instanceof HTMLElement)) {
+      return;
+    }
     const initialViewport = getViewport();
     let lastViewport = initialViewport;
-    const targetX = motionValue(initialViewport.x);
-    const targetY = motionValue(initialViewport.y);
-    const targetZoom = motionValue(initialViewport.zoom);
-    const springOptions = { visualDuration: 1.6, bounce: 0 };
-    const cameraX = springValue(targetX, springOptions);
-    const cameraY = springValue(targetY, springOptions);
-    const cameraZoom = springValue(targetZoom, springOptions);
     const contentBounds = getNodesBounds(visibleNodes);
-
-    const updateTarget = () => {
-      if (!scenarioRuntime.getTransportSnapshot().isPlaying) return;
-      const frames = scenarioRuntime.getActiveTargetFrames();
-      const focusKey = videoFocusKey(frames, edges);
-      if (focusKey && focusKey !== activeFocusKey) {
-        activeFocusKey = focusKey;
-        const focus = resolveVideoFollowPoint(frames, nodes, edges);
-        const flow = document.querySelector(".react-flow");
-        if (focus && flow instanceof HTMLElement) {
-          const frame = flow.getBoundingClientRect();
-          const target = getVideoCameraViewport({
-            contentBounds,
-            viewport: {
-              x: cameraX.get(),
-              y: cameraY.get(),
-              zoom: cameraZoom.get(),
-            },
-            frame: { width: frame.width, height: frame.height },
-            focus,
-          });
-          if (target) {
-            targetX.set(target.x);
-            targetY.set(target.y);
-            targetZoom.set(target.zoom);
-          }
-        }
-      } else if (!focusKey) {
-        activeFocusKey = "";
-      }
-    };
+    const frameBounds = flow.getBoundingClientRect();
+    const cameraTrack = buildVideoCameraTrack({
+      scenario,
+      nodeCenters: Object.fromEntries(
+        visibleNodes.map((node) => [node.id, nodeCenter(node)])
+      ),
+      edges,
+      contentBounds,
+      frame: { width: frameBounds.width, height: frameBounds.height },
+      initialViewport,
+    });
+    let lastTransform = "";
+    viewportElement.style.willChange = "transform";
+    viewportElement.style.backfaceVisibility = "hidden";
 
     const renderCamera = () => {
-      const nextViewport = {
-        x: cameraX.get(),
-        y: cameraY.get(),
-        zoom: cameraZoom.get(),
-      };
-      if (
-        Math.abs(nextViewport.x - lastViewport.x) > 0.001 ||
-        Math.abs(nextViewport.y - lastViewport.y) > 0.001 ||
-        Math.abs(nextViewport.zoom - lastViewport.zoom) > 0.0001
-      ) {
-        lastViewport = nextViewport;
-        void setViewport(nextViewport);
-      }
+      const { currentTimeMs } = scenarioRuntime.getTransportSnapshot();
+      const nextViewport = sampleVideoCameraTrack(cameraTrack, currentTimeMs);
+      const transform = videoViewportTransform(
+        nextViewport,
+        window.devicePixelRatio
+      );
+      if (transform === lastTransform) return;
+      lastTransform = transform;
+      lastViewport = nextViewport;
+      viewportElement.style.transform = transform;
     };
 
-    frame.update(updateTarget, true);
-    frame.render(renderCamera, true);
-    return () => {
-      cancelFrame(updateTarget);
-      cancelFrame(renderCamera);
-      cameraX.destroy();
-      cameraY.destroy();
-      cameraZoom.destroy();
-      targetX.destroy();
-      targetY.destroy();
-      targetZoom.destroy();
+    renderCamera();
+    let rendering = false;
+    const syncCameraPlayback = (snapshot: { isPlaying: boolean }) => {
+      if (snapshot.isPlaying && !rendering) {
+        rendering = true;
+        frame.render(renderCamera, true);
+      } else if (!snapshot.isPlaying && rendering) {
+        rendering = false;
+        cancelFrame(renderCamera);
+        renderCamera();
+      }
     };
-  }, [edges, enabled, getViewport, nodes, setViewport, transport.isPlaying]);
+    const unsubscribePlayback =
+      scenarioRuntime.subscribeTransport(syncCameraPlayback);
+    return () => {
+      unsubscribePlayback();
+      cancelFrame(renderCamera);
+      viewportElement.style.willChange = "";
+      viewportElement.style.backfaceVisibility = "";
+      void setViewport(lastViewport);
+    };
+  }, [edges, enabled, getViewport, nodes, setViewport, transport.scenarioId]);
 
   if (!enabled) return null;
   return (
@@ -1158,8 +1064,13 @@ function CanvasInner() {
         selectionOnDrag={
           !isPlaybackOnly && !isPickingAnimationPath && tool === "select"
         }
-        panOnDrag={isPlaybackOnly || tool === "hand" ? true : [1]}
-        panOnScroll
+        panOnDrag={
+          isVideoPlayback ? false : isPlaybackOnly || tool === "hand" ? true : [1]
+        }
+        panOnScroll={!isVideoPlayback}
+        zoomOnScroll={!isVideoPlayback}
+        zoomOnPinch={!isVideoPlayback}
+        zoomOnDoubleClick={!isVideoPlayback}
         selectionMode={SelectionMode.Partial}
         nodesDraggable={elementsInteractive}
         nodesConnectable={elementsInteractive}
@@ -1171,7 +1082,7 @@ function CanvasInner() {
             ? null
             : ["Backspace", "Delete"]
         }
-        onlyRenderVisibleElements={!renderAll}
+        onlyRenderVisibleElements={!renderAll && !isVideoPlayback}
         elevateNodesOnSelect={false}
         fitView
         fitViewOptions={{ padding: 0.4 }}

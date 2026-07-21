@@ -65,6 +65,8 @@ export class ScenarioRuntime {
 
   getActiveScenarioName = () => this.scenario?.name ?? null;
 
+  getActiveScenario = () => this.scenario;
+
   getActiveAnimationName = () => {
     if (!this.scenario) return null;
     let activeName: string | null = null;

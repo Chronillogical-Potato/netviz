@@ -115,6 +115,16 @@ describe("scenario runtime", () => {
     expect(activeAnimationName()).toBe("Request flow");
   });
 
+  test("exposes the complete active scenario to timeline consumers", () => {
+    const runtime = new ScenarioRuntime(new ManualScheduler());
+    const activeScenario = scenario();
+    runtime.activate("page-1", activeScenario);
+
+    expect(runtime.getActiveScenario()).toBe(activeScenario);
+    runtime.activate("page-1", null);
+    expect(runtime.getActiveScenario()).toBeNull();
+  });
+
   test("exposes active frames for camera-follow consumers", () => {
     const scheduler = new ManualScheduler();
     const runtime = new ScenarioRuntime(scheduler);
