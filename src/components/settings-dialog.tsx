@@ -30,6 +30,7 @@ const TAB_TITLES: Record<TabId, string> = {
 };
 
 export type SettingsActions = {
+  onShare: () => void;
   onSave: () => void;
   onExportPng: () => void;
   onExportSvg: () => void;
@@ -239,6 +240,18 @@ export function SettingsDialog({
               )}
               {tab === "file" && (
                 <>
+                  <SettingsRow
+                    label="Share project"
+                    description="Create a link that opens an editable copy."
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={run(actions.onShare)}
+                    >
+                      Share
+                    </Button>
+                  </SettingsRow>
                   <SettingsRow
                     label="Save file"
                     description="Download the whole project as JSON."

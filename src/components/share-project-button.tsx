@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFlowSnapshot, createShareUrl } from "@/lib/storage";
 import { useFlowStore } from "@/store/flow-store";
 import { Button } from "@/ui/button";
@@ -11,7 +11,6 @@ import {
   DialogTitle,
 } from "@/ui/dialog";
 import { Input } from "@/ui/input";
-import { Share } from "@/ui/icons";
 
 type ShareState =
   | { status: "idle" }
@@ -19,29 +18,41 @@ type ShareState =
   | { status: "ready"; link: string }
   | { status: "error"; message: string };
 
-export function ShareProjectButton() {
-  const [open, setOpen] = useState(false);
+export function ShareProjectDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [share, setShare] = useState<ShareState>({ status: "idle" });
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const showShareDialog = () => {
-    setOpen(true);
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
     setCopied(false);
     setShare({ status: "loading" });
     const snapshot = createFlowSnapshot(useFlowStore.getState());
     void createShareUrl(snapshot)
-      .then((link) => setShare({ status: "ready", link }))
-      .catch((error: unknown) =>
+      .then((link) => {
+        if (current) setShare({ status: "ready", link });
+      })
+      .catch((error: unknown) => {
+        if (!current) return;
         setShare({
           status: "error",
           message:
             error instanceof Error
               ? error.message
               : "Could not create a share link.",
-        })
-      );
-  };
+        });
+      });
+    return () => {
+      current = false;
+    };
+  }, [open]);
 
   const copyLink = async () => {
     if (share.status !== "ready") return;
@@ -55,19 +66,8 @@ export function ShareProjectButton() {
   };
 
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1.5"
-        aria-label="Share project"
-        onClick={showShareDialog}
-      >
-        <Share className="h-3.5 w-3.5" />
-        Share
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
           <DialogHeader>
             <DialogTitle>Share project</DialogTitle>
             <DialogDescription>
@@ -106,12 +106,11 @@ export function ShareProjectButton() {
             </>
           )}
           <DialogFooter className="grid-cols-1">
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

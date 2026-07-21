@@ -5,8 +5,8 @@ import {
   Check,
   ChevronDown,
   Eye,
-  MoreVertical,
   PenLine,
+  Settings,
 } from "@/ui/icons";
 import type { AppIcon } from "@/ui/icons";
 import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/react";
@@ -31,7 +31,7 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Logo } from "@/ui/logo";
 import { SettingsDialog } from "./settings-dialog";
-import { ShareProjectButton } from "./share-project-button";
+import { ShareProjectDialog } from "./share-project-button";
 
 import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
@@ -185,6 +185,7 @@ export function Toolbar() {
   } | null>(null);
   const [saveDialog, setSaveDialog] = useState<{ name: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -516,13 +517,14 @@ export function Toolbar() {
           title="Settings"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <MoreVertical className="h-4 w-4" />
+          <Settings className="h-4 w-4" />
         </button>
       </div>
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         actions={{
+          onShare: () => setShareOpen(true),
           onSave: save,
           onExportPng: () => openExportDialog("png"),
           onExportSvg: () => openExportDialog("svg"),
@@ -532,8 +534,8 @@ export function Toolbar() {
           onResetWorkspace: () => setConfirmResetOpen(true),
         }}
       />
+      <ShareProjectDialog open={shareOpen} onOpenChange={setShareOpen} />
       <div className="ml-auto flex items-center gap-1.5">
-        <ShareProjectButton />
         <Button
           variant="ghost"
           size="sm"
@@ -544,16 +546,6 @@ export function Toolbar() {
         >
           <Eye className="h-3.5 w-3.5" />
           Preview
-        </Button>
-        <Button variant="ghost" size="sm" onClick={save}>
-          Save
-        </Button>
-        <Button
-          size="sm"
-          onClick={() => openExportDialog("png")}
-          disabled={!hasNodes}
-        >
-          Export
         </Button>
       </div>
 
