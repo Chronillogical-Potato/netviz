@@ -178,6 +178,42 @@ describe("authored custom paths", () => {
     ]);
   });
 
+  test("adds separate delays between animations and after the final animation", () => {
+    const first = {
+      ...document([track("user-firewall", 0)]).scenarios[0],
+      name: "Login",
+    };
+    const second = {
+      ...document([track("proxy-server", 0)]).scenarios[0],
+      id: "scenario-2",
+      name: "Checkout",
+    };
+
+    const combined = buildSequentialCustomPathScenario(
+      {
+        schemaVersion: 1,
+        defaultScenarioId: first.id,
+        scenarios: [first, second],
+      },
+      [
+        { id: "user-firewall", source: "user", target: "firewall" },
+        { id: "proxy-server", source: "proxy", target: "server" },
+      ],
+      { betweenMs: 1_200, endMs: 800 }
+    );
+
+    expect(combined?.tracks.map((item) => item.clips[0]?.startMs)).toEqual([
+      0,
+      5_200,
+    ]);
+    expect(combined?.durationMs).toBe(10_000);
+    expect(combined?.playback.loop).toEqual({
+      mode: "repeat",
+      startMs: 0,
+      endMs: 10_000,
+    });
+  });
+
   test("reconstructs a connected path from persisted scenario timing", () => {
     expect(
       findAuthoredCustomPath(

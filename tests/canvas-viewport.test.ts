@@ -15,4 +15,21 @@ describe("canvas viewport persistence", () => {
 
     expect(useFlowStore.getState().canvasViewport).toEqual(viewport);
   });
+
+  test("round-trips zoom and position through persisted state", () => {
+    const viewport = { x: -360, y: 128, zoom: 1.4 };
+    useFlowStore.getState().setCanvasViewport(viewport);
+    const partialize = useFlowStore.persist.getOptions().partialize;
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!partialize || !merge) throw new Error("Expected persistence options");
+
+    const persisted = partialize(useFlowStore.getState());
+    const hydrated = merge(
+      persisted,
+      { ...useFlowStore.getState(), canvasViewport: null }
+    ) as ReturnType<typeof useFlowStore.getState>;
+
+    expect(persisted).toMatchObject({ canvasViewport: viewport });
+    expect(hydrated.canvasViewport).toEqual(viewport);
+  });
 });

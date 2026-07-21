@@ -40,4 +40,14 @@ describe("Video mode camera follow", () => {
     expect(source).not.toContain("setCenter");
     expect(source).not.toContain("duration: 500");
   });
+
+  test("keeps the Video title visible when camera follow is disabled", async () => {
+    const source = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+
+    expect(source).toContain("videoCameraFollowEnabled");
+    expect(source).toContain("followEnabled={videoCameraFollowEnabled}");
+    expect(source).toContain("!followEnabled ||");
+  });
 });

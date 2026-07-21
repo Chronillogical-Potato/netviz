@@ -275,7 +275,10 @@ type Snapshot = {
   showSmartGuides: boolean;
   motionPreference: MotionPreference;
   videoTitle: string;
-  videoAnimationGapMs: number;
+  videoStartDelayMs: number;
+  videoBetweenDelayMs: number;
+  videoEndDelayMs: number;
+  videoCameraFollowEnabled: boolean;
   workMode: WorkMode;
   canvasViewport: CanvasViewport | null;
   renderAllElements: boolean;
@@ -286,6 +289,11 @@ export type WorkMode = "design" | "animation" | "video" | "preview";
 export type EditorMode = Exclude<WorkMode, "preview">;
 export const isAnimationCanvasMode = (mode: WorkMode) => mode !== "design";
 export type MotionPreference = "system" | "full" | "reduced";
+const MAX_VIDEO_DELAY_MS = 10_000;
+const normalizeVideoDelay = (value: unknown, fallback: number) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.min(MAX_VIDEO_DELAY_MS, Math.max(0, Math.round(value)))
+    : fallback;
 export type AnimationPathAppearance = {
   colors: [string, string];
   responseColors: [string, string];
@@ -447,7 +455,10 @@ type FlowState = Snapshot & {
   toggleSmartGuides: () => void;
   setMotionPreference: (preference: MotionPreference) => void;
   setVideoTitle: (title: string) => void;
-  setVideoAnimationGapMs: (gapMs: number) => void;
+  setVideoStartDelayMs: (delayMs: number) => void;
+  setVideoBetweenDelayMs: (delayMs: number) => void;
+  setVideoEndDelayMs: (delayMs: number) => void;
+  setVideoCameraFollowEnabled: (enabled: boolean) => void;
   setCanvasViewport: (viewport: CanvasViewport) => void;
   setWorkMode: (mode: WorkMode) => void;
   exitPreview: () => void;
@@ -1154,7 +1165,10 @@ export const useFlowStore = create<FlowState>()(
   showSmartGuides: true,
   motionPreference: "system" as MotionPreference,
   videoTitle: "",
-  videoAnimationGapMs: 400,
+  videoStartDelayMs: 3_000,
+  videoBetweenDelayMs: 400,
+  videoEndDelayMs: 0,
+  videoCameraFollowEnabled: true,
   workMode: "design" as WorkMode,
   canvasViewport: null,
   previewReturnMode: "design" as EditorMode,
@@ -2818,12 +2832,20 @@ export const useFlowStore = create<FlowState>()(
     set((s) => ({ showSmartGuides: !s.showSmartGuides })),
   setMotionPreference: (motionPreference) => set({ motionPreference }),
   setVideoTitle: (videoTitle) => set({ videoTitle }),
-  setVideoAnimationGapMs: (gapMs) =>
+  setVideoStartDelayMs: (delayMs) =>
     set({
-      videoAnimationGapMs: Number.isFinite(gapMs)
-        ? Math.min(5_000, Math.max(0, Math.round(gapMs)))
-        : 400,
+      videoStartDelayMs: normalizeVideoDelay(delayMs, 3_000),
     }),
+  setVideoBetweenDelayMs: (delayMs) =>
+    set({
+      videoBetweenDelayMs: normalizeVideoDelay(delayMs, 400),
+    }),
+  setVideoEndDelayMs: (delayMs) =>
+    set({
+      videoEndDelayMs: normalizeVideoDelay(delayMs, 0),
+    }),
+  setVideoCameraFollowEnabled: (videoCameraFollowEnabled) =>
+    set({ videoCameraFollowEnabled }),
   setCanvasViewport: (canvasViewport) => set({ canvasViewport }),
   renderAllElements: false,
   setRenderAllElements: (v) => set({ renderAllElements: v }),
@@ -2925,7 +2947,9 @@ export const useFlowStore = create<FlowState>()(
       // fights the array-order stacking. Strip any persisted zIndex so
       // paint order follows the array (and the Layers panel) again.
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<Snapshot>;
+        const { videoAnimationGapMs: legacyAnimationGapMs, ...p } = (
+          persisted ?? {}
+        ) as Partial<Snapshot> & { videoAnimationGapMs?: unknown };
         const strip = (ns?: AppNode[]) =>
           ns?.map((n) => ({ ...n, zIndex: 0 }));
         const nodes = strip(p.nodes) ?? current.nodes;
@@ -2963,11 +2987,13 @@ export const useFlowStore = create<FlowState>()(
           ),
           motionPreference: p.motionPreference ?? "system",
           videoTitle: p.videoTitle ?? "",
-          videoAnimationGapMs:
-            typeof p.videoAnimationGapMs === "number" &&
-            Number.isFinite(p.videoAnimationGapMs)
-              ? Math.min(5_000, Math.max(0, Math.round(p.videoAnimationGapMs)))
-              : 400,
+          videoStartDelayMs: normalizeVideoDelay(p.videoStartDelayMs, 3_000),
+          videoBetweenDelayMs: normalizeVideoDelay(
+            p.videoBetweenDelayMs,
+            normalizeVideoDelay(legacyAnimationGapMs, 400)
+          ),
+          videoEndDelayMs: normalizeVideoDelay(p.videoEndDelayMs, 0),
+          videoCameraFollowEnabled: p.videoCameraFollowEnabled ?? true,
           canvasViewport:
             p.canvasViewport &&
             Number.isFinite(p.canvasViewport.x) &&
@@ -3004,7 +3030,10 @@ export const useFlowStore = create<FlowState>()(
         showSmartGuides: s.showSmartGuides,
         motionPreference: s.motionPreference,
         videoTitle: s.videoTitle,
-        videoAnimationGapMs: s.videoAnimationGapMs,
+        videoStartDelayMs: s.videoStartDelayMs,
+        videoBetweenDelayMs: s.videoBetweenDelayMs,
+        videoEndDelayMs: s.videoEndDelayMs,
+        videoCameraFollowEnabled: s.videoCameraFollowEnabled,
         canvasViewport: s.canvasViewport,
         workMode:
           s.workMode === "preview" ? s.previewReturnMode : s.workMode,

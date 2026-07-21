@@ -18,6 +18,7 @@ describe("Video presentation launch", () => {
         enterPreview: () => enteredPreview++,
         startPlayback: () => startedPlayback++,
       },
+      VIDEO_START_DELAY_MS,
       (callback, delayMs) => {
         scheduled = callback;
         scheduledDelay = delayMs;
@@ -44,6 +45,7 @@ describe("Video presentation launch", () => {
     let cancelled = false;
     beginVideoPresentation(
       { enterPreview: () => {}, startPlayback: () => {} },
+      VIDEO_START_DELAY_MS,
       () => () => {
         cancelled = true;
       }
@@ -51,5 +53,20 @@ describe("Video presentation launch", () => {
 
     cancelPendingVideoPresentation();
     expect(cancelled).toBe(true);
+  });
+
+  test("uses the configured start delay", () => {
+    let scheduledDelay = 0;
+    beginVideoPresentation(
+      { enterPreview: () => {}, startPlayback: () => {} },
+      8_500,
+      (_callback, delayMs) => {
+        scheduledDelay = delayMs;
+        return () => {};
+      }
+    );
+
+    expect(scheduledDelay).toBe(8_500);
+    cancelPendingVideoPresentation();
   });
 });

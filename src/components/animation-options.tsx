@@ -75,7 +75,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Picker({
+export function Picker({
   label,
   value,
   options,

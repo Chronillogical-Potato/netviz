@@ -13,14 +13,22 @@ describe("inspector layout", () => {
     expect(animationBranch).toContain("min-h-0 flex-1 overflow-y-auto");
   });
 
-  test("offers persistent video title and animation gap controls", async () => {
+  test("offers persistent Video delay and camera controls", async () => {
     const source = await Bun.file(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
     expect(source).toContain("<VideoSettings />");
     expect(source).toContain('placeholder="Current animation name"');
-    expect(source).toContain('aria-label="Animation gap"');
+    expect(source).toContain('ariaLabel="Start delay"');
+    expect(source).toContain('ariaLabel="Between animations delay"');
+    expect(source).toContain('ariaLabel="End delay"');
+    expect(source).toContain('label="Camera follow"');
+    expect(source).toContain("max={10_000}");
     expect(source).toContain("videoTitle");
-    expect(source).toContain("videoAnimationGapMs");
+    expect(source).toContain("videoStartDelayMs");
+    expect(source).toContain("videoBetweenDelayMs");
+    expect(source).toContain("videoEndDelayMs");
+    expect(source).toContain("videoCameraFollowEnabled");
+    expect(source).toContain("Keeps your saved zoom and canvas position");
   });
 });

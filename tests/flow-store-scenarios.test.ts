@@ -54,7 +54,10 @@ function resetStore() {
     showSmartGuides: true,
     motionPreference: "system",
     videoTitle: "",
-    videoAnimationGapMs: 400,
+    videoStartDelayMs: 3_000,
+    videoBetweenDelayMs: 400,
+    videoEndDelayMs: 0,
+    videoCameraFollowEnabled: true,
     workMode: "design",
     previewReturnMode: "design",
     animationPathDraft: null,
@@ -190,28 +193,55 @@ describe("page-owned animation state", () => {
     expect(hydrated.workMode).toBe("video");
   });
 
-  test("persists the Video presentation title and animation gap", () => {
+  test("persists the Video presentation title, delays, and camera follow", () => {
     const controls = useFlowStore.getState() as unknown as {
       setVideoTitle?: (title: string) => void;
-      setVideoAnimationGapMs?: (gapMs: number) => void;
+      setVideoStartDelayMs?: (delayMs: number) => void;
+      setVideoBetweenDelayMs?: (delayMs: number) => void;
+      setVideoEndDelayMs?: (delayMs: number) => void;
+      setVideoCameraFollowEnabled?: (enabled: boolean) => void;
     };
     expect(typeof controls.setVideoTitle).toBe("function");
-    expect(typeof controls.setVideoAnimationGapMs).toBe("function");
+    expect(typeof controls.setVideoStartDelayMs).toBe("function");
+    expect(typeof controls.setVideoBetweenDelayMs).toBe("function");
+    expect(typeof controls.setVideoEndDelayMs).toBe("function");
+    expect(typeof controls.setVideoCameraFollowEnabled).toBe("function");
 
     controls.setVideoTitle?.("Production request flow");
-    controls.setVideoAnimationGapMs?.(1_200);
+    controls.setVideoStartDelayMs?.(12_000);
+    controls.setVideoBetweenDelayMs?.(1_200);
+    controls.setVideoEndDelayMs?.(-100);
+    controls.setVideoCameraFollowEnabled?.(false);
 
     expect(useFlowStore.getState()).toMatchObject({
       videoTitle: "Production request flow",
-      videoAnimationGapMs: 1_200,
+      videoStartDelayMs: 10_000,
+      videoBetweenDelayMs: 1_200,
+      videoEndDelayMs: 0,
+      videoCameraFollowEnabled: false,
     });
 
     const partialize = useFlowStore.persist.getOptions().partialize;
     if (!partialize) throw new Error("Expected persisted-state partialize");
     expect(partialize(useFlowStore.getState())).toMatchObject({
       videoTitle: "Production request flow",
-      videoAnimationGapMs: 1_200,
+      videoStartDelayMs: 10_000,
+      videoBetweenDelayMs: 1_200,
+      videoEndDelayMs: 0,
+      videoCameraFollowEnabled: false,
     });
+  });
+
+  test("migrates the previous animation gap into the between delay", () => {
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!merge) throw new Error("Expected persisted-state merge");
+
+    const hydrated = merge(
+      { videoAnimationGapMs: 1_600 },
+      useFlowStore.getState()
+    ) as ReturnType<typeof useFlowStore.getState>;
+
+    expect(hydrated.videoBetweenDelayMs).toBe(1_600);
   });
 
   test("waits for the Video play action instead of autoplaying the mode", () => {

@@ -17,6 +17,7 @@ export function beginVideoPresentation(
     enterPreview: () => void;
     startPlayback: () => void;
   },
+  delayMs = VIDEO_START_DELAY_MS,
   schedule: ScheduleVideoStart = scheduleWithTimeout
 ) {
   cancelPendingVideoPresentation();
@@ -24,7 +25,7 @@ export function beginVideoPresentation(
   cancelPendingStart = schedule(() => {
     cancelPendingStart = null;
     actions.startPlayback();
-  }, VIDEO_START_DELAY_MS);
+  }, Math.max(0, Math.round(delayMs)));
 }
 
 export function cancelPendingVideoPresentation() {

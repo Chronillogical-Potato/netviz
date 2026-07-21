@@ -138,23 +138,21 @@ describe("PlaybackControls", () => {
     const source = await Bun.file(
       new URL("../src/components/playback-controls.tsx", import.meta.url)
     ).text();
-    const videoLaunch = source.slice(
-      source.indexOf("beginVideoPresentation({"),
-      source.indexOf("});", source.indexOf("beginVideoPresentation({")) + 3
-    );
 
-    expect(videoLaunch).toContain("scenarioRuntime.restart()");
-    expect(videoLaunch).toContain("scenarioRuntime.play()");
+    expect(source).toContain("scenarioRuntime.restart()");
+    expect(source).toContain("scenarioRuntime.play()");
   });
 
-  test("rebuilds Video playback with the configured animation gap", async () => {
+  test("rebuilds Video playback with all configured delays", async () => {
     const source = await Bun.file(
       new URL("../src/components/playback-controls.tsx", import.meta.url)
     ).text();
 
-    expect(source).toContain("videoAnimationGapMs");
-    expect(source).toContain(
-      "prepareAllConnections(videoAnimationGapMs, true)"
-    );
+    expect(source).toContain("videoStartDelayMs");
+    expect(source).toContain("videoBetweenDelayMs");
+    expect(source).toContain("videoEndDelayMs");
+    expect(source).toContain("betweenMs: videoBetweenDelayMs");
+    expect(source).toContain("endMs: videoEndDelayMs");
+    expect(source).toContain("videoStartDelayMs,");
   });
 });

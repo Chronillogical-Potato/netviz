@@ -553,10 +553,12 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
 
 function VideoFollowOverlay({
   enabled,
+  followEnabled,
   nodes,
   edges,
 }: {
   enabled: boolean;
+  followEnabled: boolean;
   nodes: readonly AppNode[];
   edges: readonly LabeledEdgeModel[];
 }) {
@@ -571,7 +573,14 @@ function VideoFollowOverlay({
   useEffect(() => {
     const visibleNodes = nodes.filter((node) => !node.hidden);
     const scenario = scenarioRuntime.getActiveScenario();
-    if (!enabled || !scenario || visibleNodes.length === 0) return;
+    if (
+      !enabled ||
+      !followEnabled ||
+      !scenario ||
+      visibleNodes.length === 0
+    ) {
+      return;
+    }
     const flow = document.querySelector(".react-flow");
     const viewportElement = flow?.querySelector(".react-flow__viewport");
     if (!(flow instanceof HTMLElement) || !(viewportElement instanceof HTMLElement)) {
@@ -650,7 +659,15 @@ function VideoFollowOverlay({
       applyViewport(initialViewport);
       void setViewport(initialViewport);
     };
-  }, [edges, enabled, getViewport, nodes, setViewport, transport.scenarioId]);
+  }, [
+    edges,
+    enabled,
+    followEnabled,
+    getViewport,
+    nodes,
+    setViewport,
+    transport.scenarioId,
+  ]);
 
   if (!enabled) return null;
   return (
@@ -689,6 +706,9 @@ function CanvasInner() {
   const renderAll = useFlowStore((s) => s.renderAllElements);
   const savedViewport = useFlowStore((s) => s.canvasViewport);
   const setCanvasViewport = useFlowStore((s) => s.setCanvasViewport);
+  const videoCameraFollowEnabled = useFlowStore(
+    (s) => s.videoCameraFollowEnabled
+  );
   const selectedSingle = useFlowStore((s) => {
     const sel = s.nodes.filter((n) => n.selected);
     return sel.length === 1 ? sel[0] : null;
@@ -1137,6 +1157,7 @@ function CanvasInner() {
       </ReactFlow>
       <VideoFollowOverlay
         enabled={isVideoPresentation}
+        followEnabled={videoCameraFollowEnabled}
         nodes={nodes}
         edges={edges}
       />

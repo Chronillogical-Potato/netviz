@@ -58,6 +58,7 @@ import {
   AnimationOverview,
   AnimationPathBuilder,
   ExistingAnimationPath,
+  Picker,
   RequestFlowOptions,
 } from "./animation-options";
 import { PlaybackControls } from "./playback-controls";
@@ -70,12 +71,28 @@ import {
 
 function VideoSettings() {
   const videoTitle = useFlowStore((state) => state.videoTitle);
-  const videoAnimationGapMs = useFlowStore(
-    (state) => state.videoAnimationGapMs
+  const videoStartDelayMs = useFlowStore(
+    (state) => state.videoStartDelayMs
+  );
+  const videoBetweenDelayMs = useFlowStore(
+    (state) => state.videoBetweenDelayMs
+  );
+  const videoEndDelayMs = useFlowStore((state) => state.videoEndDelayMs);
+  const videoCameraFollowEnabled = useFlowStore(
+    (state) => state.videoCameraFollowEnabled
   );
   const setVideoTitle = useFlowStore((state) => state.setVideoTitle);
-  const setVideoAnimationGapMs = useFlowStore(
-    (state) => state.setVideoAnimationGapMs
+  const setVideoStartDelayMs = useFlowStore(
+    (state) => state.setVideoStartDelayMs
+  );
+  const setVideoBetweenDelayMs = useFlowStore(
+    (state) => state.setVideoBetweenDelayMs
+  );
+  const setVideoEndDelayMs = useFlowStore(
+    (state) => state.setVideoEndDelayMs
+  );
+  const setVideoCameraFollowEnabled = useFlowStore(
+    (state) => state.setVideoCameraFollowEnabled
   );
 
   return (
@@ -89,30 +106,77 @@ function VideoSettings() {
             aria-label="Video title"
           />
         </Row>
-        <Row label="Gap">
-          <Slider
-            min={0}
-            max={5_000}
-            step={100}
-            value={videoAnimationGapMs}
-            onChange={(event) =>
-              setVideoAnimationGapMs(Number(event.target.value))
-            }
-            className="min-w-0 flex-1"
-            aria-label="Animation gap"
-          />
-          <span className="flex h-7 w-11 shrink-0 items-center justify-end rounded-md bg-input px-1.5 text-[11px] tabular-nums text-foreground">
-            {(videoAnimationGapMs / 1_000).toFixed(1)}s
-          </span>
-        </Row>
       </Section>
-      <Section title="Camera follow">
+      <Section title="Delay">
+        <VideoDelayRow
+          label="Start"
+          ariaLabel="Start delay"
+          value={videoStartDelayMs}
+          onChange={setVideoStartDelayMs}
+        />
+        <VideoDelayRow
+          label="Between"
+          ariaLabel="Between animations delay"
+          value={videoBetweenDelayMs}
+          onChange={setVideoBetweenDelayMs}
+        />
+        <VideoDelayRow
+          label="End"
+          ariaLabel="End delay"
+          value={videoEndDelayMs}
+          onChange={setVideoEndDelayMs}
+        />
+      </Section>
+      <Section title="Camera">
+        <Row label="Follow">
+          <Picker
+            label="Camera follow"
+            value={videoCameraFollowEnabled ? "enabled" : "disabled"}
+            options={[
+              { value: "enabled", label: "Enabled" },
+              { value: "disabled", label: "Disabled" },
+            ]}
+            onChange={(value) =>
+              setVideoCameraFollowEnabled(value === "enabled")
+            }
+          />
+        </Row>
         <p className="text-xs font-medium leading-[18px] text-foreground/70">
-          The canvas follows the active request when the full diagram does not
-          fit onscreen. Use Animation mode to edit paths.
+          {videoCameraFollowEnabled
+            ? "The canvas follows the active request when the full diagram does not fit onscreen."
+            : "Keeps your saved zoom and canvas position during playback."}
         </p>
       </Section>
     </>
+  );
+}
+
+function VideoDelayRow({
+  label,
+  ariaLabel,
+  value,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Row label={label}>
+      <Slider
+        min={0}
+        max={10_000}
+        step={100}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="min-w-0 flex-1"
+        aria-label={ariaLabel}
+      />
+      <span className="flex h-7 w-11 shrink-0 items-center justify-end rounded-md bg-input px-1.5 text-[11px] tabular-nums text-foreground">
+        {(value / 1_000).toFixed(1)}s
+      </span>
+    </Row>
   );
 }
 
@@ -176,7 +240,7 @@ export function Inspector() {
           </p>
           <p className="pt-0.5 text-xs font-medium leading-[18px] text-foreground/70">
             {isVideo
-              ? "Playback with automatic camera follow"
+              ? "Presentation playback and camera controls"
               : isBuildingAnimationPath
               ? "Pick blocks in order"
               : hasSelectedEdge

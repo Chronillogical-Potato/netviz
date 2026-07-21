@@ -44,10 +44,18 @@ export interface NamedAuthoredCustomPath extends AuthoredCustomPath {
 export const PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID =
   "__netviz-play-all-custom-paths__";
 
+export interface SequentialPlaybackDelays {
+  betweenMs: number;
+  endMs: number;
+}
+
+const safeDelay = (value: number, fallback: number) =>
+  Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
+
 export function buildSequentialCustomPathScenario(
   document: PageScenarioDocumentV1,
   edges: readonly RequestFlowEdge[],
-  gapMs = 400
+  delays: number | SequentialPlaybackDelays = 400
 ): ScenarioV1 | null {
   const paths = findAuthoredCustomPaths(document, edges);
   const scenarios = paths.flatMap((path) => {
@@ -58,9 +66,12 @@ export function buildSequentialCustomPathScenario(
   });
   if (scenarios.length === 0) return null;
 
-  const safeGapMs = Number.isFinite(gapMs)
-    ? Math.max(0, Math.round(gapMs))
-    : 400;
+  const betweenDelayMs =
+    typeof delays === "number"
+      ? safeDelay(delays, 400)
+      : safeDelay(delays.betweenMs, 400);
+  const endDelayMs =
+    typeof delays === "number" ? 0 : safeDelay(delays.endMs, 0);
   let offsetMs = 0;
   const markers: ScenarioV1["markers"] = [];
   const tracks = scenarios.flatMap((scenario, index) => {
@@ -77,9 +88,10 @@ export function buildSequentialCustomPathScenario(
       })),
     }));
     offsetMs += scenario.durationMs;
-    if (index < scenarios.length - 1) offsetMs += safeGapMs;
+    if (index < scenarios.length - 1) offsetMs += betweenDelayMs;
     return shifted;
   });
+  offsetMs += endDelayMs;
 
   return {
     id: PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID,
