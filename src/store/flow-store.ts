@@ -1304,6 +1304,7 @@ export const useFlowStore = create<FlowState>()(
               blockId: block.id,
               label: item.label ?? block.label,
               subtitle: item.subtitle ?? block.subtitle,
+              iconName: item.iconName,
               variant,
               bgColor: block.bgColor,
               titleColor: block.titleColor,

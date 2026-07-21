@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { canonicalIconName } from "../src/blocks/icons";
 import { CORE_BLOCKS } from "../src/blocks/registry";
 import { TEMPLATES } from "../src/templates/registry";
 
@@ -39,6 +40,32 @@ const productionTemplates = [
 ];
 
 describe("production templates", () => {
+  test("gives each template a distinct picker identity", () => {
+    expect(new Set(TEMPLATES.map((template) => template.iconName)).size).toBe(
+      TEMPLATES.length
+    );
+    expect(new Set(TEMPLATES.map((template) => template.accent)).size).toBe(
+      TEMPLATES.length
+    );
+    expect(
+      TEMPLATES.every((template) => canonicalIconName(template.iconName))
+    ).toBeTrue();
+  });
+
+  test("keeps production stages spacious and uses purpose-specific icons", () => {
+    for (const template of TEMPLATES) {
+      const columns = [
+        ...new Set(template.nodes.map((node) => node.position.x)),
+      ].sort((a, b) => a - b);
+      const gaps = columns.slice(1).map((x, index) => x - columns[index]);
+
+      expect(Math.min(...gaps)).toBeGreaterThanOrEqual(320);
+      expect(
+        template.nodes.every((node) => canonicalIconName(node.iconName))
+      ).toBeTrue();
+    }
+  });
+
   test("offers two complex animated systems alongside the load balancer", () => {
     expect(TEMPLATES.map((template) => template.id)).toEqual([
       "load-balanced-web-app",

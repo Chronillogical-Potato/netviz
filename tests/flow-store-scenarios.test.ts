@@ -402,6 +402,11 @@ describe("animation target lifecycle", () => {
     ).toBe(true);
     expect(Math.min(...state.nodes.map((item) => item.position.x))).toBe(120);
     expect(Math.min(...state.nodes.map((item) => item.position.y))).toBe(240);
+    expect(
+      ["Global Users", "Redis Cache", "Observability"].map(
+        (label) => state.nodes.find((item) => item.data.label === label)?.data.iconName
+      )
+    ).toEqual(["Users", "Bolt", "Activity2"]);
     expect(state.scenarioDocument.scenarios.map((scenario) => scenario.name)).toEqual([
       "Load-balanced requests",
       "Cached request via App A",

@@ -5,7 +5,6 @@ import {
   Image,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   Type,
   type AppIcon,
@@ -196,7 +195,12 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
     key: template.id,
     label: template.name,
     payload: { kind: "template", templateId: template.id },
-    tile: <AccentTile icon={Sparkles} accent="emerald" />,
+    tile: (
+      <AccentTile
+        icon={resolveIcon(template.iconName)}
+        accent={template.accent}
+      />
+    ),
     add: () => {
       insertTemplate(
         template.id,
