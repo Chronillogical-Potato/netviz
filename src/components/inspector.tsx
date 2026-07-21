@@ -1232,6 +1232,17 @@ function StepEditor({ node }: { node: StepNode }) {
           onChange={(a) => updateNodeData(node.id, { accent: a })}
         />
       </Section>
+      <Section title="Style">
+        <SliderRow
+          label="Radius"
+          value={node.data.borderRadius ?? 28}
+          min={0}
+          max={48}
+          onChange={(borderRadius) =>
+            updateNodeData(node.id, { borderRadius })
+          }
+        />
+      </Section>
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },

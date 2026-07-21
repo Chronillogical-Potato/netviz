@@ -4,6 +4,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import { useTheme } from "next-themes";
 import type { CodeNode } from "@/store/flow-store";
 import { cn } from "@/lib/utils";
+import { CanvasNodeResizer } from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -27,14 +28,11 @@ function CodeNodeComponent({ data, selected }: NodeProps<CodeNode>) {
   return (
     <div
       className={cn(
-        "code-card relative max-w-[640px] overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+        "code-card relative flex h-full w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm",
         selected && "ring-1 ring-ring"
       )}
       style={style}
     >
-      {HANDLE_POSITIONS.map(({ pos, key }) => (
-        <Handle key={key} type="source" position={pos} id={key} />
-      ))}
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-1.5">
         <span
           className="truncate text-[11px] font-medium tracking-wide text-muted-foreground"
@@ -50,7 +48,7 @@ function CodeNodeComponent({ data, selected }: NodeProps<CodeNode>) {
         {({ className, style: preStyle, tokens, getLineProps, getTokenProps }) => (
           <pre
             className={cn(
-              "overflow-x-auto whitespace-pre p-3 text-xs leading-relaxed",
+              "min-h-0 flex-1 overflow-auto whitespace-pre p-3 text-xs leading-relaxed",
               className
             )}
             style={preStyle}
@@ -71,6 +69,16 @@ function CodeNodeComponent({ data, selected }: NodeProps<CodeNode>) {
           </pre>
         )}
       </Highlight>
+      <CanvasNodeResizer
+        isVisible={selected}
+        minWidth={180}
+        minHeight={100}
+        lineClassName="!border-ring/70"
+        handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
+      />
+      {HANDLE_POSITIONS.map(({ pos, key }) => (
+        <Handle key={key} type="source" position={pos} id={key} />
+      ))}
     </div>
   );
 }

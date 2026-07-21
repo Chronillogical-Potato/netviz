@@ -24,6 +24,8 @@ function StepNodeComponent({ data, selected }: NodeProps<StepNode>) {
   if (data.bgColor) style.backgroundColor = data.bgColor;
   if (data.titleColor) style.color = data.titleColor;
   if (data.borderColor) style.borderColor = data.borderColor;
+  if (typeof data.borderRadius === "number")
+    style.borderRadius = data.borderRadius;
 
   return (
     <div

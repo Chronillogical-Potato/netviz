@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-const nodeFiles = ["infra-node", "shape-node", "image-node", "step-node"];
+const nodeFiles = [
+  "infra-node",
+  "shape-node",
+  "text-node",
+  "step-node",
+  "image-node",
+  "code-node",
+];
 
 describe("canvas node resize selector", () => {
   test("uses a zoom-aware shared resizer on every resizable node", async () => {
@@ -18,5 +25,14 @@ describe("canvas node resize selector", () => {
     expect(css).toContain("--nv-resize-line-width");
     expect(css).toContain("width: 7px");
     expect(css).toContain("height: 7px");
+
+    const resizer = await Bun.file(
+      new URL(
+        "../src/components/nodes/canvas-node-resizer.tsx",
+        import.meta.url
+      )
+    ).text();
+    expect(resizer).toContain('event.key === "Shift"');
+    expect(resizer).toContain("keepAspectRatio || shiftDown");
   });
 });

@@ -3,7 +3,10 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useFlowStore, type TextNode } from "@/store/flow-store";
 import { ACCENT_CLASSES } from "@/blocks/registry";
 import { cn } from "@/lib/utils";
-import { NodeRotationControls } from "./canvas-node-resizer";
+import {
+  CanvasNodeResizer,
+  NodeRotationControls,
+} from "./canvas-node-resizer";
 
 const HANDLE_POSITIONS: { pos: Position; key: string }[] = [
   { pos: Position.Top, key: "top" },
@@ -119,7 +122,7 @@ function TextNodeComponent({
   return (
     <div
       className={cn(
-        "text-card relative inline-flex w-max items-center rounded-md font-medium leading-tight",
+        "text-card relative inline-flex h-full w-full min-w-max items-center rounded-md font-medium leading-tight",
         !hasFontSize && "max-w-[360px] px-2.5 py-1 text-sm",
         !data.bgColor && accent.tile,
         !data.titleColor && accent.icon,
@@ -135,14 +138,6 @@ function TextNodeComponent({
         setEditingTextNode(id);
       }}
     >
-      <NodeRotationControls
-        nodeId={id}
-        rotation={data.rotation ?? 0}
-        visible={selected && !editing}
-      />
-      {HANDLE_POSITIONS.map(({ pos, key }) => (
-        <Handle key={key} type="source" position={pos} id={key} />
-      ))}
       {editing ? (
         <InlineTextEditor
           value={draft}
@@ -159,6 +154,21 @@ function TextNodeComponent({
           {data.text || "Text"}
         </span>
       )}
+      <CanvasNodeResizer
+        isVisible={selected && !editing}
+        minWidth={32}
+        minHeight={20}
+        lineClassName="!border-ring/70"
+        handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
+      />
+      <NodeRotationControls
+        nodeId={id}
+        rotation={data.rotation ?? 0}
+        visible={selected && !editing}
+      />
+      {HANDLE_POSITIONS.map(({ pos, key }) => (
+        <Handle key={key} type="source" position={pos} id={key} />
+      ))}
     </div>
   );
 }

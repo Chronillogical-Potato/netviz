@@ -1,6 +1,7 @@
 import {
   useEffect,
   useRef,
+  useState,
   type ComponentProps,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -16,16 +17,48 @@ type CanvasNodeResizerProps = ComponentProps<typeof NodeResizer>;
 
 export function CanvasNodeResizer({
   lineStyle,
+  keepAspectRatio = false,
+  isVisible,
   ...props
 }: CanvasNodeResizerProps) {
   const zoom = useStore((state) => state.transform[2]);
+  const [shiftDown, setShiftDown] = useState(false);
   const zoomSafe = Math.max(zoom, 0.01);
   const scaledLineStyle = {
     ...lineStyle,
     "--nv-resize-line-width": `${1 / zoomSafe}px`,
   } as CSSProperties;
 
-  return <NodeResizer {...props} lineStyle={scaledLineStyle} />;
+  useEffect(() => {
+    if (!isVisible) {
+      setShiftDown(false);
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Shift") setShiftDown(true);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "Shift") setShiftDown(false);
+    };
+    const onBlur = () => setShiftDown(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [isVisible]);
+
+  return (
+    <NodeResizer
+      {...props}
+      isVisible={isVisible}
+      keepAspectRatio={keepAspectRatio || shiftDown}
+      lineStyle={scaledLineStyle}
+    />
+  );
 }
 
 export function rotationAfterPointerMove(
