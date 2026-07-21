@@ -299,14 +299,17 @@ describe("animation target lifecycle", () => {
     });
 
     const state = useFlowStore.getState();
-    expect(state.nodes).toHaveLength(5);
-    expect(state.edges).toHaveLength(5);
+    expect(state.nodes).toHaveLength(11);
+    expect(state.edges).toHaveLength(17);
     expect(Math.min(...state.nodes.map((item) => item.position.x))).toBe(120);
     expect(Math.min(...state.nodes.map((item) => item.position.y))).toBe(240);
     expect(state.scenarioDocument.scenarios.map((scenario) => scenario.name)).toEqual([
       "Load-balanced requests",
-      "Request via Server A",
-      "Request via Server B",
+      "Cached request via App A",
+      "Write request via App B",
+      "Read request via App C",
+      "Primary database replication",
+      "Telemetry export",
     ]);
     expect(
       state.scenarioDocument.scenarios.slice(1).map(
@@ -315,15 +318,17 @@ describe("animation target lifecycle", () => {
             (track) => track.property === "connection-effect"
           ).length
       )
-    ).toEqual([3, 3]);
+    ).toEqual([5, 5, 5, 1, 1]);
 
     const defaultScenario = state.scenarioDocument.scenarios.find(
       (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
     );
-    const serverA = state.nodes.find((item) => item.data.label === "Server A");
-    const serverB = state.nodes.find((item) => item.data.label === "Server B");
-    const edgeToA = state.edges.find((item) => item.target === serverA?.id);
-    const edgeToB = state.edges.find((item) => item.target === serverB?.id);
+    const appA = state.nodes.find((item) => item.data.label === "App Server A");
+    const appB = state.nodes.find((item) => item.data.label === "App Server B");
+    const appC = state.nodes.find((item) => item.data.label === "App Server C");
+    const edgeToA = state.edges.find((item) => item.target === appA?.id);
+    const edgeToB = state.edges.find((item) => item.target === appB?.id);
+    const edgeToC = state.edges.find((item) => item.target === appC?.id);
     const startsAt = (edgeId?: string) =>
       defaultScenario?.tracks.find(
         (track) => "id" in track.target && track.target.id === edgeId
@@ -332,6 +337,7 @@ describe("animation target lifecycle", () => {
     expect(defaultScenario?.name).toBe("Load-balanced requests");
     expect(startsAt(edgeToA?.id)).toBeNumber();
     expect(startsAt(edgeToB?.id)).toBeGreaterThan(startsAt(edgeToA?.id) ?? 0);
+    expect(startsAt(edgeToC?.id)).toBeGreaterThan(startsAt(edgeToB?.id) ?? 0);
   });
 
   test("reorders custom paths without moving the template preview scenario", () => {
@@ -355,8 +361,11 @@ describe("animation target lifecycle", () => {
         .scenarioDocument.scenarios.map((scenario) => scenario.name)
     ).toEqual([
       "Load-balanced requests",
-      "Request via Server B",
-      "Request via Server A",
+      "Write request via App B",
+      "Cached request via App A",
+      "Read request via App C",
+      "Primary database replication",
+      "Telemetry export",
     ]);
   });
 
