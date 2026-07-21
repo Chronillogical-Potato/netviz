@@ -57,7 +57,13 @@ export function resolvePlaybackShortcut(
   event: KeyboardEvent,
   workMode: WorkMode
 ): PlaybackShortcut | null {
-  if (workMode !== "animation" && workMode !== "preview") return null;
+  if (
+    workMode !== "animation" &&
+    workMode !== "video" &&
+    workMode !== "preview"
+  ) {
+    return null;
+  }
   if (
     event.repeat ||
     event.metaKey ||

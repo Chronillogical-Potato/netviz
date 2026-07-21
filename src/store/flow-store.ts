@@ -278,7 +278,7 @@ type Snapshot = {
   setRenderAllElements: (v: boolean) => void;
 };
 
-export type WorkMode = "design" | "animation" | "preview";
+export type WorkMode = "design" | "animation" | "video" | "preview";
 export type EditorMode = Exclude<WorkMode, "preview">;
 export const isAnimationCanvasMode = (mode: WorkMode) => mode !== "design";
 export type MotionPreference = "system" | "full" | "reduced";
@@ -2832,6 +2832,16 @@ export const useFlowStore = create<FlowState>()(
             previewReturnMode: mode,
             ...(mode === "animation" ? {} : { animationPathDraft: null }),
             ...(mode === "design" ? {} : { editingTextNodeId: null }),
+            ...(mode === "video"
+              ? {
+                  nodes: state.nodes.map((node) =>
+                    node.selected ? { ...node, selected: false } : node
+                  ),
+                  edges: state.edges.map((edge) =>
+                    edge.selected ? { ...edge, selected: false } : edge
+                  ),
+                }
+              : {}),
           }
     ),
   exitPreview: () =>
@@ -2936,7 +2946,10 @@ export const useFlowStore = create<FlowState>()(
           motionPreference: p.motionPreference ?? "system",
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
           edgeCurveStyle: p.edgeCurveStyle ?? "stepped",
-          workMode: p.workMode === "animation" ? "animation" : "design",
+          workMode:
+            p.workMode === "animation" || p.workMode === "video"
+              ? p.workMode
+              : "design",
         };
       },
       partialize: (s) => ({
@@ -3009,7 +3022,10 @@ function syncScenarioRuntime(
   ) {
     scenarioRuntime.setLoop(scenario?.playback.loop.mode === "repeat");
   }
-  if (state.workMode === "preview" && scenario !== null) {
+  if (
+    (state.workMode === "video" || state.workMode === "preview") &&
+    scenario !== null
+  ) {
     scenarioRuntime.play();
   }
 }

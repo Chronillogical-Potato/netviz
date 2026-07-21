@@ -105,7 +105,7 @@ export function LabeledEdge({
         motionState={
           workMode === "design"
             ? "stopped"
-            : workMode === "preview"
+            : workMode === "preview" || workMode === "video"
               ? "playing"
               : "paused"
         }

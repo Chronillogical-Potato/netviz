@@ -163,7 +163,29 @@ describe("page-owned animation state", () => {
   test("uses animation canvas styling in preview mode", () => {
     expect(isAnimationCanvasMode("design")).toBe(false);
     expect(isAnimationCanvasMode("animation")).toBe(true);
+    expect(isAnimationCanvasMode("video")).toBe(true);
     expect(isAnimationCanvasMode("preview")).toBe(true);
+  });
+
+  test("persists Video mode and returns clean preview to it", () => {
+    useFlowStore.getState().setWorkMode("video");
+    useFlowStore.getState().setWorkMode("preview");
+
+    expect(useFlowStore.getState()).toMatchObject({
+      workMode: "preview",
+      previewReturnMode: "video",
+    });
+
+    useFlowStore.getState().exitPreview();
+    expect(useFlowStore.getState().workMode).toBe("video");
+
+    const merge = useFlowStore.persist.getOptions().merge;
+    if (!merge) throw new Error("Expected persisted-state merge");
+    const hydrated = merge(
+      { workMode: "video" },
+      useFlowStore.getState()
+    ) as ReturnType<typeof useFlowStore.getState>;
+    expect(hydrated.workMode).toBe("video");
   });
 
   test("returns clean preview to the editor mode it entered from", () => {

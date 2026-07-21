@@ -12,6 +12,7 @@ import {
   ReactFlow,
   SelectionMode,
   getBezierPath,
+  getNodesBounds,
   useReactFlow,
   useViewport,
   type EdgeTypes,
@@ -48,6 +49,8 @@ import {
   type Guide,
 } from "@/lib/snapping";
 import { findLineBindingAtPoint } from "@/lib/line-bindings";
+import { scenarioRuntime } from "@/animation/runtime-instance";
+import type { TargetFrame } from "@/animation/runtime";
 
 const nodeTypes: NodeTypes = {
   infra: InfraNodeView,
@@ -307,6 +310,92 @@ export function isCanvasElementInteractionEnabled(
   return !isPreview && !isPickingAnimationPath && tool !== "hand";
 }
 
+const nodeCenter = (node: AppNode) => {
+  const { w, h } = nodeDims(node);
+  return {
+    x: node.position.x + w / 2,
+    y: node.position.y + h / 2,
+  };
+};
+
+export function resolveVideoFollowPoint(
+  frames: readonly TargetFrame[],
+  nodes: readonly AppNode[],
+  edges: readonly LabeledEdgeModel[]
+) {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const edgesById = new Map(edges.map((edge) => [edge.id, edge]));
+  const edgePoints: Array<{ x: number; y: number }> = [];
+
+  for (const frame of frames) {
+    const edge = edgesById.get(frame.targetId);
+    if (!edge) continue;
+    const source = nodesById.get(edge.source);
+    const target = nodesById.get(edge.target);
+    if (!source || !target) continue;
+    const start = nodeCenter(source);
+    const end = nodeCenter(target);
+    for (const clip of frame.clips) {
+      for (const progress of clip.timing.progresses) {
+        edgePoints.push({
+          x: start.x + (end.x - start.x) * progress,
+          y: start.y + (end.y - start.y) * progress,
+        });
+      }
+    }
+  }
+
+  const points =
+    edgePoints.length > 0
+      ? edgePoints
+      : frames.flatMap((frame) => {
+          const node = nodesById.get(frame.targetId);
+          return node ? [nodeCenter(node)] : [];
+        });
+  if (points.length === 0) return null;
+  return points.reduce(
+    (center, point) => ({
+      x: center.x + point.x / points.length,
+      y: center.y + point.y / points.length,
+    }),
+    { x: 0, y: 0 }
+  );
+}
+
+export function getVideoCameraTarget({
+  contentBounds,
+  viewport,
+  frame,
+  focus,
+}: {
+  contentBounds: { x: number; y: number; width: number; height: number };
+  viewport: { x: number; y: number; zoom: number };
+  frame: { width: number; height: number };
+  focus: { x: number; y: number };
+}) {
+  const overflowX = contentBounds.width * viewport.zoom > frame.width * 0.9;
+  const overflowY = contentBounds.height * viewport.zoom > frame.height * 0.9;
+  if (!overflowX && !overflowY) return null;
+
+  const screenX = viewport.x + focus.x * viewport.zoom;
+  const screenY = viewport.y + focus.y * viewport.zoom;
+  const moveX =
+    overflowX && (screenX < frame.width * 0.3 || screenX > frame.width * 0.7);
+  const moveY =
+    overflowY &&
+    (screenY < frame.height * 0.3 || screenY > frame.height * 0.7);
+  if (!moveX && !moveY) return null;
+
+  const currentCenter = {
+    x: (frame.width / 2 - viewport.x) / viewport.zoom,
+    y: (frame.height / 2 - viewport.y) / viewport.zoom,
+  };
+  return {
+    x: moveX ? focus.x : currentCenter.x,
+    y: moveY ? focus.y : currentCenter.y,
+  };
+}
+
 export function getDrawBounds(
   start: { x: number; y: number },
   end: { x: number; y: number },
@@ -534,6 +623,65 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
   );
 }
 
+function VideoFollowOverlay({
+  enabled,
+  nodes,
+  edges,
+}: {
+  enabled: boolean;
+  nodes: readonly AppNode[];
+  edges: readonly LabeledEdgeModel[];
+}) {
+  const { getViewport, setCenter } = useReactFlow();
+  const [transport, setTransport] = useState(
+    scenarioRuntime.getTransportSnapshot()
+  );
+
+  useEffect(() => scenarioRuntime.subscribeTransport(setTransport), []);
+
+  useEffect(() => {
+    if (!enabled || !transport.isPlaying || nodes.length === 0) return;
+    const focus = resolveVideoFollowPoint(
+      scenarioRuntime.getActiveTargetFrames(),
+      nodes,
+      edges
+    );
+    if (!focus) return;
+    const flow = document.querySelector(".react-flow");
+    if (!(flow instanceof HTMLElement)) return;
+    const frame = flow.getBoundingClientRect();
+    const visibleNodes = nodes.filter((node) => !node.hidden);
+    if (visibleNodes.length === 0) return;
+    const viewport = getViewport();
+    const target = getVideoCameraTarget({
+      contentBounds: getNodesBounds(visibleNodes),
+      viewport,
+      frame: { width: frame.width, height: frame.height },
+      focus,
+    });
+    if (!target) return;
+    void setCenter(target.x, target.y, {
+      zoom: viewport.zoom,
+      duration: 500,
+    });
+  }, [edges, enabled, getViewport, nodes, setCenter, transport]);
+
+  if (!enabled) return null;
+  return (
+    <div
+      className="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(28rem,calc(100%-2rem))] rounded-lg border border-border/70 bg-background/90 px-3 py-2 shadow-lg backdrop-blur"
+      data-video-animation-name
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        Now playing
+      </p>
+      <p className="truncate pt-0.5 text-[13px] font-semibold text-foreground">
+        {scenarioRuntime.getActiveScenarioName() ?? "No animation selected"}
+      </p>
+    </div>
+  );
+}
+
 function CanvasInner() {
   const nodes = useFlowStore((s) => s.nodes);
   const edges = useFlowStore((s) => s.edges);
@@ -559,6 +707,7 @@ function CanvasInner() {
     return sel.length === 1 ? sel[0] : null;
   });
   const workMode = useFlowStore((s) => s.workMode);
+  const previewReturnMode = useFlowStore((s) => s.previewReturnMode);
   const editingTextNodeId = useFlowStore((s) => s.editingTextNodeId);
   const animationPathDraft = useFlowStore((s) => s.animationPathDraft);
   const appendAnimationPathNode = useFlowStore(
@@ -569,6 +718,10 @@ function CanvasInner() {
     (s) => s.pages.find((p) => p.id === s.activePageId)?.bgColor
   );
   const isPreview = workMode === "preview";
+  const isVideoPlayback =
+    workMode === "video" ||
+    (isPreview && previewReturnMode === "video");
+  const isPlaybackOnly = isPreview || workMode === "video";
   const isDesign = workMode === "design";
   const isPickingAnimationPath =
     workMode === "animation" && animationPathDraft !== null;
@@ -581,7 +734,7 @@ function CanvasInner() {
   const activeSnaps = useRef<Map<string, ActiveSnap>>(new Map());
   const elementsInteractive = isCanvasElementInteractionEnabled(
     tool,
-    isPreview,
+    isPlaybackOnly,
     isPickingAnimationPath
   );
 
@@ -915,6 +1068,7 @@ function CanvasInner() {
         "relative h-full w-full",
         turbo && "turbo",
         isPreview && "preview-canvas",
+        isVideoPlayback && "video-canvas",
         tool === "hand" && "hand-tool",
         tool === "line" && "line-tool-active",
         isPickingAnimationPath && "animation-path-picking"
@@ -927,7 +1081,7 @@ function CanvasInner() {
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
-        onNodesChange={isPreview ? undefined : handleNodesChange}
+        onNodesChange={isPlaybackOnly ? undefined : handleNodesChange}
         onNodeClick={
           isPickingAnimationPath
             ? (_, node) => appendAnimationPathNode(node.id)
@@ -935,19 +1089,19 @@ function CanvasInner() {
         }
         onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
         onNodeMouseLeave={() => setHoveredId(null)}
-        onEdgesChange={isPreview ? undefined : onEdgesChange}
-        onBeforeDelete={isPreview ? undefined : handleBeforeDelete}
-        onConnect={isPreview ? undefined : onConnect}
-        onConnectEnd={isPreview ? undefined : onConnectEnd}
+        onEdgesChange={isPlaybackOnly ? undefined : onEdgesChange}
+        onBeforeDelete={isPlaybackOnly ? undefined : handleBeforeDelete}
+        onConnect={isPlaybackOnly ? undefined : onConnect}
+        onConnectEnd={isPlaybackOnly ? undefined : onConnectEnd}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
         proOptions={{ hideAttribution: true }}
         selectionOnDrag={
-          !isPreview && !isPickingAnimationPath && tool === "select"
+          !isPlaybackOnly && !isPickingAnimationPath && tool === "select"
         }
-        panOnDrag={isPreview || tool === "hand" ? true : [1]}
+        panOnDrag={isPlaybackOnly || tool === "hand" ? true : [1]}
         panOnScroll
         selectionMode={SelectionMode.Partial}
         nodesDraggable={elementsInteractive}
@@ -956,7 +1110,9 @@ function CanvasInner() {
         nodesFocusable={elementsInteractive && editingTextNodeId === null}
         edgesFocusable={elementsInteractive}
         deleteKeyCode={
-          isPreview || isPickingAnimationPath ? null : ["Backspace", "Delete"]
+          isPlaybackOnly || isPickingAnimationPath
+            ? null
+            : ["Backspace", "Delete"]
         }
         onlyRenderVisibleElements={!renderAll}
         elevateNodesOnSelect={false}
@@ -964,6 +1120,11 @@ function CanvasInner() {
         fitViewOptions={{ padding: 0.4 }}
       >
       </ReactFlow>
+      <VideoFollowOverlay
+        enabled={isVideoPlayback}
+        nodes={nodes}
+        edges={edges}
+      />
       {isPickingAnimationPath ? (
         <div className="pointer-events-none absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border border-border bg-background/95 px-3 py-1.5 text-[10px] font-medium text-foreground shadow-lg backdrop-blur">
           Click blocks in request order · Esc to cancel
@@ -989,7 +1150,7 @@ function CanvasInner() {
           nodes={nodes}
         />
       )}
-      {!isPreview && connectPopover && (
+      {!isPlaybackOnly && connectPopover && (
         <>
           {sourceHandlePos && (
             <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full">

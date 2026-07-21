@@ -52,6 +52,7 @@ import {
   TextalignRight2,
   Trash,
   Upload as RUpload,
+  Video as RVideo,
   X as RX,
 } from "reicon-react";
 
@@ -132,4 +133,5 @@ export const Sun = filled(RSun);
 export const Trash2 = filled(Trash);
 export const Type = filled(Text);
 export const Upload = filled(RUpload);
+export const Video = filled(RVideo);
 export const X = filled(RX);

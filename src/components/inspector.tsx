@@ -118,13 +118,18 @@ export function Inspector() {
     (s) => s.animationPathDraft !== null
   );
 
-  if (workMode === "animation") {
+  if (workMode === "animation" || workMode === "video") {
+    const isVideo = workMode === "video";
     return (
       <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-background">
         <div className="border-b border-border px-4 py-3">
-          <p className="text-[13px] font-semibold text-foreground">Animation</p>
+          <p className="text-[13px] font-semibold text-foreground">
+            {isVideo ? "Video" : "Animation"}
+          </p>
           <p className="pt-0.5 text-xs font-medium leading-[18px] text-foreground/70">
-            {isBuildingAnimationPath
+            {isVideo
+              ? "Playback with automatic camera follow"
+              : isBuildingAnimationPath
               ? "Pick blocks in order"
               : hasSelectedEdge
               ? "Connection effect"
@@ -135,18 +140,32 @@ export function Inspector() {
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <PlaybackControls />
-          {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}
-          {isBuildingAnimationPath ? (
-            <AnimationPathBuilder />
-          ) : hasSelectedEdge ? (
-            <AnimationOptions />
-          ) : selectedNode ? (
-            <RequestFlowOptions
-              nodeId={selectedNode.id}
-              nodeLabel={getNodeDisplayName(selectedNode)}
-            />
+          {isVideo ? (
+            <div className="border-b border-border px-4 py-3.5">
+              <p className="text-[13px] font-semibold text-foreground">
+                Camera follow
+              </p>
+              <p className="pt-1 text-xs font-medium leading-[18px] text-foreground/70">
+                The canvas follows the active request when the full diagram
+                does not fit onscreen. Use Animation mode to edit paths.
+              </p>
+            </div>
           ) : (
-            <AnimationOverview />
+            <>
+              {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}
+              {isBuildingAnimationPath ? (
+                <AnimationPathBuilder />
+              ) : hasSelectedEdge ? (
+                <AnimationOptions />
+              ) : selectedNode ? (
+                <RequestFlowOptions
+                  nodeId={selectedNode.id}
+                  nodeLabel={getNodeDisplayName(selectedNode)}
+                />
+              ) : (
+                <AnimationOverview />
+              )}
+            </>
           )}
         </div>
       </aside>

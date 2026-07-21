@@ -86,6 +86,23 @@ describe("scenario runtime", () => {
       playbackRate: 1,
       isPlaying: false,
     });
+    expect(runtime.getActiveScenarioName()).toBe("Request flow");
+  });
+
+  test("exposes active frames for camera-follow consumers", () => {
+    const scheduler = new ManualScheduler();
+    const runtime = new ScenarioRuntime(scheduler);
+
+    runtime.activate("page-1", scenario());
+    runtime.play();
+    scheduler.frame(100);
+
+    expect(runtime.getActiveTargetFrames()).toMatchObject([
+      {
+        targetId: "edge-a",
+        clips: [{ timing: { active: true, progress: 0.5 } }],
+      },
+    ]);
   });
 
   test("notifies only active targets and clears a target exactly once on exit", () => {

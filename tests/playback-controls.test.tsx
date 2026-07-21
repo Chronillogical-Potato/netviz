@@ -77,7 +77,7 @@ describe("PlaybackControls", () => {
   });
 
   test("maps Space and Home only in playback-capable modes", () => {
-    for (const mode of ["animation", "preview"] satisfies WorkMode[]) {
+    for (const mode of ["animation", "video", "preview"] satisfies WorkMode[]) {
       expect(resolvePlaybackShortcut(shortcutEvent(" "), mode)).toBe(
         "toggle-playback"
       );

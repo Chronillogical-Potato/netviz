@@ -63,6 +63,22 @@ export class ScenarioRuntime {
     scenarioId: this.scenario?.id ?? null,
   });
 
+  getActiveScenarioName = () => this.scenario?.name ?? null;
+
+  getActiveTargetFrames = (): TargetFrame[] => {
+    if (!this.projectionEnabled || !this.scenario) return [];
+    const frames: TargetFrame[] = [];
+    for (const targetId of this.tracksByTarget.keys()) {
+      if (this.targetScope !== null && !this.targetScope.has(targetId)) continue;
+      const frame = this.createTargetFrame(
+        targetId,
+        this.clockSnapshot.currentTimeMs
+      );
+      if (frame.clips.length > 0) frames.push(frame);
+    }
+    return frames;
+  };
+
   subscribeTransport = (listener: TransportListener) => {
     this.assertAlive();
     this.transportListeners.add(listener);

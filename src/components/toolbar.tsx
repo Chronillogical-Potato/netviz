@@ -7,6 +7,7 @@ import {
   Eye,
   PenLine,
   Settings,
+  Video,
 } from "@/ui/icons";
 import type { AppIcon } from "@/ui/icons";
 import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/react";
@@ -37,6 +38,7 @@ import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
   { id: "design", label: "Design", icon: PenLine },
   { id: "animation", label: "Animation", icon: Activity },
+  { id: "video", label: "Video", icon: Video },
 ];
 
 // Centered file name, Figma-style: double-click to rename in place.

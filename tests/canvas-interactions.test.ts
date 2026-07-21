@@ -93,7 +93,7 @@ describe("canvas tool interactions", () => {
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
     const popover = source.slice(
-      source.indexOf("{!isPreview && connectPopover"),
+      source.indexOf("{!isPlaybackOnly && connectPopover"),
       source.indexOf("export function Canvas")
     );
 
@@ -107,7 +107,7 @@ describe("canvas tool interactions", () => {
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
     const popover = source.slice(
-      source.indexOf("{!isPreview && connectPopover"),
+      source.indexOf("{!isPlaybackOnly && connectPopover"),
       source.indexOf("export function Canvas")
     );
 
