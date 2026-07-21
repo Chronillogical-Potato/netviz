@@ -97,87 +97,23 @@ describe("Video mode camera follow", () => {
     ).toEqual({ x: -150, y: 0, zoom: 1 });
   });
 
-  test("preserves camera velocity when the focus changes", async () => {
-    const canvas = (await import("../src/components/canvas")) as unknown as {
-      advanceVideoCameraMotion?: (
-        current: {
-          viewport: { x: number; y: number; zoom: number };
-          velocity: { x: number; y: number; zoom: number };
-        },
-        target: { x: number; y: number; zoom: number },
-        elapsedMs: number
-      ) => {
-        viewport: { x: number; y: number; zoom: number };
-        velocity: { x: number; y: number; zoom: number };
-      };
-    };
-    expect(typeof canvas.advanceVideoCameraMotion).toBe("function");
-    if (!canvas.advanceVideoCameraMotion) return;
-
-    const initial = {
-      viewport: { x: 0, y: 0, zoom: 1 },
-      velocity: { x: 0, y: 0, zoom: 0 },
-    };
-    const first = canvas.advanceVideoCameraMotion(
-      initial,
-      { x: -400, y: 0, zoom: 1 },
-      200
-    );
-    const retargeted = canvas.advanceVideoCameraMotion(
-      first,
-      { x: -800, y: 0, zoom: 1 },
-      16
-    );
-
-    expect(first.velocity.x).toBeLessThan(0);
-    expect(retargeted.velocity.x).toBeLessThan(first.velocity.x);
-    expect(retargeted.viewport.x).toBeLessThan(first.viewport.x);
-  });
-
-  test("keeps continuous camera motion frame-rate independent", async () => {
-    const canvas = (await import("../src/components/canvas")) as unknown as {
-      advanceVideoCameraMotion?: (
-        current: {
-          viewport: { x: number; y: number; zoom: number };
-          velocity: { x: number; y: number; zoom: number };
-        },
-        target: { x: number; y: number; zoom: number },
-        elapsedMs: number
-      ) => {
-        viewport: { x: number; y: number; zoom: number };
-        velocity: { x: number; y: number; zoom: number };
-      };
-    };
-    expect(typeof canvas.advanceVideoCameraMotion).toBe("function");
-    if (!canvas.advanceVideoCameraMotion) return;
-
-    const initial = {
-      viewport: { x: 0, y: 0, zoom: 1 },
-      velocity: { x: 0, y: 0, zoom: 0 },
-    };
-    const target = { x: -600, y: -200, zoom: 1 };
-    let dense = initial;
-    for (let frame = 0; frame < 10; frame += 1) {
-      dense = canvas.advanceVideoCameraMotion(dense, target, 16);
-    }
-    const sparse = canvas.advanceVideoCameraMotion(initial, target, 160);
-
-    expect(dense.viewport.x).toBeCloseTo(sparse.viewport.x, 6);
-    expect(dense.viewport.y).toBeCloseTo(sparse.viewport.y, 6);
-    expect(dense.velocity.x).toBeCloseTo(sparse.velocity.x, 6);
-  });
-
-  test("renders the active animation name and smooth camera follow", async () => {
+  test("renders the active animation name and delegates camera motion", async () => {
     const source = await Bun.file(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
+    const packageJson = await Bun.file(
+      new URL("../package.json", import.meta.url)
+    ).json();
 
     expect(source).toContain("data-video-animation-name");
     expect(source).toContain("getActiveAnimationName");
     expect(source).toContain("videoTitle.trim()");
     expect(source).toContain("getActiveTargetFrames");
     expect(source).not.toContain("Now playing");
-    expect(source).toContain("requestAnimationFrame");
+    expect(packageJson.dependencies.motion).toBeString();
+    expect(source).toContain('from "motion"');
+    expect(source).not.toContain("requestAnimationFrame");
+    expect(source).not.toContain("advanceVideoCameraMotion");
     expect(source).toContain("setViewport");
     expect(source).not.toContain("smoothVideoFocusPoint");
     expect(source).not.toContain("cameraMoveDurationMs");

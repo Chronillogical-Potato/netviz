@@ -21,6 +21,7 @@ import {
   type NodeTypes,
   type OnBeforeDelete,
 } from "@xyflow/react";
+import { cancelFrame, frame, motionValue, springValue } from "motion";
 import { resolveIcon } from "@/blocks/icons";
 import "@xyflow/react/dist/style.css";
 import {
@@ -385,58 +386,6 @@ export function getVideoCameraViewport({
   };
 }
 
-type VideoCameraMotion = {
-  viewport: { x: number; y: number; zoom: number };
-  velocity: { x: number; y: number; zoom: number };
-};
-
-const advanceCameraAxis = (
-  position: number,
-  velocity: number,
-  target: number,
-  elapsedSeconds: number
-) => {
-  const angularFrequency = 2 / 1.2;
-  const offset = position - target;
-  const decay = Math.exp(-angularFrequency * elapsedSeconds);
-  const momentum =
-    (velocity + angularFrequency * offset) * elapsedSeconds;
-  return {
-    position: target + (offset + momentum) * decay,
-    velocity: (velocity - angularFrequency * momentum) * decay,
-  };
-};
-
-export function advanceVideoCameraMotion(
-  current: VideoCameraMotion,
-  target: { x: number; y: number; zoom: number },
-  elapsedMs: number
-): VideoCameraMotion {
-  const elapsedSeconds = Math.max(0, elapsedMs) / 1_000;
-  const x = advanceCameraAxis(
-    current.viewport.x,
-    current.velocity.x,
-    target.x,
-    elapsedSeconds
-  );
-  const y = advanceCameraAxis(
-    current.viewport.y,
-    current.velocity.y,
-    target.y,
-    elapsedSeconds
-  );
-  const zoom = advanceCameraAxis(
-    current.viewport.zoom,
-    current.velocity.zoom,
-    target.zoom,
-    elapsedSeconds
-  );
-  return {
-    viewport: { x: x.position, y: y.position, zoom: zoom.position },
-    velocity: { x: x.velocity, y: y.velocity, zoom: zoom.velocity },
-  };
-}
-
 function videoFocusKey(
   frames: readonly TargetFrame[],
   edges: readonly LabeledEdgeModel[]
@@ -702,18 +651,19 @@ function VideoFollowOverlay({
   useEffect(() => {
     const visibleNodes = nodes.filter((node) => !node.hidden);
     if (!enabled || !transport.isPlaying || visibleNodes.length === 0) return;
-    let animationFrame = 0;
     let activeFocusKey = "";
-    let previousTime = performance.now();
     const initialViewport = getViewport();
-    let cameraTarget = initialViewport;
-    let cameraMotion: VideoCameraMotion = {
-      viewport: initialViewport,
-      velocity: { x: 0, y: 0, zoom: 0 },
-    };
+    let lastViewport = initialViewport;
+    const targetX = motionValue(initialViewport.x);
+    const targetY = motionValue(initialViewport.y);
+    const targetZoom = motionValue(initialViewport.zoom);
+    const springOptions = { visualDuration: 1.6, bounce: 0 };
+    const cameraX = springValue(targetX, springOptions);
+    const cameraY = springValue(targetY, springOptions);
+    const cameraZoom = springValue(targetZoom, springOptions);
     const contentBounds = getNodesBounds(visibleNodes);
 
-    const follow = (time: number) => {
+    const updateTarget = () => {
       if (!scenarioRuntime.getTransportSnapshot().isPlaying) return;
       const frames = scenarioRuntime.getActiveTargetFrames();
       const focusKey = videoFocusKey(frames, edges);
@@ -725,35 +675,53 @@ function VideoFollowOverlay({
           const frame = flow.getBoundingClientRect();
           const target = getVideoCameraViewport({
             contentBounds,
-            viewport: cameraMotion.viewport,
+            viewport: {
+              x: cameraX.get(),
+              y: cameraY.get(),
+              zoom: cameraZoom.get(),
+            },
             frame: { width: frame.width, height: frame.height },
             focus,
           });
-          if (target) cameraTarget = target;
+          if (target) {
+            targetX.set(target.x);
+            targetY.set(target.y);
+            targetZoom.set(target.zoom);
+          }
         }
       } else if (!focusKey) {
         activeFocusKey = "";
       }
-
-      const nextMotion = advanceVideoCameraMotion(
-        cameraMotion,
-        cameraTarget,
-        Math.min(64, time - previousTime)
-      );
-      if (
-        Math.abs(nextMotion.viewport.x - cameraMotion.viewport.x) > 0.001 ||
-        Math.abs(nextMotion.viewport.y - cameraMotion.viewport.y) > 0.001 ||
-        Math.abs(nextMotion.viewport.zoom - cameraMotion.viewport.zoom) > 0.0001
-      ) {
-        void setViewport(nextMotion.viewport);
-      }
-      cameraMotion = nextMotion;
-      previousTime = time;
-      animationFrame = requestAnimationFrame(follow);
     };
 
-    animationFrame = requestAnimationFrame(follow);
-    return () => cancelAnimationFrame(animationFrame);
+    const renderCamera = () => {
+      const nextViewport = {
+        x: cameraX.get(),
+        y: cameraY.get(),
+        zoom: cameraZoom.get(),
+      };
+      if (
+        Math.abs(nextViewport.x - lastViewport.x) > 0.001 ||
+        Math.abs(nextViewport.y - lastViewport.y) > 0.001 ||
+        Math.abs(nextViewport.zoom - lastViewport.zoom) > 0.0001
+      ) {
+        lastViewport = nextViewport;
+        void setViewport(nextViewport);
+      }
+    };
+
+    frame.update(updateTarget, true);
+    frame.render(renderCamera, true);
+    return () => {
+      cancelFrame(updateTarget);
+      cancelFrame(renderCamera);
+      cameraX.destroy();
+      cameraY.destroy();
+      cameraZoom.destroy();
+      targetX.destroy();
+      targetY.destroy();
+      targetZoom.destroy();
+    };
   }, [edges, enabled, getViewport, nodes, setViewport, transport.isPlaying]);
 
   if (!enabled) return null;
