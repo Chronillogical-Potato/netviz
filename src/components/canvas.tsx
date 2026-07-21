@@ -966,19 +966,6 @@ function CanvasInner() {
         <>
           {sourceHandlePos && (
             <svg className="pointer-events-none fixed inset-0 z-40 h-full w-full">
-              <defs>
-                <linearGradient
-                  id="connect-popover-grad"
-                  gradientUnits="userSpaceOnUse"
-                  x1={sourceHandlePos.x}
-                  y1={sourceHandlePos.y}
-                  x2={connectPopover.screenX}
-                  y2={connectPopover.screenY}
-                >
-                  <stop offset="0%" stopColor={turboColors[1]} />
-                  <stop offset="100%" stopColor={turboColors[0]} />
-                </linearGradient>
-              </defs>
               <path
                 d={(() => {
                   const sx = sourceHandlePos.x;
@@ -1003,15 +990,15 @@ function CanvasInner() {
                   return d;
                 })()}
                 fill="none"
-                stroke="url(#connect-popover-grad)"
-                strokeWidth={3}
+                stroke="hsl(var(--muted-foreground))"
+                strokeWidth={2}
                 strokeLinecap="round"
               />
               <circle
                 cx={connectPopover.screenX}
                 cy={connectPopover.screenY}
                 r={4}
-                fill={turboColors[0]}
+                fill="hsl(var(--muted-foreground))"
               />
             </svg>
           )}
@@ -1020,14 +1007,14 @@ function CanvasInner() {
             onMouseDown={() => setConnectPopover(null)}
           />
           <div
-            className="fixed z-50 w-56 rounded-xl border border-border/60 bg-popover p-1.5 shadow-xl"
+            className="fixed z-50 w-80 rounded-xl border border-border/60 bg-popover p-2 shadow-xl"
             style={{ left: connectPopover.screenX, top: connectPopover.screenY }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <p className="px-1.5 pb-1.5 pt-0.5 text-xs font-semibold text-foreground">
+            <p className="px-2 pb-1.5 pt-0.5 text-xs font-semibold text-muted-foreground/90">
               Connect to…
             </p>
-            <div className="grid max-h-72 grid-cols-1 gap-0.5 overflow-y-auto">
+            <div className="grid max-h-[400px] grid-cols-1 gap-0.5 overflow-y-auto">
               {registry.map((b) => {
                 const Ic = resolveIcon(b.iconName);
                 const accent = ACCENT_CLASSES[b.accent];
@@ -1037,11 +1024,11 @@ function CanvasInner() {
                     key={b.id}
                     type="button"
                     onClick={() => pickBlock(b.id)}
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted"
                   >
                     <span
                       className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded",
+                        "flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg",
                         !b.customIcon && accent.tile
                       )}
                     >
@@ -1049,15 +1036,24 @@ function CanvasInner() {
                         <img
                           src={b.customIcon}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className="h-5 w-5 object-contain"
                         />
                       ) : hasIcon ? (
-                        <Ic className={cn("h-3 w-3", accent.icon)} />
+                        <Ic className={cn("h-4 w-4", accent.icon)} />
                       ) : (
-                        <span className={cn("h-2 w-2 rounded-full", accent.dot)} />
+                        <span className={cn("h-2.5 w-2.5 rounded-full", accent.dot)} />
                       )}
                     </span>
-                    <span className="flex-1 truncate">{b.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-foreground/80">
+                        {b.label}
+                      </span>
+                      {b.subtitle ? (
+                        <span className="block truncate pt-0.5 text-[10px] text-muted-foreground">
+                          {b.subtitle}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 );
               })}

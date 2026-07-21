@@ -87,4 +87,34 @@ describe("canvas tool interactions", () => {
       y: 40,
     });
   });
+
+  test("uses a neutral grey connection preview", async () => {
+    const source = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+    const popover = source.slice(
+      source.indexOf("{!isPreview && connectPopover"),
+      source.indexOf("export function Canvas")
+    );
+
+    expect(popover).toContain('stroke="hsl(var(--muted-foreground))"');
+    expect(popover).toContain('fill="hsl(var(--muted-foreground))"');
+    expect(popover).not.toContain("connect-popover-grad");
+  });
+
+  test("matches the larger block selector row styling", async () => {
+    const source = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+    const popover = source.slice(
+      source.indexOf("{!isPreview && connectPopover"),
+      source.indexOf("export function Canvas")
+    );
+
+    expect(popover).toContain("w-80");
+    expect(popover).toContain("h-8 w-8");
+    expect(popover).toContain("text-[13px] font-semibold text-foreground/80");
+    expect(popover).toContain("text-[10px] text-muted-foreground");
+    expect(popover).toContain("b.subtitle");
+  });
 });
