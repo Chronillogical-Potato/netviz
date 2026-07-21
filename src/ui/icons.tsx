@@ -41,6 +41,7 @@ import {
   Record,
   Restart as RRestart,
   Search as RSearch,
+  Share as RShare,
   Shapes as RShapes,
   Sparkles as RSparkles,
   Stop,
@@ -121,6 +122,7 @@ export const Plus = filled(RPlus);
 export const Play = filled(RPlay);
 export const Pointer = filled(RPointer);
 export const Search = filled(RSearch);
+export const Share = filled(RShare);
 export const Restart = filled(RRestart);
 export const Settings = filled(RSettings);
 export const Shapes = filled(RShapes);

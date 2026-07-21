@@ -35,6 +35,7 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Logo } from "@/ui/logo";
 import { SettingsDialog } from "./settings-dialog";
+import { ShareProjectButton } from "./share-project-button";
 
 import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
@@ -559,6 +560,7 @@ export function Toolbar() {
         }}
       />
       <div className="ml-auto flex items-center gap-1.5">
+        <ShareProjectButton />
         <Button
           variant="ghost"
           size="sm"
