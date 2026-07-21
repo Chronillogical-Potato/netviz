@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   createFlowSnapshot,
+  createShareUrl,
+  hasWorkspaceContent,
   parseFlowSnapshot,
+  parseSharedProject,
 } from "../src/lib/storage";
 
 const minimalV1 = {
@@ -78,5 +81,52 @@ describe("project snapshot parsing", () => {
 
     expect(snapshot.edges[0].animated).toBe(false);
     expect(snapshot.pageContents["page-2"].edges[0].animated).toBe(false);
+  });
+});
+
+describe("project share links", () => {
+  test("round-trips a compressed project through a URL-safe fragment", async () => {
+    const snapshot = parseFlowSnapshot({
+      ...minimalV1,
+      projectName: "Shared request flow",
+    });
+    const link = await createShareUrl(
+      snapshot,
+      "https://netviz.test/editor?theme=dark"
+    );
+    const url = new URL(link);
+    const payload = new URLSearchParams(url.hash.slice(1)).get("share");
+
+    expect(url.origin + url.pathname + url.search).toBe(
+      "https://netviz.test/editor?theme=dark"
+    );
+    expect(payload).toMatch(/^v1\.[A-Za-z0-9_-]+$/);
+    expect(await parseSharedProject(url.hash)).toEqual(snapshot);
+  });
+
+  test("rejects a damaged shared-project payload", async () => {
+    await expect(
+      parseSharedProject("#share=v1.not-valid-compressed-data")
+    ).rejects.toThrow("Could not read shared project");
+  });
+
+  test("distinguishes a new workspace from meaningful local work", () => {
+    const empty = parseFlowSnapshot({ ...minimalV1, projectName: "Untitled" });
+    expect(hasWorkspaceContent(empty)).toBe(false);
+    expect(hasWorkspaceContent({ ...empty, projectName: "My draft" })).toBe(
+      true
+    );
+    expect(
+      hasWorkspaceContent({
+        ...empty,
+        nodes: [{ id: "node-a" }] as typeof empty.nodes,
+      })
+    ).toBe(true);
+    expect(
+      hasWorkspaceContent({
+        ...empty,
+        pages: [{ ...empty.pages[0], bgColor: "#101010" }],
+      })
+    ).toBe(true);
   });
 });
