@@ -389,11 +389,23 @@ export function smoothVideoViewport(
   target: { x: number; y: number; zoom: number },
   elapsedMs: number
 ) {
-  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 220);
+  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 320);
   return {
     x: current.x + (target.x - current.x) * alpha,
     y: current.y + (target.y - current.y) * alpha,
     zoom: current.zoom + (target.zoom - current.zoom) * alpha,
+  };
+}
+
+export function smoothVideoFocusPoint(
+  current: { x: number; y: number },
+  target: { x: number; y: number },
+  elapsedMs: number
+) {
+  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 180);
+  return {
+    x: current.x + (target.x - current.x) * alpha,
+    y: current.y + (target.y - current.y) * alpha,
   };
 }
 
@@ -637,6 +649,7 @@ function VideoFollowOverlay({
   const [transport, setTransport] = useState(
     scenarioRuntime.getTransportSnapshot()
   );
+  const videoTitle = useFlowStore((state) => state.videoTitle);
 
   useEffect(() => scenarioRuntime.subscribeTransport(setTransport), []);
 
@@ -645,6 +658,7 @@ function VideoFollowOverlay({
     if (!enabled || !transport.isPlaying || visibleNodes.length === 0) return;
     let animationFrame = 0;
     let previousTime = performance.now();
+    let smoothedFocus: { x: number; y: number } | null = null;
     const contentBounds = getNodesBounds(visibleNodes);
 
     const follow = (time: number) => {
@@ -656,19 +670,23 @@ function VideoFollowOverlay({
       );
       const flow = document.querySelector(".react-flow");
       if (focus && flow instanceof HTMLElement) {
+        const elapsedMs = Math.min(64, time - previousTime);
+        smoothedFocus = smoothedFocus
+          ? smoothVideoFocusPoint(smoothedFocus, focus, elapsedMs)
+          : focus;
         const frame = flow.getBoundingClientRect();
         const current = getViewport();
         const target = getVideoCameraViewport({
           contentBounds,
           viewport: current,
           frame: { width: frame.width, height: frame.height },
-          focus,
+          focus: smoothedFocus,
         });
         if (target) {
           const next = smoothVideoViewport(
             current,
             target,
-            Math.min(64, time - previousTime)
+            elapsedMs
           );
           void setViewport(next);
         }
@@ -688,7 +706,9 @@ function VideoFollowOverlay({
       data-video-animation-name
     >
       <p className="truncate text-[13px] font-semibold text-foreground">
-        {scenarioRuntime.getActiveScenarioName() ?? "No animation selected"}
+        {videoTitle.trim() ||
+          scenarioRuntime.getActiveAnimationName() ||
+          "No animation selected"}
       </p>
     </div>
   );

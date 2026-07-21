@@ -104,13 +104,43 @@ describe("Video mode camera follow", () => {
     expect(dense.y).toBeCloseTo(sparse.y, 6);
   });
 
+  test("smooths the moving focus before moving the camera", async () => {
+    const canvas = (await import("../src/components/canvas")) as unknown as {
+      smoothVideoFocusPoint?: (
+        current: { x: number; y: number },
+        target: { x: number; y: number },
+        elapsedMs: number
+      ) => { x: number; y: number };
+    };
+
+    expect(typeof canvas.smoothVideoFocusPoint).toBe("function");
+    if (!canvas.smoothVideoFocusPoint) return;
+
+    const current = { x: 0, y: 0 };
+    const target = { x: 800, y: 300 };
+    const first = canvas.smoothVideoFocusPoint(current, target, 16);
+    expect(first.x).toBeGreaterThan(0);
+    expect(first.x).toBeLessThan(800);
+    expect(first.y).toBeGreaterThan(0);
+    expect(first.y).toBeLessThan(300);
+
+    let dense = current;
+    for (let frame = 0; frame < 10; frame += 1) {
+      dense = canvas.smoothVideoFocusPoint(dense, target, 16);
+    }
+    const sparse = canvas.smoothVideoFocusPoint(current, target, 160);
+    expect(dense.x).toBeCloseTo(sparse.x, 6);
+    expect(dense.y).toBeCloseTo(sparse.y, 6);
+  });
+
   test("renders the active animation name and smooth camera follow", async () => {
     const source = await Bun.file(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
 
     expect(source).toContain("data-video-animation-name");
-    expect(source).toContain("getActiveScenarioName");
+    expect(source).toContain("getActiveAnimationName");
+    expect(source).toContain("videoTitle.trim()");
     expect(source).toContain("getActiveTargetFrames");
     expect(source).not.toContain("Now playing");
     expect(source).toContain("requestAnimationFrame");
