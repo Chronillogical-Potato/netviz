@@ -155,6 +155,10 @@ export type ImageNodeData = WithGroup &
   WithColors & {
     src: string;
     alt?: string;
+    fit?: "contain" | "cover" | "fill";
+    scale?: number;
+    opacity?: number;
+    borderStyle?: BorderStyle;
   };
 export type ImageNode = Node<ImageNodeData, "image">;
 
@@ -331,7 +335,7 @@ type FlowState = Snapshot & {
     src: string,
     position: { x: number; y: number },
     size: { width: number; height: number }
-  ) => void;
+  ) => string;
   insertTemplate: (
     templateId: string,
     position: { x: number; y: number }
@@ -938,6 +942,7 @@ const IDENTITY_KEYS = new Set([
   "code",
   "step",
   "alt",
+  "src",
 ]);
 
 const infraSize = (variant: InfraVariant) =>
@@ -1463,20 +1468,31 @@ export const useFlowStore = create<FlowState>()(
       ),
     })),
 
-  addImageNode: (src, position, size) =>
+  addImageNode: (src, position, size) => {
+    const id = nextNodeId();
     set((s) => ({
       nodes: [
         ...s.nodes,
         {
-          id: nextNodeId(),
+          id,
           type: "image",
           position,
           style: size,
           zIndex: 0,
-          data: { src },
+          data: {
+            src,
+            fit: "contain",
+            scale: 100,
+            opacity: 100,
+            borderWidth: 1,
+            borderRadius: 8,
+            borderStyle: "solid",
+          },
         },
       ],
-    })),
+    }));
+    return id;
+  },
 
   duplicateNodes: (ids, offset = { x: 24, y: 24 }) =>
     set((s) => {

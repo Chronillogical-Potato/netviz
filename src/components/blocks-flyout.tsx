@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Code2,
   Hash,
+  Image,
   Plus,
   Search,
   Sparkles,
@@ -145,6 +146,7 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
   const insertTemplate = useFlowStore((s) => s.insertTemplate);
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const addStepNode = useFlowStore((s) => s.addStepNode);
+  const addImageNode = useFlowStore((s) => s.addImageNode);
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const { screenToFlowPosition } = useReactFlow();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -185,14 +187,15 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
     label: string,
     icon: AppIcon,
     accent: Accent,
-    add: (pos: { x: number; y: number }) => void
+    add: (pos: { x: number; y: number }) => void,
+    offset = { x: 40, y: 20 }
   ): Item => ({
     key,
     label,
     payload: { kind: key },
     tile: <AccentTile icon={icon} accent={accent} />,
     add: () => {
-      add(viewportCenter({ x: 40, y: 20 }));
+      add(viewportCenter(offset));
       onAdded();
     },
   });
@@ -228,6 +231,15 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
       title: "Annotations",
       items: [
         annotationItem("text", "Text", Type, "amber", addTextNode),
+        annotationItem(
+          "image",
+          "Image",
+          Image,
+          "sky",
+          (position) =>
+            addImageNode("", position, { width: 280, height: 180 }),
+          { x: 140, y: 90 }
+        ),
         annotationItem("step", "Step", Hash, "indigo", addStepNode),
         annotationItem("code", "Code", Code2, "violet", addCodeNode),
       ],

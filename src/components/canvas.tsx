@@ -113,6 +113,7 @@ type DragPayload =
   | { kind: "template"; templateId: string }
   | { kind: "shape"; shape: ShapeKind }
   | { kind: "text" }
+  | { kind: "image" }
   | { kind: "step" }
   | { kind: "code" };
 
@@ -496,6 +497,7 @@ function CanvasInner() {
   const addInfraNode = useFlowStore((s) => s.addInfraNode);
   const addShapeNode = useFlowStore((s) => s.addShapeNode);
   const addTextNode = useFlowStore((s) => s.addTextNode);
+  const addImageNode = useFlowStore((s) => s.addImageNode);
   const addStepNode = useFlowStore((s) => s.addStepNode);
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const customBlocks = useFlowStore((s) => s.customBlocks);
@@ -742,6 +744,8 @@ function CanvasInner() {
         addShapeNode(payload.shape, position);
       } else if (payload.kind === "text") {
         addTextNode(position);
+      } else if (payload.kind === "image") {
+        addImageNode("", position, { width: 280, height: 180 });
       } else if (payload.kind === "step") {
         addStepNode(position);
       } else if (payload.kind === "code") {
@@ -755,6 +759,7 @@ function CanvasInner() {
       insertTemplate,
       addShapeNode,
       addTextNode,
+      addImageNode,
       addStepNode,
       addCodeNode,
       isDesign,

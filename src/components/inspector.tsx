@@ -324,10 +324,12 @@ function PopoverControl({
   trigger,
   children,
   panelWidth = 240,
+  "aria-label": ariaLabel,
 }: {
   trigger: React.ReactNode;
   children: (close: () => void) => React.ReactNode;
   panelWidth?: number;
+  "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{
@@ -389,6 +391,7 @@ function PopoverControl({
         ref={btnRef}
         type="button"
         onClick={toggle}
+        aria-label={ariaLabel}
         className={cn(
           "flex h-7 w-full min-w-0 flex-1 items-center gap-1.5 rounded-md bg-input px-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted",
           open && "ring-1 ring-ring"
@@ -1356,11 +1359,59 @@ function CodeEditor({ node }: { node: CodeNode }) {
   );
 }
 
+type ImageFit = NonNullable<ImageNode["data"]["fit"]>;
+
+const IMAGE_FITS: { value: ImageFit; label: string }[] = [
+  { value: "contain", label: "Fit" },
+  { value: "cover", label: "Fill" },
+  { value: "fill", label: "Stretch" },
+];
+
+function ImageFitControl({
+  value,
+  onChange,
+}: {
+  value: ImageFit;
+  onChange: (value: ImageFit) => void;
+}) {
+  const current = IMAGE_FITS.find((option) => option.value === value);
+  return (
+    <PopoverControl
+      aria-label="Image fit"
+      panelWidth={160}
+      trigger={<span className="truncate">{current?.label ?? "Fit"}</span>}
+    >
+      {(close) => (
+        <div className="flex flex-col gap-0.5">
+          {IMAGE_FITS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                close();
+              }}
+              className={cn(
+                "rounded-lg px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted",
+                option.value === value
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </PopoverControl>
+  );
+}
+
 function ImageEditor({ node }: { node: ImageNode }) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
   return (
     <>
-      <Section>
+      <Section title="Image">
         <Row label="Alt text">
           <FieldInput
             value={node.data.alt ?? ""}
@@ -1368,11 +1419,53 @@ function ImageEditor({ node }: { node: ImageNode }) {
             placeholder="Optional"
           />
         </Row>
+        <Row label="Fit">
+          <ImageFitControl
+            value={node.data.fit ?? "contain"}
+            onChange={(fit) => updateNodeData(node.id, { fit })}
+          />
+        </Row>
+        <SliderRow
+          label="Scale"
+          value={node.data.scale ?? 100}
+          min={25}
+          max={300}
+          onChange={(scale) => updateNodeData(node.id, { scale })}
+        />
+        <SliderRow
+          label="Opacity"
+          value={node.data.opacity ?? 100}
+          min={0}
+          max={100}
+          onChange={(opacity) => updateNodeData(node.id, { opacity })}
+        />
       </Section>
-      <Section title="Style">
+      <Section title="Border">
+        <Row label="Style">
+          <Segmented
+            className="flex-1"
+            value={node.data.borderStyle ?? "solid"}
+            onChange={(borderStyle) =>
+              updateNodeData(node.id, { borderStyle })
+            }
+            options={BORDER_STYLES.map((style) => ({
+              value: style,
+              label: style[0].toUpperCase() + style.slice(1),
+            }))}
+          />
+        </Row>
+        <SliderRow
+          label="Border width"
+          value={node.data.borderWidth ?? 1}
+          min={0}
+          max={12}
+          onChange={(borderWidth) =>
+            updateNodeData(node.id, { borderWidth })
+          }
+        />
         <SliderRow
           label="Radius"
-          value={node.data.borderRadius ?? 6}
+          value={node.data.borderRadius ?? 8}
           min={0}
           max={48}
           onChange={(v) => updateNodeData(node.id, { borderRadius: v })}

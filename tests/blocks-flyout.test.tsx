@@ -17,6 +17,7 @@ describe("BlocksFlyout", () => {
     expect(markup).toContain(">Blocks<");
     expect(markup).not.toContain(">Core<");
     expect(markup).toContain('placeholder="Search…"');
+    expect(markup).toContain("Image — click to add");
     expect(markup).not.toContain("Line — click to add");
   });
 });
