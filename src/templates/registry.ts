@@ -1056,6 +1056,7 @@ export const TEMPLATES: TemplateDefinition[] = [
         name: "Cached API request",
         nodeKeys: ["users", "dns", "waf", "ingress", "web-api", "redis"],
         colors: ["#34d399", "#22d3ee"],
+        previewStartMs: 0,
       },
       {
         name: "Authenticated request",
@@ -1068,6 +1069,7 @@ export const TEMPLATES: TemplateDefinition[] = [
           "postgres",
         ],
         colors: ["#a78bfa", "#3b82f6"],
+        previewStartMs: 900,
       },
       {
         name: "Asynchronous job",
@@ -1082,31 +1084,37 @@ export const TEMPLATES: TemplateDefinition[] = [
           "object-storage",
         ],
         colors: ["#f59e0b", "#f97316"],
+        previewStartMs: 1_800,
       },
       {
         name: "Autoscaling signal",
         nodeKeys: ["web-api", "prometheus", "autoscaler", "web-api"],
         colors: ["#2dd4bf", "#22d3ee"],
+        previewStartMs: 4_800,
       },
       {
         name: "Metrics dashboard",
         nodeKeys: ["web-api", "prometheus", "grafana"],
         colors: ["#84cc16", "#eab308"],
+        previewStartMs: 6_000,
       },
       {
         name: "Centralized log search",
         nodeKeys: ["worker", "loki", "grafana"],
         colors: ["#38bdf8", "#818cf8"],
+        previewStartMs: 6_000,
       },
       {
         name: "Distributed trace",
         nodeKeys: ["web-api", "tracing", "grafana"],
         colors: ["#d946ef", "#ec4899"],
+        previewStartMs: 6_000,
       },
       {
         name: "Alert delivery",
         nodeKeys: ["worker", "prometheus", "alertmanager"],
         colors: ["#fb7185", "#ef4444"],
+        previewStartMs: 7_500,
       },
       {
         name: "Administrative batch",
@@ -1121,6 +1129,7 @@ export const TEMPLATES: TemplateDefinition[] = [
           "postgres",
         ],
         colors: ["#06b6d4", "#3b82f6"],
+        previewStartMs: 8_500,
       },
     ],
   },

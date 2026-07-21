@@ -131,6 +131,29 @@ describe("production templates", () => {
     ).toBeTrue();
   });
 
+  test("schedules concurrent workload and telemetry beams for Kubernetes", () => {
+    const template = TEMPLATES.find(
+      (item) => item.id === "kubernetes-production-platform"
+    );
+    const starts = new Map(
+      template?.animations.map((animation) => [
+        animation.name,
+        animation.previewStartMs,
+      ])
+    );
+
+    expect([
+      starts.get("Cached API request"),
+      starts.get("Authenticated request"),
+      starts.get("Asynchronous job"),
+    ]).toEqual([0, 900, 1_800]);
+    expect([
+      starts.get("Metrics dashboard"),
+      starts.get("Centralized log search"),
+      starts.get("Distributed trace"),
+    ]).toEqual([6_000, 6_000, 6_000]);
+  });
+
   test("uses valid blocks and connected paths for every template animation", () => {
     const blockIds = new Set(CORE_BLOCKS.map((block) => block.id));
 

@@ -599,6 +599,29 @@ describe("animation target lifecycle", () => {
     expect(activeForwardBeams.length).toBeGreaterThanOrEqual(2);
   });
 
+  test("plays several Kubernetes workload and telemetry beams together", () => {
+    useFlowStore.getState().insertTemplate("kubernetes-production-platform", {
+      x: 0,
+      y: 0,
+    });
+    const state = useFlowStore.getState();
+    const preview = state.scenarioDocument.scenarios.find(
+      (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
+    );
+    const activeBeams =
+      preview?.tracks
+        .filter((track) => track.property === "connection-effect")
+        .flatMap((track) => track.clips)
+        .filter(
+          (clip) =>
+            clip.startMs <= 6_800 &&
+            clip.startMs + clip.durationMs > 6_800
+        ) ?? [];
+
+    expect(preview?.name).toBe("Kubernetes production flows");
+    expect(activeBeams.length).toBeGreaterThanOrEqual(5);
+  });
+
   test("reorders custom paths without moving the template preview scenario", () => {
     useFlowStore.getState().insertTemplate("load-balanced-web-app", {
       x: 0,
