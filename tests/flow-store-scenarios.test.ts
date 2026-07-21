@@ -60,6 +60,7 @@ function resetStore() {
     videoCameraFollowEnabled: true,
     workMode: "design",
     previewReturnMode: "design",
+    previewIntent: "clean",
     animationPathDraft: null,
   });
   temporal.clear();
@@ -179,6 +180,7 @@ describe("page-owned animation state", () => {
     expect(useFlowStore.getState()).toMatchObject({
       workMode: "preview",
       previewReturnMode: "video",
+      previewIntent: "clean",
     });
 
     useFlowStore.getState().exitPreview();
@@ -191,6 +193,34 @@ describe("page-owned animation state", () => {
       useFlowStore.getState()
     ) as ReturnType<typeof useFlowStore.getState>;
     expect(hydrated.workMode).toBe("video");
+  });
+
+  test("marks only Video playback as a video presentation", () => {
+    useFlowStore.getState().setWorkMode("video");
+    useFlowStore.getState().setWorkMode("preview", "video");
+
+    expect(useFlowStore.getState()).toMatchObject({
+      workMode: "preview",
+      previewReturnMode: "video",
+      previewIntent: "video",
+    });
+  });
+
+  test("runs the regular Preview action normally when opened from Video mode", () => {
+    useFlowStore.setState({
+      nodes: [node("a"), node("b")],
+      edges: [edge("edge-a", "a", "b", true)],
+      motionPreference: "full",
+    });
+    useFlowStore.getState().applySelectedEdgeEffect({
+      type: "edge.gradient-beam",
+      params: { direction: "forward" },
+    });
+    useFlowStore.getState().setWorkMode("video");
+    useFlowStore.getState().setWorkMode("preview");
+
+    expect(useFlowStore.getState().previewIntent).toBe("clean");
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBeTrue();
   });
 
   test("persists the Video presentation title, delays, and camera follow", () => {
@@ -258,7 +288,7 @@ describe("page-owned animation state", () => {
     useFlowStore.getState().setWorkMode("video");
     expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
 
-    useFlowStore.getState().setWorkMode("preview");
+    useFlowStore.getState().setWorkMode("preview", "video");
     expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
   });
 

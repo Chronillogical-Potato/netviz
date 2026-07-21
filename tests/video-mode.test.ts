@@ -11,8 +11,12 @@ describe("Video mode camera follow", () => {
 
     expect(controlsSource).toContain("stageVideoPresentationViewport");
     expect(controlsSource).toContain("getViewport()");
+    expect(controlsSource).toContain('setWorkMode("preview", "video")');
     expect(canvasSource).toContain("takeVideoPresentationViewport");
     expect(canvasSource).toContain("preserveVideoPresentationViewport");
+    expect(canvasSource).toContain(
+      'const isVideoPresentation = isPreview && previewIntent === "video";',
+    );
     expect(canvasSource).toContain("useLayoutEffect");
     expect(canvasSource).not.toContain("const staging = animate");
     expect(canvasSource).toContain("cameraTransition = animate");

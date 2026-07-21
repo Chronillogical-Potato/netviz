@@ -736,6 +736,7 @@ function CanvasInner() {
   });
   const workMode = useFlowStore((s) => s.workMode);
   const previewReturnMode = useFlowStore((s) => s.previewReturnMode);
+  const previewIntent = useFlowStore((s) => s.previewIntent);
   const editingTextNodeId = useFlowStore((s) => s.editingTextNodeId);
   const animationPathDraft = useFlowStore((s) => s.animationPathDraft);
   const appendAnimationPathNode = useFlowStore(
@@ -749,7 +750,7 @@ function CanvasInner() {
   const isVideoCanvas =
     workMode === "video" ||
     (isPreview && previewReturnMode === "video");
-  const isVideoPresentation = isPreview && previewReturnMode === "video";
+  const isVideoPresentation = isPreview && previewIntent === "video";
   const isPlaybackOnly = isPreview || workMode === "video";
   const isDesign = workMode === "design";
   const isPickingAnimationPath =

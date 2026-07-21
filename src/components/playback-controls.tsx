@@ -189,7 +189,7 @@ export function PlaybackControls({
             frame: { left: frame.left, top: frame.top },
           });
         }
-        setWorkMode("preview");
+        setWorkMode("preview", "video");
         prepareAllConnections(
           {
             betweenMs: videoBetweenDelayMs,

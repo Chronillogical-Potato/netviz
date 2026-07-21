@@ -287,6 +287,7 @@ type Snapshot = {
 
 export type WorkMode = "design" | "animation" | "video" | "preview";
 export type EditorMode = Exclude<WorkMode, "preview">;
+export type PreviewIntent = "clean" | "video";
 export const isAnimationCanvasMode = (mode: WorkMode) => mode !== "design";
 export type MotionPreference = "system" | "full" | "reduced";
 const MAX_VIDEO_DELAY_MS = 10_000;
@@ -324,6 +325,7 @@ type NodeDataPatch = Partial<InfraNodeData> &
 
 type FlowState = Snapshot & {
   previewReturnMode: EditorMode;
+  previewIntent: PreviewIntent;
   animationPathDraft: AnimationPathDraft | null;
   editingTextNodeId: string | null;
   onNodesChange: OnNodesChange<AppNode>;
@@ -460,7 +462,7 @@ type FlowState = Snapshot & {
   setVideoEndDelayMs: (delayMs: number) => void;
   setVideoCameraFollowEnabled: (enabled: boolean) => void;
   setCanvasViewport: (viewport: CanvasViewport) => void;
-  setWorkMode: (mode: WorkMode) => void;
+  setWorkMode: (mode: WorkMode, previewIntent?: PreviewIntent) => void;
   exitPreview: () => void;
 };
 
@@ -1172,6 +1174,7 @@ export const useFlowStore = create<FlowState>()(
   workMode: "design" as WorkMode,
   canvasViewport: null,
   previewReturnMode: "design" as EditorMode,
+  previewIntent: "clean" as PreviewIntent,
   animationPathDraft: null,
   editingTextNodeId: null,
 
@@ -2850,11 +2853,12 @@ export const useFlowStore = create<FlowState>()(
   setCanvasViewport: (canvasViewport) => set({ canvasViewport }),
   renderAllElements: false,
   setRenderAllElements: (v) => set({ renderAllElements: v }),
-  setWorkMode: (mode) =>
+  setWorkMode: (mode, previewIntent = "clean") =>
     set((state) =>
       mode === "preview"
         ? {
             workMode: mode,
+            previewIntent,
             previewReturnMode:
               state.workMode === "preview"
                 ? state.previewReturnMode
@@ -2870,6 +2874,7 @@ export const useFlowStore = create<FlowState>()(
           }
         : {
             workMode: mode,
+            previewIntent: "clean",
             previewReturnMode: mode,
             ...(mode === "animation" ? {} : { animationPathDraft: null }),
             ...(mode === "design" ? {} : { editingTextNodeId: null }),
@@ -2886,7 +2891,10 @@ export const useFlowStore = create<FlowState>()(
           }
     ),
   exitPreview: () =>
-    set((state) => ({ workMode: state.previewReturnMode })),
+    set((state) => ({
+      workMode: state.previewReturnMode,
+      previewIntent: "clean",
+    })),
     }),
     {
       partialize: (state) => ({
@@ -3089,7 +3097,7 @@ function syncScenarioRuntime(
   }
   if (
     state.workMode === "preview" &&
-    state.previewReturnMode !== "video" &&
+    state.previewIntent !== "video" &&
     scenario !== null
   ) {
     scenarioRuntime.play();
