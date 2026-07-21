@@ -1313,7 +1313,7 @@ export const useFlowStore = create<FlowState>()(
               label: "",
               turbo: s.turbo,
               color: s.edgeColor,
-              curveStyle: s.edgeCurveStyle,
+              curveStyle: template.edgeCurveStyle ?? s.edgeCurveStyle,
               lineStyle: s.edgeLineStyle,
               dashGap: s.edgeDashGap,
             },

@@ -301,6 +301,9 @@ describe("animation target lifecycle", () => {
     const state = useFlowStore.getState();
     expect(state.nodes).toHaveLength(11);
     expect(state.edges).toHaveLength(17);
+    expect(
+      state.edges.every((item) => item.data?.curveStyle === "smooth")
+    ).toBe(true);
     expect(Math.min(...state.nodes.map((item) => item.position.x))).toBe(120);
     expect(Math.min(...state.nodes.map((item) => item.position.y))).toBe(240);
     expect(state.scenarioDocument.scenarios.map((scenario) => scenario.name)).toEqual([

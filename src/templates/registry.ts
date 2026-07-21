@@ -25,6 +25,7 @@ export type TemplateDefinition = {
   name: string;
   description: string;
   previewName?: string;
+  edgeCurveStyle?: "stepped" | "smooth";
   width: number;
   height: number;
   nodes: TemplateNode[];
@@ -39,6 +40,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     description:
       "Production web delivery with edge caching, WAF, high-availability balancing, stateless application servers, cache, replicated storage, and observability.",
     previewName: "Load-balanced requests",
+    edgeCurveStyle: "smooth",
     width: 1_940,
     height: 640,
     nodes: [
