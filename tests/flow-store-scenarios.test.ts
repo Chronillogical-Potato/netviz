@@ -439,6 +439,41 @@ describe("animation target lifecycle", () => {
     expect(startsAt(edgeToC?.id)).toBeGreaterThan(startsAt(edgeToB?.id) ?? 0);
   });
 
+  test("inserts both complex production templates with playable previews", () => {
+    for (const template of [
+      {
+        id: "event-driven-commerce",
+        preview: "Commerce production flows",
+        minimumNodes: 14,
+        minimumEdges: 16,
+      },
+      {
+        id: "kubernetes-production-platform",
+        preview: "Kubernetes production flows",
+        minimumNodes: 14,
+        minimumEdges: 16,
+      },
+    ]) {
+      resetStore();
+      useFlowStore.getState().insertTemplate(template.id, { x: 80, y: 120 });
+      const state = useFlowStore.getState();
+      const active = state.scenarioDocument.scenarios.find(
+        (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
+      );
+
+      expect(state.nodes.length).toBeGreaterThanOrEqual(template.minimumNodes);
+      expect(state.edges.length).toBeGreaterThanOrEqual(template.minimumEdges);
+      expect(state.edges.every((edge) => edge.data?.curveStyle === "smooth")).toBeTrue();
+      expect(Math.min(...state.nodes.map((node) => node.position.x))).toBe(80);
+      expect(Math.min(...state.nodes.map((node) => node.position.y))).toBe(120);
+      expect(active?.name).toBe(template.preview);
+      expect(active?.tracks.length).toBeGreaterThan(0);
+      expect(
+        findAuthoredCustomPaths(state.scenarioDocument, state.edges).length
+      ).toBe(state.scenarioDocument.scenarios.length - 1);
+    }
+  });
+
   test("reorders custom paths without moving the template preview scenario", () => {
     useFlowStore.getState().insertTemplate("load-balanced-web-app", {
       x: 0,
