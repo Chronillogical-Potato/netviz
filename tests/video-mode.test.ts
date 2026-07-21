@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { AppNode, LabeledEdge } from "../src/store/flow-store";
 import type { TargetFrame } from "../src/animation/runtime";
 import {
-  getVideoCameraTarget,
+  getVideoCameraViewport,
   resolveVideoFollowPoint,
+  smoothVideoViewport,
 } from "../src/components/canvas";
 
 const node = (id: string, x: number): AppNode => ({
@@ -64,7 +65,7 @@ describe("Video mode camera follow", () => {
 
   test("does not pan content that already fits the viewport", () => {
     expect(
-      getVideoCameraTarget({
+      getVideoCameraViewport({
         contentBounds: { x: 0, y: 0, width: 600, height: 300 },
         viewport: { x: 0, y: 0, zoom: 1 },
         frame: { width: 1_000, height: 700 },
@@ -75,13 +76,32 @@ describe("Video mode camera follow", () => {
 
   test("centers an overflowing axis once the animation leaves the safe area", () => {
     expect(
-      getVideoCameraTarget({
+      getVideoCameraViewport({
         contentBounds: { x: 0, y: 0, width: 2_000, height: 300 },
         viewport: { x: 0, y: 0, zoom: 1 },
         frame: { width: 1_000, height: 700 },
         focus: { x: 900, y: 150 },
       })
-    ).toEqual({ x: 900, y: 350 });
+    ).toEqual({ x: -450, y: 0, zoom: 1 });
+  });
+
+  test("smooths camera frames without overshoot or frame-rate dependence", () => {
+    const current = { x: 0, y: 0, zoom: 1 };
+    const target = { x: -600, y: -200, zoom: 1 };
+    const first = smoothVideoViewport(current, target, 16);
+
+    expect(first.x).toBeLessThan(0);
+    expect(first.x).toBeGreaterThan(-600);
+    expect(first.y).toBeLessThan(0);
+    expect(first.y).toBeGreaterThan(-200);
+
+    let dense = current;
+    for (let frame = 0; frame < 10; frame += 1) {
+      dense = smoothVideoViewport(dense, target, 16);
+    }
+    const sparse = smoothVideoViewport(current, target, 160);
+    expect(dense.x).toBeCloseTo(sparse.x, 6);
+    expect(dense.y).toBeCloseTo(sparse.y, 6);
   });
 
   test("renders the active animation name and smooth camera follow", async () => {
@@ -92,6 +112,10 @@ describe("Video mode camera follow", () => {
     expect(source).toContain("data-video-animation-name");
     expect(source).toContain("getActiveScenarioName");
     expect(source).toContain("getActiveTargetFrames");
-    expect(source).toContain("duration: 500");
+    expect(source).not.toContain("Now playing");
+    expect(source).toContain("requestAnimationFrame");
+    expect(source).toContain("setViewport");
+    expect(source).not.toContain("setCenter");
+    expect(source).not.toContain("duration: 500");
   });
 });

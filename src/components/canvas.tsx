@@ -362,7 +362,7 @@ export function resolveVideoFollowPoint(
   );
 }
 
-export function getVideoCameraTarget({
+export function getVideoCameraViewport({
   contentBounds,
   viewport,
   frame,
@@ -377,22 +377,23 @@ export function getVideoCameraTarget({
   const overflowY = contentBounds.height * viewport.zoom > frame.height * 0.9;
   if (!overflowX && !overflowY) return null;
 
-  const screenX = viewport.x + focus.x * viewport.zoom;
-  const screenY = viewport.y + focus.y * viewport.zoom;
-  const moveX =
-    overflowX && (screenX < frame.width * 0.3 || screenX > frame.width * 0.7);
-  const moveY =
-    overflowY &&
-    (screenY < frame.height * 0.3 || screenY > frame.height * 0.7);
-  if (!moveX && !moveY) return null;
-
-  const currentCenter = {
-    x: (frame.width / 2 - viewport.x) / viewport.zoom,
-    y: (frame.height / 2 - viewport.y) / viewport.zoom,
-  };
   return {
-    x: moveX ? focus.x : currentCenter.x,
-    y: moveY ? focus.y : currentCenter.y,
+    x: overflowX ? frame.width * 0.45 - focus.x * viewport.zoom : viewport.x,
+    y: overflowY ? frame.height * 0.5 - focus.y * viewport.zoom : viewport.y,
+    zoom: viewport.zoom,
+  };
+}
+
+export function smoothVideoViewport(
+  current: { x: number; y: number; zoom: number },
+  target: { x: number; y: number; zoom: number },
+  elapsedMs: number
+) {
+  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 220);
+  return {
+    x: current.x + (target.x - current.x) * alpha,
+    y: current.y + (target.y - current.y) * alpha,
+    zoom: current.zoom + (target.zoom - current.zoom) * alpha,
   };
 }
 
@@ -632,7 +633,7 @@ function VideoFollowOverlay({
   nodes: readonly AppNode[];
   edges: readonly LabeledEdgeModel[];
 }) {
-  const { getViewport, setCenter } = useReactFlow();
+  const { getViewport, setViewport } = useReactFlow();
   const [transport, setTransport] = useState(
     scenarioRuntime.getTransportSnapshot()
   );
@@ -640,31 +641,45 @@ function VideoFollowOverlay({
   useEffect(() => scenarioRuntime.subscribeTransport(setTransport), []);
 
   useEffect(() => {
-    if (!enabled || !transport.isPlaying || nodes.length === 0) return;
-    const focus = resolveVideoFollowPoint(
-      scenarioRuntime.getActiveTargetFrames(),
-      nodes,
-      edges
-    );
-    if (!focus) return;
-    const flow = document.querySelector(".react-flow");
-    if (!(flow instanceof HTMLElement)) return;
-    const frame = flow.getBoundingClientRect();
     const visibleNodes = nodes.filter((node) => !node.hidden);
-    if (visibleNodes.length === 0) return;
-    const viewport = getViewport();
-    const target = getVideoCameraTarget({
-      contentBounds: getNodesBounds(visibleNodes),
-      viewport,
-      frame: { width: frame.width, height: frame.height },
-      focus,
-    });
-    if (!target) return;
-    void setCenter(target.x, target.y, {
-      zoom: viewport.zoom,
-      duration: 500,
-    });
-  }, [edges, enabled, getViewport, nodes, setCenter, transport]);
+    if (!enabled || !transport.isPlaying || visibleNodes.length === 0) return;
+    let animationFrame = 0;
+    let previousTime = performance.now();
+    const contentBounds = getNodesBounds(visibleNodes);
+
+    const follow = (time: number) => {
+      if (!scenarioRuntime.getTransportSnapshot().isPlaying) return;
+      const focus = resolveVideoFollowPoint(
+        scenarioRuntime.getActiveTargetFrames(),
+        nodes,
+        edges
+      );
+      const flow = document.querySelector(".react-flow");
+      if (focus && flow instanceof HTMLElement) {
+        const frame = flow.getBoundingClientRect();
+        const current = getViewport();
+        const target = getVideoCameraViewport({
+          contentBounds,
+          viewport: current,
+          frame: { width: frame.width, height: frame.height },
+          focus,
+        });
+        if (target) {
+          const next = smoothVideoViewport(
+            current,
+            target,
+            Math.min(64, time - previousTime)
+          );
+          void setViewport(next);
+        }
+      }
+      previousTime = time;
+      animationFrame = requestAnimationFrame(follow);
+    };
+
+    animationFrame = requestAnimationFrame(follow);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [edges, enabled, getViewport, nodes, setViewport, transport.isPlaying]);
 
   if (!enabled) return null;
   return (
@@ -672,10 +687,7 @@ function VideoFollowOverlay({
       className="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(28rem,calc(100%-2rem))] rounded-lg border border-border/70 bg-background/90 px-3 py-2 shadow-lg backdrop-blur"
       data-video-animation-name
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        Now playing
-      </p>
-      <p className="truncate pt-0.5 text-[13px] font-semibold text-foreground">
+      <p className="truncate text-[13px] font-semibold text-foreground">
         {scenarioRuntime.getActiveScenarioName() ?? "No animation selected"}
       </p>
     </div>
