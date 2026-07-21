@@ -1,0 +1,55 @@
+import { describe, expect, test } from "bun:test";
+import {
+  VIDEO_START_DELAY_MS,
+  beginVideoPresentation,
+  cancelPendingVideoPresentation,
+} from "../src/animation/video-presentation";
+
+describe("Video presentation launch", () => {
+  test("hides the editor immediately and starts playback after three seconds", () => {
+    let enteredPreview = 0;
+    let startedPlayback = 0;
+    let scheduledDelay = 0;
+    let scheduled: (() => void) | null = null;
+    let cancelled = false;
+
+    beginVideoPresentation(
+      {
+        enterPreview: () => enteredPreview++,
+        startPlayback: () => startedPlayback++,
+      },
+      (callback, delayMs) => {
+        scheduled = callback;
+        scheduledDelay = delayMs;
+        return () => {
+          cancelled = true;
+        };
+      }
+    );
+
+    expect(enteredPreview).toBe(1);
+    expect(startedPlayback).toBe(0);
+    expect(scheduledDelay).toBe(VIDEO_START_DELAY_MS);
+    expect(VIDEO_START_DELAY_MS).toBe(3_000);
+
+    const runScheduled = scheduled as (() => void) | null;
+    runScheduled?.();
+    expect(startedPlayback).toBe(1);
+
+    cancelPendingVideoPresentation();
+    expect(cancelled).toBe(false);
+  });
+
+  test("cancels a pending launch when presentation is exited", () => {
+    let cancelled = false;
+    beginVideoPresentation(
+      { enterPreview: () => {}, startPlayback: () => {} },
+      () => () => {
+        cancelled = true;
+      }
+    );
+
+    cancelPendingVideoPresentation();
+    expect(cancelled).toBe(true);
+  });
+});

@@ -10,6 +10,7 @@ import {
   useFlowStore,
 } from "@/store/flow-store";
 import { cn } from "@/lib/utils";
+import { cancelPendingVideoPresentation } from "@/animation/video-presentation";
 
 export default function App() {
   const workMode = useFlowStore((s) => s.workMode);
@@ -32,7 +33,10 @@ export default function App() {
     (motionPreference === "system" && systemReduced);
 
   useEffect(() => {
-    if (!isPreview) return;
+    if (!isPreview) {
+      cancelPendingVideoPresentation();
+      return;
+    }
     const h = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       const target = e.target as HTMLElement | null;
@@ -43,10 +47,14 @@ export default function App() {
       ) {
         return;
       }
+      cancelPendingVideoPresentation();
       exitPreview();
     };
     window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    return () => {
+      cancelPendingVideoPresentation();
+      window.removeEventListener("keydown", h);
+    };
   }, [isPreview, exitPreview]);
 
   const clipboardRef = useRef<{ ids: string[]; pasteCount: number }>({

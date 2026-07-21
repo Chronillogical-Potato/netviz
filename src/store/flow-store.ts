@@ -3023,7 +3023,8 @@ function syncScenarioRuntime(
     scenarioRuntime.setLoop(scenario?.playback.loop.mode === "repeat");
   }
   if (
-    (state.workMode === "video" || state.workMode === "preview") &&
+    state.workMode === "preview" &&
+    state.previewReturnMode !== "video" &&
     scenario !== null
   ) {
     scenarioRuntime.play();

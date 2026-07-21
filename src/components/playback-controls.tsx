@@ -25,6 +25,7 @@ import {
 } from "@/store/flow-store";
 import { Button } from "@/ui/button";
 import { Pause, Play, Restart } from "@/ui/icons";
+import { beginVideoPresentation } from "@/animation/video-presentation";
 
 export type PlaybackShortcut = "toggle-playback" | "restart";
 
@@ -151,12 +152,23 @@ export function PlaybackControls({
   const setMotionPreference = useFlowStore(
     (state) => state.setMotionPreference
   );
+  const setWorkMode = useFlowStore((state) => state.setWorkMode);
   const motionPreference =
     motionPreferenceOverride ?? storedMotionPreference;
   const motionBlocked = prefersReducedMotion(motionPreference);
   const transport = useTransportSnapshot();
   const hasScenario =
     transport.scenarioId !== null && transport.durationMs > 0;
+  const playVideo = useCallback(() => {
+    scenarioRuntime.stop();
+    beginVideoPresentation({
+      enterPreview: () => setWorkMode("preview"),
+      startPlayback: () => {
+        scenarioRuntime.restart();
+        scenarioRuntime.play();
+      },
+    });
+  }, [setWorkMode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -173,12 +185,15 @@ export function PlaybackControls({
 
       event.preventDefault();
       if (shortcut === "restart") {
-        restartAllConnections();
+        if (workMode === "video") playVideo();
+        else restartAllConnections();
         return;
       }
 
       if (currentTransport.isPlaying) {
         scenarioRuntime.pause();
+      } else if (workMode === "video") {
+        playVideo();
       } else {
         playAllConnections();
       }
@@ -186,7 +201,7 @@ export function PlaybackControls({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [motionBlocked, workMode]);
+  }, [motionBlocked, playVideo, workMode]);
 
   if (motionBlocked) {
     return (
@@ -237,7 +252,11 @@ export function PlaybackControls({
           aria-keyshortcuts="Space"
           disabled={!hasScenario}
           onClick={() =>
-            transport.isPlaying ? scenarioRuntime.pause() : playAllConnections()
+            transport.isPlaying
+              ? scenarioRuntime.pause()
+              : workMode === "video"
+                ? playVideo()
+                : playAllConnections()
           }
         >
           {transport.isPlaying ? (
@@ -245,7 +264,11 @@ export function PlaybackControls({
           ) : (
             <Play className="h-3.5 w-3.5" />
           )}
-          {transport.isPlaying ? "Pause" : "Play all"}
+          {transport.isPlaying
+            ? "Pause"
+            : workMode === "video"
+              ? "Play"
+              : "Play all"}
         </Button>
         <Button
           type="button"
@@ -255,7 +278,7 @@ export function PlaybackControls({
           aria-label="Restart animation"
           aria-keyshortcuts="Home"
           disabled={!hasScenario}
-          onClick={restartAllConnections}
+          onClick={workMode === "video" ? playVideo : restartAllConnections}
         >
           <Restart className="h-3.5 w-3.5" />
         </Button>

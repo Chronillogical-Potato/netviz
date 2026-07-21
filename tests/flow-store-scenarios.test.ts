@@ -188,6 +188,24 @@ describe("page-owned animation state", () => {
     expect(hydrated.workMode).toBe("video");
   });
 
+  test("waits for the Video play action instead of autoplaying the mode", () => {
+    useFlowStore.setState({
+      nodes: [node("a"), node("b")],
+      edges: [edge("edge-a", "a", "b", true)],
+      motionPreference: "full",
+    });
+    useFlowStore.getState().applySelectedEdgeEffect({
+      type: "edge.gradient-beam",
+      params: { direction: "forward" },
+    });
+
+    useFlowStore.getState().setWorkMode("video");
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
+
+    useFlowStore.getState().setWorkMode("preview");
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
+  });
+
   test("returns clean preview to the editor mode it entered from", () => {
     useFlowStore.getState().setWorkMode("animation");
     useFlowStore.getState().setWorkMode("preview");

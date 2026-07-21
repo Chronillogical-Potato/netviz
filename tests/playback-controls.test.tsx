@@ -133,4 +133,17 @@ describe("PlaybackControls", () => {
       )
     ).toBeNull();
   });
+
+  test("starts the runtime after the delayed Video launch", async () => {
+    const source = await Bun.file(
+      new URL("../src/components/playback-controls.tsx", import.meta.url)
+    ).text();
+    const videoLaunch = source.slice(
+      source.indexOf("beginVideoPresentation({"),
+      source.indexOf("});", source.indexOf("beginVideoPresentation({")) + 3
+    );
+
+    expect(videoLaunch).toContain("scenarioRuntime.restart()");
+    expect(videoLaunch).toContain("scenarioRuntime.play()");
+  });
 });
