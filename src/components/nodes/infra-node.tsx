@@ -110,7 +110,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
         isVisible={selected}
 
         lineClassName="!border-ring/70"
-        handleClassName="!h-2 !w-2 !rounded-[2px] !border !border-ring !bg-white !shadow-sm"
+        handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />

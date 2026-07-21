@@ -36,4 +36,16 @@ describe("line tool", () => {
     expect(line?.data.arrowStart).toBe(false);
     expect(line?.data.arrowEnd).toBe(true);
   });
+
+  test("does not offer the removed bar arrow", async () => {
+    const inspector = await Bun.file(
+      new URL("../src/components/inspector.tsx", import.meta.url)
+    ).text();
+    const lineNode = await Bun.file(
+      new URL("../src/components/nodes/line-node.tsx", import.meta.url)
+    ).text();
+
+    expect(inspector).not.toContain('label: "Bar"');
+    expect(lineNode).not.toContain('case "bar"');
+  });
 });

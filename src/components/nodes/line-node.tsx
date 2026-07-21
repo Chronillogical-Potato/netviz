@@ -62,12 +62,6 @@ function ArrowMarker({
           <circle cx="5" cy="5" r="3.5" fill={color} />
         </marker>
       );
-    case "bar":
-      return (
-        <marker {...common}>
-          <path d="M 5 0 L 5 10" stroke={color} strokeWidth={2} strokeLinecap="round" />
-        </marker>
-      );
   }
 }
 

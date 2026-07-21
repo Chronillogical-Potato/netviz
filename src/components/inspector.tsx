@@ -1394,7 +1394,6 @@ const ARROW_SHAPES: { id: ArrowShape; label: string; svg: React.ReactNode }[] = 
   { id: "open", label: "Open", svg: <path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /> },
   { id: "diamond", label: "Diamond", svg: <path d="M 0 5 L 5 0 L 10 5 L 5 10 z" fill="currentColor" /> },
   { id: "circle", label: "Circle", svg: <circle cx="5" cy="5" r="3.5" fill="currentColor" /> },
-  { id: "bar", label: "Bar", svg: <path d="M 5 0 L 5 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /> },
 ];
 
 function ArrowShapeRow({

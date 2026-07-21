@@ -189,10 +189,10 @@
 }
 
 .react-flow__handle {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   background: hsl(var(--primary));
-  border: 2px solid hsl(var(--background));
+  border: 1.5px solid hsl(var(--background));
   opacity: 0;
   transition: opacity 0.15s ease;
 }

@@ -133,7 +133,7 @@ export type StepNodeData = WithGroup &
 export type StepNode = Node<StepNodeData, "step">;
 
 export type LineDirection = "tl-br" | "tr-bl" | "l-r" | "t-b";
-export type ArrowShape = "none" | "triangle" | "open" | "diamond" | "circle" | "bar";
+export type ArrowShape = "none" | "triangle" | "open" | "diamond" | "circle";
 export type LinePoint = { x: number; y: number };
 export type LineNodeData = WithGroup & {
   direction?: LineDirection;

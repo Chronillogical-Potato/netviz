@@ -31,7 +31,7 @@ type Filter = "all" | CategoryKey;
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "templates", label: "Templates" },
-  { key: "core", label: "Core" },
+  { key: "core", label: "Blocks" },
   { key: "annotations", label: "Annotations" },
   { key: "custom", label: "Custom" },
 ];
@@ -220,7 +220,7 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
     },
     {
       key: "core",
-      title: "Core",
+      title: "Blocks",
       items: CORE_BLOCKS.map((b) => blockItem(b)),
     },
     {
@@ -261,7 +261,7 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search blocks…"
+              placeholder="Search…"
               className="pl-8"
             />
           </div>

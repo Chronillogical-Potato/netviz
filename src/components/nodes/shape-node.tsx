@@ -90,7 +90,7 @@ function ShapeNodeComponent({ id, data, selected }: NodeProps<ShapeNode>) {
         isVisible={selected}
         keepAspectRatio={isCircle}
         lineClassName="!border-ring/70"
-        handleClassName="!h-2 !w-2 !rounded-[2px] !border !border-ring !bg-white !shadow-sm"
+        handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
       />
       <NodeRotationControls
         nodeId={id}
