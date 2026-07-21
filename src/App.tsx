@@ -4,6 +4,7 @@ import { Toolbar } from "@/components/toolbar";
 import { Sidebar } from "@/components/sidebar";
 import { Canvas } from "@/components/canvas";
 import { Inspector } from "@/components/inspector";
+import { SharedProjectGate } from "@/components/shared-project-gate";
 import {
   isAnimationCanvasMode,
   useFlowStore,
@@ -91,6 +92,7 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
+      <SharedProjectGate />
       <div
         className={cn(
           "flex h-screen w-screen flex-col bg-background text-foreground",
@@ -113,3 +115,5 @@ export default function App() {
     </ReactFlowProvider>
   );
 }
+
+export { SharedProjectConflictContent } from "@/components/shared-project-gate";
