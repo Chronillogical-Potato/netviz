@@ -138,6 +138,42 @@ describe("video camera track", () => {
     ]);
   });
 
+  test("holds the composed view instead of chasing overlapping beams", () => {
+    const concurrentScenario: ScenarioV1 = {
+      ...scenario,
+      tracks: [
+        scenario.tracks[0]!,
+        {
+          ...scenario.tracks[1]!,
+          clips: [
+            {
+              ...scenario.tracks[1]!.clips[0]!,
+              startMs: 700,
+            },
+          ],
+        },
+      ],
+    };
+    const initialViewport = { x: 40, y: 80, zoom: 0.6 };
+    const camera = buildVideoCameraTrack({
+      scenario: concurrentScenario,
+      nodeCenters: {
+        client: { x: 100, y: 100 },
+        firewall: { x: 600, y: 100 },
+        server: { x: 1_100, y: 100 },
+      },
+      edges: [
+        { id: "edge-a", source: "client", target: "firewall" },
+        { id: "edge-b", source: "firewall", target: "server" },
+      ],
+      contentBounds: { x: 0, y: 0, width: 1_200, height: 800 },
+      frame: { width: 800, height: 600 },
+      initialViewport,
+    });
+
+    expect(camera.cues).toEqual([{ atMs: 0, viewport: initialViewport }]);
+  });
+
   test("uses a readable presentation zoom instead of inheriting fit-view zoom", () => {
     const camera = buildVideoCameraTrack({
       scenario,

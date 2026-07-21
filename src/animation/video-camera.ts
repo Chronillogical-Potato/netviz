@@ -31,6 +31,36 @@ const average = (points: readonly Point[]): Point => ({
 const samePoint = (left: Point, right: Point) =>
   Math.abs(left.x - right.x) < 0.01 && Math.abs(left.y - right.y) < 0.01;
 
+const hasOverlappingConnectionMotion = (scenario: ScenarioV1) => {
+  const windows = scenario.tracks
+    .filter(
+      (track) => track.enabled && track.property === "connection-effect"
+    )
+    .flatMap((track) =>
+      track.clips.map((clip) => {
+        const repeats =
+          clip.repeatCount === "infinite"
+            ? Number.POSITIVE_INFINITY
+            : Math.max(0, clip.repeatCount);
+        const endMs =
+          repeats === Number.POSITIVE_INFINITY
+            ? scenario.durationMs
+            : clip.startMs +
+              clip.durationMs * (repeats + 1) +
+              clip.repeatDelayMs * repeats;
+        return { startMs: clip.startMs, endMs };
+      })
+    )
+    .filter((window) => window.endMs > window.startMs)
+    .sort((left, right) => left.startMs - right.startMs);
+  let latestEndMs = Number.NEGATIVE_INFINITY;
+  for (const window of windows) {
+    if (window.startMs < latestEndMs) return true;
+    latestEndMs = Math.max(latestEndMs, window.endMs);
+  }
+  return false;
+};
+
 export function preserveVideoPresentationViewport(
   viewport: Viewport,
   previousFrame: FrameOrigin,
@@ -58,6 +88,9 @@ export function buildVideoCameraTrack({
   frame: { width: number; height: number };
   initialViewport: Viewport;
 }): VideoCameraTrack {
+  if (hasOverlappingConnectionMotion(scenario)) {
+    return { cues: [{ atMs: 0, viewport: initialViewport }] };
+  }
   const presentationZoom = Math.max(
     initialViewport.zoom,
     MIN_PRESENTATION_ZOOM
