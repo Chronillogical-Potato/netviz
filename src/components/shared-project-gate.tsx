@@ -5,6 +5,7 @@ import {
   downloadSnapshot,
   hasWorkspaceContent,
   parseSharedProject,
+  urlWithoutSharePayload,
 } from "@/lib/storage";
 import { useFlowStore } from "@/store/flow-store";
 import {
@@ -20,11 +21,11 @@ function currentSnapshot() {
 }
 
 function removeSharePayload() {
-  const url = new URL(window.location.href);
-  const params = new URLSearchParams(url.hash.slice(1));
-  params.delete("share");
-  url.hash = params.toString();
-  window.history.replaceState(window.history.state, "", url);
+  window.history.replaceState(
+    null,
+    "",
+    urlWithoutSharePayload(window.location.href)
+  );
 }
 
 export function SharedProjectConflictContent({
@@ -49,22 +50,20 @@ export function SharedProjectConflictContent({
           Opening it will replace your current local workspace.
         </p>
       </div>
-      <div className="rounded-xl border border-border/60 bg-muted/50 p-3">
-        <button
-          type="button"
-          onClick={onDownload}
-          className="text-xs font-medium text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
-        >
-          Download current project
-        </button>
-        <p className="pt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-          Save your existing work first, or open this link in an
-          incognito/private window to keep both projects separate.
-        </p>
-      </div>
-      <DialogFooter>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Download your existing work first, or open this link in an
+        incognito/private window to keep both projects separate.
+      </p>
+      <DialogFooter className="grid-cols-3">
         <Button variant="outline" onClick={onCancel}>
           Cancel
+        </Button>
+        <Button
+          variant="outline"
+          aria-label="Download current project"
+          onClick={onDownload}
+        >
+          Download
         </Button>
         <Button variant="destructive" onClick={onOpen}>
           Open project
@@ -90,8 +89,8 @@ export function SharedProjectGate() {
             setPending(snapshot);
             return;
           }
-          useFlowStore.getState().replaceDocument(snapshot);
           removeSharePayload();
+          useFlowStore.getState().replaceDocument(snapshot);
         })
         .catch(() => setError("The shared-project link is invalid or damaged."));
     };
@@ -110,9 +109,9 @@ export function SharedProjectGate() {
 
   const open = () => {
     if (!pending) return;
+    removeSharePayload();
     useFlowStore.getState().replaceDocument(pending);
     setPending(null);
-    removeSharePayload();
   };
 
   const closeError = () => {

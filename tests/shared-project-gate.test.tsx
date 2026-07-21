@@ -20,5 +20,13 @@ describe("shared project protection", () => {
     expect(markup).toContain("Download current project");
     expect(markup).toContain("Cancel");
     expect(markup).toContain("Open project");
+    expect(markup).toContain("grid-cols-3");
+    expect(markup).not.toContain("underline");
+    expect(markup.indexOf("Cancel")).toBeLessThan(
+      markup.indexOf("Download current project")
+    );
+    expect(markup.indexOf("Download current project")).toBeLessThan(
+      markup.indexOf("Open project")
+    );
   });
 });

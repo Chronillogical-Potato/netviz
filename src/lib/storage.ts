@@ -146,6 +146,14 @@ export async function parseSharedProject(hash: string) {
   }
 }
 
+export function urlWithoutSharePayload(input: string) {
+  const url = new URL(input);
+  const params = new URLSearchParams(url.hash.slice(1));
+  params.delete("share");
+  const hash = params.toString();
+  return `${url.pathname}${url.search}${hash ? `#${hash}` : ""}`;
+}
+
 export function hasWorkspaceContent(snapshot: FlowSnapshot) {
   if (snapshot.projectName.trim() !== "Untitled") return true;
   if (

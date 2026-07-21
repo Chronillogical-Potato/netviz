@@ -5,6 +5,7 @@ import {
   hasWorkspaceContent,
   parseFlowSnapshot,
   parseSharedProject,
+  urlWithoutSharePayload,
 } from "../src/lib/storage";
 
 const minimalV1 = {
@@ -108,6 +109,19 @@ describe("project share links", () => {
     await expect(
       parseSharedProject("#share=v1.not-valid-compressed-data")
     ).rejects.toThrow("Could not read shared project");
+  });
+
+  test("removes the shared payload while preserving the rest of the URL", () => {
+    expect(
+      urlWithoutSharePayload(
+        "https://netviz.test/editor?theme=dark#panel=layers&share=v1.payload"
+      )
+    ).toBe("/editor?theme=dark#panel=layers");
+    expect(
+      urlWithoutSharePayload(
+        "https://netviz.test/editor?theme=dark#share=v1.payload"
+      )
+    ).toBe("/editor?theme=dark");
   });
 
   test("distinguishes a new workspace from meaningful local work", () => {
