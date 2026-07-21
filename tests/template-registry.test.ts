@@ -139,6 +139,12 @@ describe("production templates", () => {
       const edgePairs = new Set(
         template.edges.map((edge) => `${edge.source}:${edge.target}`)
       );
+      const connectedPairs = new Set(
+        template.edges.flatMap((edge) => [
+          `${edge.source}:${edge.target}`,
+          `${edge.target}:${edge.source}`,
+        ])
+      );
       expect(nodeKeys.size).toBe(template.nodes.length);
       expect(new Set(template.edges.map((edge) => edge.key)).size).toBe(
         template.edges.length
@@ -154,6 +160,17 @@ describe("production templates", () => {
           animation.nodeKeys.slice(0, -1).every((key, index) =>
             edgePairs.has(`${key}:${animation.nodeKeys[index + 1]}`)
           )
+        )
+      ).toBeTrue();
+      expect(
+        template.animations.every(
+          (animation) =>
+            !animation.responseNodeKeys ||
+            animation.responseNodeKeys.slice(0, -1).every((key, index) =>
+              connectedPairs.has(
+                `${key}:${animation.responseNodeKeys![index + 1]}`
+              )
+            )
         )
       ).toBeTrue();
     }

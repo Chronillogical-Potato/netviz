@@ -111,7 +111,7 @@ function findPathInScenario(
   scenario: ScenarioV1,
   edges: readonly RequestFlowEdge[]
 ): AuthoredCustomPath | null {
-  const authored = scenario.tracks
+  let authored = scenario.tracks
     .filter(
       (track) =>
         track.enabled &&
@@ -145,6 +145,9 @@ function findPathInScenario(
     )
   ) {
     return null;
+  }
+  if (preset === "request-response") {
+    authored = authored.filter((item) => item.phase !== "response");
   }
 
   const linearPreset =

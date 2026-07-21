@@ -22,6 +22,7 @@ export type TemplateEdge = {
 export type TemplateAnimation = {
   name: string;
   nodeKeys: string[];
+  responseNodeKeys?: string[];
   colors: [string, string];
   responseColors?: [string, string];
   preset?: AnimationPathPreset;
@@ -1292,6 +1293,9 @@ export const TEMPLATES: TemplateDefinition[] = [
       { key: "web-dns", source: "web-users", target: "dns", sourceHandle: "right", targetHandle: "left" },
       { key: "mobile-dns", source: "mobile-users", target: "dns", sourceHandle: "right", targetHandle: "left" },
       { key: "partner-dns", source: "partner-api", target: "dns", sourceHandle: "right", targetHandle: "left" },
+      { key: "web-firewall", source: "web-users", target: "firewall", sourceHandle: "right", targetHandle: "left" },
+      { key: "mobile-firewall", source: "mobile-users", target: "firewall", sourceHandle: "right", targetHandle: "left" },
+      { key: "partner-firewall", source: "partner-api", target: "firewall", sourceHandle: "right", targetHandle: "left" },
       { key: "dns-firewall", source: "dns", target: "firewall", sourceHandle: "right", targetHandle: "left" },
       { key: "firewall-lb", source: "firewall", target: "load-balancer", sourceHandle: "right", targetHandle: "left" },
       { key: "lb-api-a", source: "load-balancer", target: "api-a", sourceHandle: "right", targetHandle: "left" },
@@ -1318,6 +1322,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       {
         name: "Web profile request / response",
         nodeKeys: ["web-users", "dns", "firewall", "load-balancer", "api-a", "pgpool", "shard-a"],
+        responseNodeKeys: ["shard-a", "pgpool", "api-a", "load-balancer", "firewall", "web-users"],
         colors: ["#34d399", "#22d3ee"],
         responseColors: ["#38bdf8", "#818cf8"],
         preset: "request-response",
@@ -1326,6 +1331,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       {
         name: "Mobile checkout request / response",
         nodeKeys: ["mobile-users", "dns", "firewall", "load-balancer", "api-b", "pgpool", "shard-b"],
+        responseNodeKeys: ["shard-b", "pgpool", "api-b", "load-balancer", "firewall", "mobile-users"],
         colors: ["#a78bfa", "#ec4899"],
         responseColors: ["#f59e0b", "#f97316"],
         preset: "request-response",
@@ -1334,6 +1340,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       {
         name: "Partner analytics request / response",
         nodeKeys: ["partner-api", "dns", "firewall", "load-balancer", "api-c", "pgpool", "shard-c"],
+        responseNodeKeys: ["shard-c", "pgpool", "api-c", "load-balancer", "firewall", "partner-api"],
         colors: ["#facc15", "#f97316"],
         responseColors: ["#22d3ee", "#3b82f6"],
         preset: "request-response",
@@ -1342,6 +1349,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       {
         name: "Cached session request / response",
         nodeKeys: ["mobile-users", "dns", "firewall", "load-balancer", "api-a", "redis"],
+        responseNodeKeys: ["redis", "api-a", "load-balancer", "firewall", "mobile-users"],
         colors: ["#2dd4bf", "#84cc16"],
         responseColors: ["#60a5fa", "#a78bfa"],
         preset: "request-response",

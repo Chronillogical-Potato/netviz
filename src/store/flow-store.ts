@@ -569,6 +569,10 @@ function buildAnimationPathScenario(input: {
   edgeIds: readonly string[];
   edges: readonly LabeledEdge[];
   appearance: AnimationPathAppearance;
+  response?: {
+    nodeIds: readonly string[];
+    edgeIds: readonly string[];
+  };
   preset?: AnimationPathPreset;
   staggerMs?: number;
 }): ScenarioV1 | null {
@@ -679,21 +683,31 @@ function buildAnimationPathScenario(input: {
     const responseStart = input.appearance.shimmer
       ? edgeCount * REQUEST_FLOW_HOP_DELAY_MS + REQUEST_FLOW_EDGE_DELAY_MS
       : edgeCount * GRADIENT_BEAM_DURATION_MS;
-    [...input.edgeIds].reverse().forEach((edgeId, index) => {
+    const responseNodeIds =
+      input.response?.nodeIds ?? [...input.nodeIds].reverse();
+    const responseEdgeIds =
+      input.response?.edgeIds ?? [...input.edgeIds].reverse();
+    responseEdgeIds.forEach((edgeId, index) => {
       const startMs = responseStart + index * REQUEST_FLOW_HOP_DELAY_MS;
       const edge = edgeById(edgeId);
+      const fromNodeId = responseNodeIds[index];
+      const toNodeId = responseNodeIds[index + 1];
+      const direction =
+        edge?.source === fromNodeId && edge?.target === toNodeId
+          ? "forward"
+          : "reverse";
       addEdge(edgeId, startMs, {
-        direction: "reverse",
+        direction,
         colors: input.appearance.responseColors,
         phase: "response",
         append: true,
       });
       addShimmer(
-        edge?.source,
+        toNodeId,
         startMs + GRADIENT_BEAM_DURATION_MS - REQUEST_FLOW_ARRIVAL_LEAD_MS,
         edge,
         input.appearance.responseColors,
-        "reverse"
+        direction
       );
     });
   } else if (preset === "bidirectional") {
@@ -1410,6 +1424,8 @@ export const useFlowStore = create<FlowState>()(
           edgeIds.get(item.key),
         ])
       );
+      const edgeIdBetween = (from: string, to: string) =>
+        edgeByNodes.get(`${from}:${to}`) ?? edgeByNodes.get(`${to}:${from}`);
       const scenarios = template.animations.flatMap((animation) => {
         const pathNodeIds = animation.nodeKeys.map((key) => nodeIds.get(key));
         if (pathNodeIds.some((id) => !id)) return [];
@@ -1417,11 +1433,28 @@ export const useFlowStore = create<FlowState>()(
           edgeByNodes.get(`${key}:${animation.nodeKeys[index + 1]}`)
         );
         if (pathEdgeIds.some((id) => !id)) return [];
+        const responseNodeIds = animation.responseNodeKeys?.map((key) =>
+          nodeIds.get(key)
+        );
+        if (responseNodeIds?.some((id) => !id)) return [];
+        const responseEdgeIds = animation.responseNodeKeys
+          ?.slice(0, -1)
+          .map((key, index) =>
+            edgeIdBetween(key, animation.responseNodeKeys![index + 1]!)
+          );
+        if (responseEdgeIds?.some((id) => !id)) return [];
         const scenario = buildAnimationPathScenario({
           name: animation.name,
           nodeIds: pathNodeIds as string[],
           edgeIds: pathEdgeIds as string[],
           edges: templateEdges,
+          response:
+            responseNodeIds && responseEdgeIds
+              ? {
+                  nodeIds: responseNodeIds as string[],
+                  edgeIds: responseEdgeIds as string[],
+                }
+              : undefined,
           appearance: {
             ...defaultAnimationPathAppearance(),
             colors: animation.colors,

@@ -523,12 +523,18 @@ describe("animation target lifecycle", () => {
     const preview = state.scenarioDocument.scenarios.find(
       (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
     );
-    const requestNames = [
-      "Web profile request / response",
-      "Mobile checkout request / response",
-      "Partner analytics request / response",
-      "Cached session request / response",
+    const requestFlows = [
+      { name: "Web profile request / response", client: "Web Users" },
+      { name: "Mobile checkout request / response", client: "Mobile Clients" },
+      { name: "Partner analytics request / response", client: "Partner API" },
+      { name: "Cached session request / response", client: "Mobile Clients" },
     ];
+    const dns = state.nodes.find(
+      (node) => node.data.label === "Authoritative DNS"
+    );
+    const firewall = state.nodes.find(
+      (node) => node.data.label === "Edge Firewall"
+    );
 
     expect(preview?.name).toBe("Concurrent database traffic");
     expect(preview?.markers.slice(0, 4).map((marker) => marker.atMs)).toEqual([
@@ -537,7 +543,7 @@ describe("animation target lifecycle", () => {
       1_800,
       3_100,
     ]);
-    for (const name of requestNames) {
+    for (const { name, client: clientLabel } of requestFlows) {
       const scenario = state.scenarioDocument.scenarios.find(
         (item) => item.name === name
       );
@@ -548,6 +554,37 @@ describe("animation target lifecycle", () => {
         );
       expect(directions).toContain("forward");
       expect(directions).toContain("reverse");
+
+      const responseEdgeIds = new Set(
+        scenario?.tracks.flatMap((track) =>
+          track.property === "connection-effect" &&
+          track.target.type === "edge" &&
+          "id" in track.target &&
+          track.clips.some(
+            (clip) => clip.effect.params.pathPhase === "response"
+          )
+            ? [track.target.id]
+            : []
+        ) ?? []
+      );
+      const responseEdges = state.edges.filter((edge) =>
+        responseEdgeIds.has(edge.id)
+      );
+      const client = state.nodes.find(
+        (node) => node.data.label === clientLabel
+      );
+      expect(
+        responseEdges.some(
+          (edge) => edge.source === dns?.id || edge.target === dns?.id
+        )
+      ).toBeFalse();
+      expect(
+        responseEdges.some(
+          (edge) =>
+            (edge.source === client?.id && edge.target === firewall?.id) ||
+            (edge.source === firewall?.id && edge.target === client?.id)
+        )
+      ).toBeTrue();
     }
     const activeForwardBeams =
       preview?.tracks
