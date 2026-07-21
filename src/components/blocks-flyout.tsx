@@ -70,14 +70,12 @@ function AccentTile({
 function BlockRow({
   payload,
   label,
-  description,
   onAdd,
   onDelete,
   children,
 }: {
   payload: object;
   label: string;
-  description?: string;
   onAdd: () => void;
   onDelete?: () => void;
   children: React.ReactNode;
@@ -99,11 +97,6 @@ function BlockRow({
         <p className="truncate text-[13px] font-semibold text-foreground/80">
           {label}
         </p>
-        {description ? (
-          <p className="truncate pt-0.5 text-[10px] text-muted-foreground">
-            {description}
-          </p>
-        ) : null}
       </div>
       {onDelete && (
         <button
@@ -132,7 +125,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 type Item = {
   key: string;
   label: string;
-  description?: string;
   payload: object;
   tile: React.ReactNode;
   add: () => void;
@@ -203,7 +195,6 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
   const templateItems: Item[] = TEMPLATES.map((template) => ({
     key: template.id,
     label: template.name,
-    description: template.description,
     payload: { kind: "template", templateId: template.id },
     tile: <AccentTile icon={Sparkles} accent="emerald" />,
     add: () => {
@@ -321,7 +312,6 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
                       key={it.key}
                       payload={it.payload}
                       label={it.label}
-                      description={it.description}
                       onAdd={it.add}
                       onDelete={it.onDelete}
                     >

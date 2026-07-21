@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReactFlowProvider } from "@xyflow/react";
 import { BlocksFlyout } from "../src/components/blocks-flyout";
+import { TEMPLATES } from "../src/templates/registry";
 
 describe("BlocksFlyout", () => {
   test("separates block sections and softens their stronger names", () => {
@@ -19,5 +20,6 @@ describe("BlocksFlyout", () => {
     expect(markup).toContain('placeholder="Search…"');
     expect(markup).toContain("Image — click to add");
     expect(markup).not.toContain("Line — click to add");
+    expect(markup).not.toContain(TEMPLATES[0].description);
   });
 });
