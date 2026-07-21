@@ -72,7 +72,7 @@ const track = () =>
       { id: "edge-a", source: "client", target: "firewall" },
       { id: "edge-b", source: "firewall", target: "server" },
     ],
-    contentBounds: { x: 0, y: 0, width: 1_200, height: 200 },
+    contentBounds: { x: 0, y: 0, width: 1_200, height: 800 },
     frame: { width: 800, height: 600 },
     initialViewport: { x: 0, y: 0, zoom: 1 },
   });
@@ -123,9 +123,9 @@ describe("video camera track", () => {
 
   test("plans the full connected route before playback without a hold at a block", () => {
     expect(track().cues).toEqual([
-      { atMs: 0, viewport: { x: 260, y: 0, zoom: 1 } },
-      { atMs: 1_000, viewport: { x: -240, y: 0, zoom: 1 } },
-      { atMs: 2_400, viewport: { x: -740, y: 0, zoom: 1 } },
+      { atMs: 0, viewport: { x: 340, y: 164, zoom: 1 } },
+      { atMs: 1_000, viewport: { x: -160, y: 164, zoom: 1 } },
+      { atMs: 2_400, viewport: { x: -660, y: 164, zoom: 1 } },
     ]);
   });
 
@@ -145,13 +145,13 @@ describe("video camera track", () => {
   test("lands exactly and remains completely still after the final cue", () => {
     const camera = track();
     expect(sampleVideoCameraTrack(camera, 2_400)).toEqual({
-      x: -740,
-      y: 0,
+      x: -660,
+      y: 164,
       zoom: 1,
     });
     expect(sampleVideoCameraTrack(camera, 200_000)).toEqual({
-      x: -740,
-      y: 0,
+      x: -660,
+      y: 164,
       zoom: 1,
     });
   });

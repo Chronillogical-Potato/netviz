@@ -19,6 +19,8 @@ interface CameraEdge {
 }
 
 const MIN_PRESENTATION_ZOOM = 0.85;
+const CAMERA_FOCUS_X_PERCENT = 55;
+const CAMERA_FOCUS_Y_PERCENT = 44;
 
 const average = (points: readonly Point[]): Point => ({
   x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
@@ -111,10 +113,12 @@ export function buildVideoCameraTrack({
   for (const { atMs, focus } of focuses) {
     const viewport = {
       x: overflowX
-        ? frame.width * 0.45 - focus.x * presentationZoom
+        ? (frame.width * CAMERA_FOCUS_X_PERCENT) / 100 -
+          focus.x * presentationZoom
         : initialViewport.x,
       y: overflowY
-        ? frame.height * 0.5 - focus.y * presentationZoom
+        ? (frame.height * CAMERA_FOCUS_Y_PERCENT) / 100 -
+          focus.y * presentationZoom
         : initialViewport.y,
       zoom: presentationZoom,
     };
