@@ -1,6 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
 describe("Video mode camera follow", () => {
+  test("preserves the clean Preview viewport while editor chrome is hidden", async () => {
+    const toolbarSource = await Bun.file(
+      new URL("../src/components/toolbar.tsx", import.meta.url)
+    ).text();
+    const canvasSource = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+
+    expect(toolbarSource).toContain("const openPreview = () => {");
+    expect(toolbarSource).toContain("stageVideoPresentationViewport({");
+    expect(toolbarSource).toContain("viewport: getViewport()");
+    expect(toolbarSource).toContain("onClick={openPreview}");
+    expect(canvasSource).toContain("function PresentationViewportOverlay(");
+    expect(canvasSource).toContain("enabled={isPreview}");
+    expect(canvasSource).toContain("showTitle={isVideoPresentation}");
+  });
+
   test("keeps chrome removal stationary and starts camera motion with playback", async () => {
     const canvasSource = await Bun.file(
       new URL("../src/components/canvas.tsx", import.meta.url)
@@ -45,7 +62,8 @@ describe("Video mode camera follow", () => {
     expect(source).toContain("videoViewportTransform");
     expect(source).toContain("subscribeTransport(syncCameraPlayback)");
     expect(source).toContain("viewportElement.style.transform = transform");
-    expect(source).toContain("enabled={isVideoPresentation}");
+    expect(source).toContain("enabled={isPreview}");
+    expect(source).toContain("showTitle={isVideoPresentation}");
     expect(source).toContain("panOnScroll={!isVideoPresentation}");
     expect(source).toContain("zoomOnScroll={!isVideoPresentation}");
     expect(source).toContain("onlyRenderVisibleElements={!renderAll && !isVideoPresentation}");

@@ -33,6 +33,7 @@ import { Label } from "@/ui/label";
 import { Logo } from "@/ui/logo";
 import { SettingsDialog } from "./settings-dialog";
 import { ShareProjectDialog } from "./share-project-button";
+import { stageVideoPresentationViewport } from "@/animation/video-presentation";
 
 import type { WorkMode } from "@/store/flow-store";
 const WORK_MODES: { id: WorkMode; label: string; icon: AppIcon }[] = [
@@ -172,7 +173,7 @@ export function Toolbar() {
   const resetWorkspace = useFlowStore((s) => s.resetWorkspace);
   const selectAll = useFlowStore((s) => s.selectAll);
   const addImageNode = useFlowStore((s) => s.addImageNode);
-  const { screenToFlowPosition } = useReactFlow();
+  const { getViewport, screenToFlowPosition } = useReactFlow();
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -507,6 +508,18 @@ export function Toolbar() {
     }
   };
 
+  const openPreview = () => {
+    const flow = document.querySelector(".react-flow");
+    if (flow instanceof HTMLElement) {
+      const frame = flow.getBoundingClientRect();
+      stageVideoPresentationViewport({
+        viewport: getViewport(),
+        frame: { left: frame.left, top: frame.top },
+      });
+    }
+    setWorkMode("preview");
+  };
+
   return (
     <header className="relative flex h-12 shrink-0 items-center border-b border-border bg-background px-2.5">
       <ProjectTitle />
@@ -542,7 +555,7 @@ export function Toolbar() {
           variant="ghost"
           size="sm"
           className="gap-1.5"
-          onClick={() => setWorkMode("preview")}
+          onClick={openPreview}
           disabled={!hasNodes}
           title="Hide the editor for screenshots or recording"
         >

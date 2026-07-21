@@ -554,13 +554,15 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
   );
 }
 
-function VideoFollowOverlay({
+function PresentationViewportOverlay({
   enabled,
+  showTitle,
   followEnabled,
   nodes,
   edges,
 }: {
   enabled: boolean;
+  showTitle: boolean;
   followEnabled: boolean;
   nodes: readonly AppNode[];
   edges: readonly LabeledEdgeModel[];
@@ -616,7 +618,12 @@ function VideoFollowOverlay({
     };
 
     applyViewport(initialViewport);
-    if (!followEnabled || !scenario || visibleNodes.length === 0) {
+    if (
+      !showTitle ||
+      !followEnabled ||
+      !scenario ||
+      visibleNodes.length === 0
+    ) {
       return restoreEditorViewport;
     }
 
@@ -687,10 +694,11 @@ function VideoFollowOverlay({
     getViewport,
     nodes,
     setViewport,
+    showTitle,
     transport.scenarioId,
   ]);
 
-  if (!enabled) return null;
+  if (!enabled || !showTitle) return null;
   return (
     <div
       className="pointer-events-none absolute left-4 top-4 z-20 max-w-[min(28rem,calc(100%-2rem))] rounded-lg border border-border/70 bg-background/90 px-3 py-2 shadow-lg backdrop-blur"
@@ -1177,8 +1185,9 @@ function CanvasInner() {
         fitViewOptions={{ padding: 0.4 }}
       >
       </ReactFlow>
-      <VideoFollowOverlay
-        enabled={isVideoPresentation}
+      <PresentationViewportOverlay
+        enabled={isPreview}
+        showTitle={isVideoPresentation}
         followEnabled={videoCameraFollowEnabled}
         nodes={nodes}
         edges={edges}
