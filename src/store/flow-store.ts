@@ -3095,13 +3095,6 @@ function syncScenarioRuntime(
   ) {
     scenarioRuntime.setLoop(scenario?.playback.loop.mode === "repeat");
   }
-  if (
-    state.workMode === "preview" &&
-    state.previewIntent !== "video" &&
-    scenario !== null
-  ) {
-    scenarioRuntime.play();
-  }
 }
 
 useFlowStore.subscribe((state, previous) =>

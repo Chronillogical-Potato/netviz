@@ -206,7 +206,7 @@ describe("page-owned animation state", () => {
     });
   });
 
-  test("runs the regular Preview action normally when opened from Video mode", () => {
+  test("keeps the regular Preview action still when a design has animations", () => {
     useFlowStore.setState({
       nodes: [node("a"), node("b")],
       edges: [edge("edge-a", "a", "b", true)],
@@ -216,11 +216,10 @@ describe("page-owned animation state", () => {
       type: "edge.gradient-beam",
       params: { direction: "forward" },
     });
-    useFlowStore.getState().setWorkMode("video");
     useFlowStore.getState().setWorkMode("preview");
 
     expect(useFlowStore.getState().previewIntent).toBe("clean");
-    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBeTrue();
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBeFalse();
   });
 
   test("persists the Video presentation title, delays, and camera follow", () => {
@@ -366,7 +365,7 @@ describe("page-owned animation state", () => {
     });
   });
 
-  test("honors reduced motion before Preview autoplay", () => {
+  test("keeps clean Preview still across motion preference changes", () => {
     useFlowStore.setState({
       nodes: [node("a", true), node("b")],
       edges: [edge("edge-a", "a", "b", true)],
@@ -390,7 +389,7 @@ describe("page-owned animation state", () => {
     });
 
     useFlowStore.getState().setMotionPreference("full");
-    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(true);
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
     useFlowStore.getState().setWorkMode("design");
     expect(scenarioRuntime.getTransportSnapshot()).toMatchObject({
       scenarioId: null,
