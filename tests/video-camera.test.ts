@@ -138,7 +138,7 @@ describe("video camera track", () => {
     ]);
   });
 
-  test("holds the composed view instead of chasing overlapping beams", () => {
+  test("follows overlapping beams as one smooth camera path", () => {
     const concurrentScenario: ScenarioV1 = {
       ...scenario,
       tracks: [
@@ -160,7 +160,7 @@ describe("video camera track", () => {
       nodeCenters: {
         client: { x: 100, y: 100 },
         firewall: { x: 600, y: 100 },
-        server: { x: 1_100, y: 100 },
+        server: { x: 1_100, y: 500 },
       },
       edges: [
         { id: "edge-a", source: "client", target: "firewall" },
@@ -171,7 +171,34 @@ describe("video camera track", () => {
       initialViewport,
     });
 
-    expect(camera.cues).toEqual([{ atMs: 0, viewport: initialViewport }]);
+    expect(camera.cues.length).toBeGreaterThan(1);
+    expect(camera.cues.length).toBeLessThan(4);
+    expect(camera.cues[0]?.atMs).toBe(0);
+    expect(
+      new Set(camera.cues.map((cue) => Math.round(cue.viewport.y))).size
+    ).toBeGreaterThan(1);
+  });
+
+  test("follows vertical motion when an overflowing route changes lanes", () => {
+    const camera = buildVideoCameraTrack({
+      scenario,
+      nodeCenters: {
+        client: { x: 100, y: 100 },
+        firewall: { x: 600, y: 500 },
+        server: { x: 1_100, y: 100 },
+      },
+      edges: [
+        { id: "edge-a", source: "client", target: "firewall" },
+        { id: "edge-b", source: "firewall", target: "server" },
+      ],
+      contentBounds: { x: 0, y: 0, width: 1_200, height: 600 },
+      frame: { width: 800, height: 900 },
+      initialViewport: { x: 40, y: 80, zoom: 0.6 },
+    });
+
+    expect(
+      new Set(camera.cues.map((cue) => Math.round(cue.viewport.y))).size
+    ).toBeGreaterThan(1);
   });
 
   test("uses a readable presentation zoom instead of inheriting fit-view zoom", () => {
