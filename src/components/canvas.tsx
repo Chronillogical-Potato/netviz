@@ -114,7 +114,6 @@ type DragPayload =
   | { kind: "shape"; shape: ShapeKind }
   | { kind: "text" }
   | { kind: "step" }
-  | { kind: "line" }
   | { kind: "code" };
 
 function TurboDefs({ colors }: { colors: [string, string] }) {
@@ -269,7 +268,7 @@ function MeasureOverlay({
   );
 }
 
-type DrawTool = "rect" | "circle" | "text";
+type DrawTool = "rect" | "circle" | "line" | "text";
 
 export function isCanvasElementInteractionEnabled(
   tool: string,
@@ -316,13 +315,13 @@ export function constrainDrawEnd(
   };
 }
 
-// Figma-style draw tools: drag out a freeform rect/circle (or click for a
-// default-size one), click to place text. Covers the flow pane while a
-// draw tool is active so existing nodes don't swallow the gesture.
+// Figma-style draw tools cover the flow pane while active so existing nodes
+// don't swallow the drawing gesture.
 function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
   const { screenToFlowPosition } = useReactFlow();
   const addShapeNode = useFlowStore((s) => s.addShapeNode);
   const addTextNode = useFlowStore((s) => s.addTextNode);
+  const addLineNode = useFlowStore((s) => s.addLineNode);
   const selectNodes = useFlowStore((s) => s.selectNodes);
   const ref = useRef<HTMLDivElement>(null);
   const draftRef = useRef<{
@@ -368,7 +367,7 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
     const p = constrainDrawEnd(
       { x: draftRef.current.x0, y: draftRef.current.y0 },
       toLocal(e),
-      e.shiftKey && tool !== "text"
+      e.shiftKey && tool !== "text" && tool !== "line"
     );
     const next = { ...draftRef.current, x1: p.x, y1: p.y };
     draftRef.current = next;
@@ -382,7 +381,7 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
     const pointerUp = constrainDrawEnd(
       { x: current.x0, y: current.y0 },
       toLocal(e),
-      e.shiftKey && tool !== "text"
+      e.shiftKey && tool !== "text" && tool !== "line"
     );
     const toFlow = (point: { x: number; y: number }) =>
       screenToFlowPosition({
@@ -398,11 +397,20 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
     const dragged =
       Math.abs(pointerUp.x - current.x0) >= 8 &&
       Math.abs(pointerUp.y - current.y0) >= 8;
+    const lineDragged =
+      Math.hypot(pointerUp.x - current.x0, pointerUp.y - current.y0) >= 8;
     draftRef.current = null;
     setDraft(null);
     let id: string;
     if (tool === "text") {
       id = addTextNode(origin);
+    } else if (tool === "line") {
+      id = addLineNode(
+        origin,
+        lineDragged
+          ? toFlow(pointerUp)
+          : { x: origin.x + 176, y: origin.y }
+      );
     } else {
       const shape: ShapeKind = tool === "circle" ? "circle" : "rectangle";
       id = dragged
@@ -439,7 +447,33 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {rect && rect.width > 2 && tool !== "text" && (
+      {draft && tool === "line" && (
+        <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible text-primary">
+          <defs>
+            <marker
+              id="line-tool-draft-arrow"
+              viewBox="0 0 6 6"
+              refX="5.5"
+              refY="3"
+              markerWidth="5"
+              markerHeight="5"
+              orient="auto"
+            >
+              <path d="M 0 0 L 6 3 L 0 6 Z" fill="currentColor" />
+            </marker>
+          </defs>
+          <line
+            x1={draft.x0}
+            y1={draft.y0}
+            x2={draft.x1}
+            y2={draft.y1}
+            stroke="currentColor"
+            strokeWidth="2"
+            markerEnd="url(#line-tool-draft-arrow)"
+          />
+        </svg>
+      )}
+      {rect && rect.width > 2 && tool !== "text" && tool !== "line" && (
         <div
           className={cn(
             "absolute border border-primary bg-primary/10",
@@ -463,7 +497,6 @@ function CanvasInner() {
   const addShapeNode = useFlowStore((s) => s.addShapeNode);
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const addStepNode = useFlowStore((s) => s.addStepNode);
-  const addLineNode = useFlowStore((s) => s.addLineNode);
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const insertTemplate = useFlowStore((s) => s.insertTemplate);
@@ -711,8 +744,6 @@ function CanvasInner() {
         addTextNode(position);
       } else if (payload.kind === "step") {
         addStepNode(position);
-      } else if (payload.kind === "line") {
-        addLineNode(position);
       } else if (payload.kind === "code") {
         addCodeNode(position);
       }
@@ -725,7 +756,6 @@ function CanvasInner() {
       addShapeNode,
       addTextNode,
       addStepNode,
-      addLineNode,
       addCodeNode,
       isDesign,
     ]
@@ -886,7 +916,11 @@ function CanvasInner() {
           Click blocks in request order · Esc to cancel
         </div>
       ) : null}
-      {isDesign && (tool === "rect" || tool === "circle" || tool === "text") && (
+      {isDesign &&
+        (tool === "rect" ||
+          tool === "circle" ||
+          tool === "line" ||
+          tool === "text") && (
         <DrawOverlay tool={tool} onDone={() => setTool("select")} />
       )}
       {isDesign && showControls && (

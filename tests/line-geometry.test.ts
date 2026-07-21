@@ -2,12 +2,25 @@ import { describe, expect, test } from "bun:test";
 import {
   LINE_HANDLE_PADDING,
   deriveLegacyLineEndpoints,
+  lineGeometryFromPoints,
   lineAngleDegrees,
   normalizeLineEndpointDrag,
   rotateLineToAngle,
 } from "../src/lib/line-geometry";
 
 describe("line geometry", () => {
+  test("creates a padded line box from two anchored canvas points", () => {
+    expect(
+      lineGeometryFromPoints({ x: 100, y: 100 }, { x: 260, y: 160 })
+    ).toEqual({
+      position: { x: 88, y: 88 },
+      width: 184,
+      height: 84,
+      start: { x: 12, y: 12 },
+      end: { x: 172, y: 72 },
+    });
+  });
+
   test("derives rotated legacy endpoints from direction and rotation", () => {
     const endpoints = deriveLegacyLineEndpoints("l-r", 200, 60, 90);
 

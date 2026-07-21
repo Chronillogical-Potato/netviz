@@ -14,5 +14,6 @@ describe("BlocksFlyout", () => {
     expect(markup).toContain("gap-3");
     expect(markup).toContain("font-semibold text-foreground/80");
     expect(markup).toContain("text-muted-foreground/90");
+    expect(markup).not.toContain("Line — click to add");
   });
 });

@@ -20,6 +20,7 @@ import {
 } from "@xyflow/react";
 import { CORE_BLOCKS, type Accent, type BlockDef } from "@/blocks/registry";
 import type { IconName } from "@/blocks/icons";
+import { lineGeometryFromPoints } from "@/lib/line-geometry";
 import type {
   PageScenarioDocumentV1,
   ScenarioEffectV1,
@@ -315,7 +316,7 @@ type FlowState = Snapshot & {
   setEditingTextNode: (id: string | null) => void;
   addCodeNode: (position: { x: number; y: number }) => void;
   addStepNode: (position: { x: number; y: number }) => void;
-  addLineNode: (position: { x: number; y: number }) => void;
+  addLineNode: (start: LinePoint, end?: LinePoint) => string;
   updateLineGeometry: (
     id: string,
     geometry: {
@@ -1408,20 +1409,22 @@ export const useFlowStore = create<FlowState>()(
       };
     }),
 
-  addLineNode: (position) =>
+  addLineNode: (start, end = { x: start.x + 176, y: start.y }) => {
+    const id = nextNodeId();
+    const geometry = lineGeometryFromPoints(start, end);
     set((s) => ({
       nodes: [
         ...s.nodes,
         {
-          id: nextNodeId(),
+          id,
           type: "line",
-          position,
-          style: { width: 200, height: 60 },
+          position: geometry.position,
+          style: { width: geometry.width, height: geometry.height },
           zIndex: 0,
           data: {
             curvature: 0,
-            start: { x: 12, y: 30 },
-            end: { x: 188, y: 30 },
+            start: geometry.start,
+            end: geometry.end,
             arrowStart: false,
             arrowEnd: true,
             arrowStartShape: "triangle",
@@ -1432,7 +1435,9 @@ export const useFlowStore = create<FlowState>()(
           },
         },
       ],
-    })),
+    }));
+    return id;
+  },
 
   updateLineGeometry: (id, geometry) =>
     set((s) => ({

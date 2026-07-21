@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Code2,
   Hash,
-  Minus,
   Plus,
   Search,
   Sparkles,
@@ -146,7 +145,6 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
   const insertTemplate = useFlowStore((s) => s.insertTemplate);
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const addStepNode = useFlowStore((s) => s.addStepNode);
-  const addLineNode = useFlowStore((s) => s.addLineNode);
   const addCodeNode = useFlowStore((s) => s.addCodeNode);
   const { screenToFlowPosition } = useReactFlow();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -231,7 +229,6 @@ export function BlocksFlyout({ onAdded }: { onAdded: () => void }) {
       items: [
         annotationItem("text", "Text", Type, "amber", addTextNode),
         annotationItem("step", "Step", Hash, "indigo", addStepNode),
-        annotationItem("line", "Line", Minus, "teal", addLineNode),
         annotationItem("code", "Code", Code2, "violet", addCodeNode),
       ],
     },

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   Circle,
   Hand,
   Pointer,
@@ -11,7 +12,13 @@ import { useReactFlow } from "@xyflow/react";
 import { BlocksFlyout } from "./blocks-flyout";
 import { cn } from "@/lib/utils";
 
-export type CanvasTool = "select" | "hand" | "rect" | "circle" | "text";
+export type CanvasTool =
+  | "select"
+  | "hand"
+  | "rect"
+  | "circle"
+  | "line"
+  | "text";
 
 const TOOLS: {
   id: CanvasTool;
@@ -22,6 +29,7 @@ const TOOLS: {
   { id: "hand", icon: Hand, title: "Hand (H)" },
   { id: "rect", icon: Square, title: "Rectangle (R)" },
   { id: "circle", icon: Circle, title: "Circle (O)" },
+  { id: "line", icon: ArrowRight, title: "Line (L)" },
   { id: "text", icon: Type, title: "Text (T)" },
 ];
 
@@ -30,6 +38,7 @@ const TOOL_KEYS: Record<string, CanvasTool> = {
   h: "hand",
   r: "rect",
   o: "circle",
+  l: "line",
   t: "text",
 };
 

@@ -59,6 +59,17 @@ export function normalizeLineEndpointDrag({
   return normalizeLineGeometry(position, nextStart, nextEnd);
 }
 
+export function lineGeometryFromPoints(
+  start: LinePoint,
+  end: LinePoint
+): NormalizedLineGeometry {
+  return normalizeLineGeometry(
+    start,
+    { x: 0, y: 0 },
+    { x: end.x - start.x, y: end.y - start.y }
+  );
+}
+
 export function lineAngleDegrees(start: LinePoint, end: LinePoint): number {
   const degrees = (Math.atan2(end.y - start.y, end.x - start.x) * 180) / Math.PI;
   return Math.round((degrees + 360) % 360);
