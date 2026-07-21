@@ -4,7 +4,6 @@ import type { TargetFrame } from "../src/animation/runtime";
 import {
   getVideoCameraViewport,
   resolveVideoFollowPoint,
-  smoothVideoViewport,
 } from "../src/components/canvas";
 
 const node = (id: string, x: number): AppNode => ({
@@ -47,7 +46,7 @@ const activeFrame = (targetId: string, progress: number): TargetFrame => ({
 });
 
 describe("Video mode camera follow", () => {
-  test("follows the active beam between its connected blocks", () => {
+  test("uses the destination block as a stable cinematic focus", () => {
     const nodes = [node("source", 0), node("target", 400)];
     const edges = [
       {
@@ -59,8 +58,10 @@ describe("Video mode camera follow", () => {
       } satisfies LabeledEdge,
     ];
 
-    expect(resolveVideoFollowPoint([activeFrame("edge-a", 0.5)], nodes, edges))
-      .toEqual({ x: 250, y: 50 });
+    expect(resolveVideoFollowPoint([activeFrame("edge-a", 0.2)], nodes, edges))
+      .toEqual({ x: 450, y: 50 });
+    expect(resolveVideoFollowPoint([activeFrame("edge-a", 0.8)], nodes, edges))
+      .toEqual({ x: 450, y: 50 });
   });
 
   test("does not pan content that already fits the viewport", () => {
@@ -85,52 +86,41 @@ describe("Video mode camera follow", () => {
     ).toEqual({ x: -450, y: 0, zoom: 1 });
   });
 
-  test("smooths camera frames without overshoot or frame-rate dependence", () => {
-    const current = { x: 0, y: 0, zoom: 1 };
-    const target = { x: -600, y: -200, zoom: 1 };
-    const first = smoothVideoViewport(current, target, 16);
-
-    expect(first.x).toBeLessThan(0);
-    expect(first.x).toBeGreaterThan(-600);
-    expect(first.y).toBeLessThan(0);
-    expect(first.y).toBeGreaterThan(-200);
-
-    let dense = current;
-    for (let frame = 0; frame < 10; frame += 1) {
-      dense = smoothVideoViewport(dense, target, 16);
-    }
-    const sparse = smoothVideoViewport(current, target, 160);
-    expect(dense.x).toBeCloseTo(sparse.x, 6);
-    expect(dense.y).toBeCloseTo(sparse.y, 6);
+  test("holds the camera while the focus remains inside its safe frame", () => {
+    expect(
+      getVideoCameraViewport({
+        contentBounds: { x: 0, y: 0, width: 2_000, height: 300 },
+        viewport: { x: 0, y: 0, zoom: 1 },
+        frame: { width: 1_000, height: 700 },
+        focus: { x: 600, y: 150 },
+      })
+    ).toBeNull();
   });
 
-  test("smooths the moving focus before moving the camera", async () => {
+  test("moves between fixed camera keyframes with cinematic easing", async () => {
     const canvas = (await import("../src/components/canvas")) as unknown as {
-      smoothVideoFocusPoint?: (
-        current: { x: number; y: number },
-        target: { x: number; y: number },
-        elapsedMs: number
-      ) => { x: number; y: number };
+      interpolateVideoViewport?: (
+        current: { x: number; y: number; zoom: number },
+        target: { x: number; y: number; zoom: number },
+        progress: number
+      ) => { x: number; y: number; zoom: number };
     };
+    expect(typeof canvas.interpolateVideoViewport).toBe("function");
+    if (!canvas.interpolateVideoViewport) return;
 
-    expect(typeof canvas.smoothVideoFocusPoint).toBe("function");
-    if (!canvas.smoothVideoFocusPoint) return;
+    const current = { x: 0, y: 0, zoom: 1 };
+    const target = { x: -600, y: -200, zoom: 1 };
+    expect(canvas.interpolateVideoViewport(current, target, 0)).toEqual(current);
+    expect(canvas.interpolateVideoViewport(current, target, 0.5)).toEqual({
+      x: -300,
+      y: -100,
+      zoom: 1,
+    });
+    expect(canvas.interpolateVideoViewport(current, target, 1)).toEqual(target);
 
-    const current = { x: 0, y: 0 };
-    const target = { x: 800, y: 300 };
-    const first = canvas.smoothVideoFocusPoint(current, target, 16);
-    expect(first.x).toBeGreaterThan(0);
-    expect(first.x).toBeLessThan(800);
-    expect(first.y).toBeGreaterThan(0);
-    expect(first.y).toBeLessThan(300);
-
-    let dense = current;
-    for (let frame = 0; frame < 10; frame += 1) {
-      dense = canvas.smoothVideoFocusPoint(dense, target, 16);
-    }
-    const sparse = canvas.smoothVideoFocusPoint(current, target, 160);
-    expect(dense.x).toBeCloseTo(sparse.x, 6);
-    expect(dense.y).toBeCloseTo(sparse.y, 6);
+    const early = canvas.interpolateVideoViewport(current, target, 0.1);
+    expect(early.x).toBeLessThan(0);
+    expect(early.x).toBeGreaterThan(-60);
   });
 
   test("renders the active animation name and smooth camera follow", async () => {
@@ -145,6 +135,7 @@ describe("Video mode camera follow", () => {
     expect(source).not.toContain("Now playing");
     expect(source).toContain("requestAnimationFrame");
     expect(source).toContain("setViewport");
+    expect(source).not.toContain("smoothVideoFocusPoint");
     expect(source).not.toContain("setCenter");
     expect(source).not.toContain("duration: 500");
   });

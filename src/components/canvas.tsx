@@ -333,14 +333,15 @@ export function resolveVideoFollowPoint(
     const source = nodesById.get(edge.source);
     const target = nodesById.get(edge.target);
     if (!source || !target) continue;
-    const start = nodeCenter(source);
-    const end = nodeCenter(target);
     for (const clip of frame.clips) {
-      for (const progress of clip.timing.progresses) {
-        edgePoints.push({
-          x: start.x + (end.x - start.x) * progress,
-          y: start.y + (end.y - start.y) * progress,
-        });
+      if (clip.timing.progresses.length > 1) {
+        edgePoints.push(nodeCenter(source), nodeCenter(target));
+      } else {
+        edgePoints.push(
+          nodeCenter(
+            clip.timing.travelDirection === "reverse" ? source : target
+          )
+        );
       }
     }
   }
@@ -377,36 +378,52 @@ export function getVideoCameraViewport({
   const overflowY = contentBounds.height * viewport.zoom > frame.height * 0.9;
   if (!overflowX && !overflowY) return null;
 
+  const screenX = viewport.x + focus.x * viewport.zoom;
+  const screenY = viewport.y + focus.y * viewport.zoom;
+  const panX =
+    overflowX && (screenX < frame.width * 0.28 || screenX > frame.width * 0.72);
+  const panY =
+    overflowY &&
+    (screenY < frame.height * 0.25 || screenY > frame.height * 0.75);
+  if (!panX && !panY) return null;
+
   return {
-    x: overflowX ? frame.width * 0.45 - focus.x * viewport.zoom : viewport.x,
-    y: overflowY ? frame.height * 0.5 - focus.y * viewport.zoom : viewport.y,
+    x: panX ? frame.width * 0.45 - focus.x * viewport.zoom : viewport.x,
+    y: panY ? frame.height * 0.5 - focus.y * viewport.zoom : viewport.y,
     zoom: viewport.zoom,
   };
 }
 
-export function smoothVideoViewport(
+export function interpolateVideoViewport(
   current: { x: number; y: number; zoom: number },
   target: { x: number; y: number; zoom: number },
-  elapsedMs: number
+  progress: number
 ) {
-  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 320);
+  const time = Math.min(1, Math.max(0, progress));
+  const eased = time * time * time * (time * (time * 6 - 15) + 10);
   return {
-    x: current.x + (target.x - current.x) * alpha,
-    y: current.y + (target.y - current.y) * alpha,
-    zoom: current.zoom + (target.zoom - current.zoom) * alpha,
+    x: current.x + (target.x - current.x) * eased,
+    y: current.y + (target.y - current.y) * eased,
+    zoom: current.zoom + (target.zoom - current.zoom) * eased,
   };
 }
 
-export function smoothVideoFocusPoint(
-  current: { x: number; y: number },
-  target: { x: number; y: number },
-  elapsedMs: number
+function videoFocusKey(
+  frames: readonly TargetFrame[],
+  edges: readonly LabeledEdgeModel[]
 ) {
-  const alpha = 1 - Math.exp(-Math.max(0, elapsedMs) / 180);
-  return {
-    x: current.x + (target.x - current.x) * alpha,
-    y: current.y + (target.y - current.y) * alpha,
-  };
+  const edgeIds = new Set(edges.map((edge) => edge.id));
+  const edgeFrames = frames.filter((frame) => edgeIds.has(frame.targetId));
+  const relevantFrames = edgeFrames.length > 0 ? edgeFrames : frames;
+  return relevantFrames
+    .flatMap((frame) =>
+      frame.clips.map(
+        (clip) =>
+          `${frame.targetId}:${clip.trackId}:${clip.timing.travelDirection}`
+      )
+    )
+    .sort()
+    .join("|");
 }
 
 export function getDrawBounds(
@@ -656,42 +673,58 @@ function VideoFollowOverlay({
   useEffect(() => {
     const visibleNodes = nodes.filter((node) => !node.hidden);
     if (!enabled || !transport.isPlaying || visibleNodes.length === 0) return;
+    const cameraMoveDurationMs = 900;
     let animationFrame = 0;
-    let previousTime = performance.now();
-    let smoothedFocus: { x: number; y: number } | null = null;
+    let activeFocusKey = "";
+    let cameraMove: {
+      from: { x: number; y: number; zoom: number };
+      to: { x: number; y: number; zoom: number };
+      startedAt: number;
+    } | null = null;
     const contentBounds = getNodesBounds(visibleNodes);
 
     const follow = (time: number) => {
       if (!scenarioRuntime.getTransportSnapshot().isPlaying) return;
-      const focus = resolveVideoFollowPoint(
-        scenarioRuntime.getActiveTargetFrames(),
-        nodes,
-        edges
-      );
-      const flow = document.querySelector(".react-flow");
-      if (focus && flow instanceof HTMLElement) {
-        const elapsedMs = Math.min(64, time - previousTime);
-        smoothedFocus = smoothedFocus
-          ? smoothVideoFocusPoint(smoothedFocus, focus, elapsedMs)
-          : focus;
-        const frame = flow.getBoundingClientRect();
+      const frames = scenarioRuntime.getActiveTargetFrames();
+      const focusKey = videoFocusKey(frames, edges);
+      if (focusKey && focusKey !== activeFocusKey) {
+        activeFocusKey = focusKey;
+        const focus = resolveVideoFollowPoint(frames, nodes, edges);
+        const flow = document.querySelector(".react-flow");
+        if (focus && flow instanceof HTMLElement) {
+          const frame = flow.getBoundingClientRect();
+          const current = getViewport();
+          const target = getVideoCameraViewport({
+            contentBounds,
+            viewport: current,
+            frame: { width: frame.width, height: frame.height },
+            focus,
+          });
+          cameraMove = target
+            ? { from: current, to: target, startedAt: time }
+            : null;
+        }
+      } else if (!focusKey) {
+        activeFocusKey = "";
+      }
+
+      if (cameraMove) {
         const current = getViewport();
-        const target = getVideoCameraViewport({
-          contentBounds,
-          viewport: current,
-          frame: { width: frame.width, height: frame.height },
-          focus: smoothedFocus,
-        });
-        if (target) {
-          const next = smoothVideoViewport(
-            current,
-            target,
-            elapsedMs
-          );
+        const progress = (time - cameraMove.startedAt) / cameraMoveDurationMs;
+        const next = interpolateVideoViewport(
+          cameraMove.from,
+          cameraMove.to,
+          progress
+        );
+        if (
+          current.x !== next.x ||
+          current.y !== next.y ||
+          current.zoom !== next.zoom
+        ) {
           void setViewport(next);
         }
+        if (progress >= 1) cameraMove = null;
       }
-      previousTime = time;
       animationFrame = requestAnimationFrame(follow);
     };
 
