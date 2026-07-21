@@ -1044,15 +1044,8 @@ function CanvasInner() {
                         <span className={cn("h-2.5 w-2.5 rounded-full", accent.dot)} />
                       )}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-semibold text-foreground/80">
-                        {b.label}
-                      </span>
-                      {b.subtitle ? (
-                        <span className="block truncate pt-0.5 text-[10px] text-muted-foreground">
-                          {b.subtitle}
-                        </span>
-                      ) : null}
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground/80">
+                      {b.label}
                     </span>
                   </button>
                 );

@@ -114,7 +114,6 @@ describe("canvas tool interactions", () => {
     expect(popover).toContain("w-80");
     expect(popover).toContain("h-8 w-8");
     expect(popover).toContain("text-[13px] font-semibold text-foreground/80");
-    expect(popover).toContain("text-[10px] text-muted-foreground");
-    expect(popover).toContain("b.subtitle");
+    expect(popover).not.toContain("b.subtitle");
   });
 });

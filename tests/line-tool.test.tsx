@@ -48,4 +48,14 @@ describe("line tool", () => {
     expect(inspector).not.toContain('label: "Bar"');
     expect(lineNode).not.toContain('case "bar"');
   });
+
+  test("disables rotation when either line endpoint is connected", async () => {
+    const inspector = await Bun.file(
+      new URL("../src/components/inspector.tsx", import.meta.url)
+    ).text();
+    expect(inspector).toContain(
+      "node.data.startBinding || node.data.endBinding"
+    );
+    expect(inspector).toContain("disabled={rotationDisabled}");
+  });
 });

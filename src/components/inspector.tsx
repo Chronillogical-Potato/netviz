@@ -228,6 +228,7 @@ function NumberField({
   step = 1,
   onChange,
   format = (v: number) => String(v),
+  disabled = false,
 }: {
   value: number;
   min: number;
@@ -235,6 +236,7 @@ function NumberField({
   step?: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
+  disabled?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
@@ -249,6 +251,7 @@ function NumberField({
   return (
     <input
       inputMode="decimal"
+      disabled={disabled}
       value={draft ?? format(value)}
       onFocus={(e) => {
         setDraft(format(value));
@@ -267,7 +270,7 @@ function NumberField({
           (e.target as HTMLInputElement).blur();
         }
       }}
-      className="h-7 w-11 shrink-0 rounded-md bg-input px-1.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring"
+      className="h-7 w-11 shrink-0 rounded-md bg-input px-1.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       aria-label="Value"
     />
   );
@@ -281,6 +284,7 @@ function SliderRow({
   step = 1,
   onChange,
   format,
+  disabled = false,
 }: {
   label: string;
   value: number;
@@ -289,6 +293,7 @@ function SliderRow({
   step?: number;
   onChange: (v: number) => void;
   format?: (v: number) => string;
+  disabled?: boolean;
 }) {
   return (
     <Row label={label}>
@@ -297,8 +302,12 @@ function SliderRow({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="min-w-0 flex-1"
+        className={cn(
+          "min-w-0 flex-1",
+          disabled && "cursor-not-allowed opacity-50"
+        )}
         aria-label={label}
       />
       <NumberField
@@ -308,6 +317,7 @@ function SliderRow({
         step={step}
         onChange={onChange}
         format={format}
+        disabled={disabled}
       />
     </Row>
   );
@@ -1605,6 +1615,9 @@ function LineEditor({ node }: { node: LineNode }) {
           node.data.rotation ?? 0
         );
   const rotation = lineAngleDegrees(endpoints.start, endpoints.end);
+  const rotationDisabled = Boolean(
+    node.data.startBinding || node.data.endBinding
+  );
   const curvature = node.data.curvature ?? 0;
   const strokeColor = node.data.strokeColor ?? "#94a3b8";
   const strokeWidth = node.data.strokeWidth ?? 2;
@@ -1615,6 +1628,7 @@ function LineEditor({ node }: { node: LineNode }) {
   const arrowEndShape: ArrowShape = node.data.arrowEndShape ?? "triangle";
 
   const rotate = (angle: number) => {
+    if (rotationDisabled) return;
     // The projected node has a neutralized position; read live.
     const live = useFlowStore.getState().nodes.find((n) => n.id === node.id);
     const geometry = rotateLineToAngle({
@@ -1637,6 +1651,7 @@ function LineEditor({ node }: { node: LineNode }) {
           min={0}
           max={359}
           onChange={rotate}
+          disabled={rotationDisabled}
         />
         <SliderRow
           label="Curve"
