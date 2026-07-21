@@ -1409,14 +1409,37 @@ function ImageFitControl({
 
 function ImageEditor({ node }: { node: ImageNode }) {
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const replaceImage = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => updateNodeData(node.id, { src: String(reader.result) });
+    reader.readAsDataURL(file);
+  };
+
   return (
     <>
       <Section title="Image">
-        <Row label="Alt text">
-          <FieldInput
-            value={node.data.alt ?? ""}
-            onChange={(e) => updateNodeData(node.id, { alt: e.target.value })}
-            placeholder="Optional"
+        <Row label="Source">
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-input px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Replace image
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) replaceImage(file);
+              event.target.value = "";
+            }}
           />
         </Row>
         <Row label="Fit">

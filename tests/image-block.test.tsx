@@ -49,6 +49,8 @@ describe("image block", () => {
 
     expect(markup).toContain("Click to add image");
     expect(markup).toContain('accept="image/*"');
+    expect(markup).toContain("overflow-visible");
+    expect(markup).toContain('data-image-content="true"');
   });
 
   test("lets the image frame resize freely", async () => {
@@ -86,5 +88,16 @@ describe("image block", () => {
     expect(inspector).toContain('label="Scale"');
     expect(inspector).toContain('label="Opacity"');
     expect(inspector).toContain('label="Border width"');
+    expect(inspector).toContain("Replace image");
+    expect(inspector).not.toContain("Alt text");
+  });
+
+  test("removes legacy alt text from the image model and layer name", async () => {
+    const store = await Bun.file(
+      new URL("../src/store/flow-store.ts", import.meta.url)
+    ).text();
+
+    expect(store).not.toContain("alt?: string");
+    expect(store).not.toContain('return node.data.alt || "Image"');
   });
 });

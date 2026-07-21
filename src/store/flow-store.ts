@@ -154,7 +154,6 @@ export type LineNode = Node<LineNodeData, "line">;
 export type ImageNodeData = WithGroup &
   WithColors & {
     src: string;
-    alt?: string;
     fit?: "contain" | "cover" | "fill";
     scale?: number;
     opacity?: number;
@@ -941,7 +940,6 @@ const IDENTITY_KEYS = new Set([
   "text",
   "code",
   "step",
-  "alt",
   "src",
 ]);
 
@@ -2997,7 +2995,7 @@ export function getNodeDisplayName(node: AppNode): string {
     case "line":
       return "Line";
     case "image":
-      return node.data.alt || "Image";
+      return "Image";
     case "code":
       return node.data.label || `Code (${node.data.language})`;
   }

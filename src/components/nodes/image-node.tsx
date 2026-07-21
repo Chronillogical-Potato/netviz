@@ -32,24 +32,47 @@ function ImageNodeComponent({ id, data, selected }: NodeProps<ImageNode>) {
   };
 
   return (
-    <div
-      className={cn(
-        "relative h-full w-full overflow-hidden rounded-md border",
-        !hasBg && "bg-card",
-        !hasBorder && "border-border"
-      )}
-      style={{
-        ...(hasBg ? { backgroundColor: data.bgColor } : {}),
-        ...(hasBorder ? { borderColor: data.borderColor } : {}),
-        ...(typeof data.borderRadius === "number"
-          ? { borderRadius: data.borderRadius }
-          : {}),
-        ...(typeof data.borderWidth === "number"
-          ? { borderWidth: data.borderWidth }
-          : {}),
-        borderStyle: data.borderStyle ?? "solid",
-      }}
-    >
+    <div className="relative h-full w-full overflow-visible">
+      <div
+        data-image-content="true"
+        className={cn(
+          "absolute inset-0 overflow-hidden border",
+          !hasBg && "bg-card",
+          !hasBorder && "border-border"
+        )}
+        style={{
+          ...(hasBg ? { backgroundColor: data.bgColor } : {}),
+          ...(hasBorder ? { borderColor: data.borderColor } : {}),
+          borderRadius: data.borderRadius ?? 8,
+          borderWidth: data.borderWidth ?? 1,
+          borderStyle: data.borderStyle ?? "solid",
+        }}
+      >
+        {data.src ? (
+          <img
+            src={data.src}
+            alt=""
+            className="pointer-events-none h-full w-full select-none"
+            style={{
+              objectFit: data.fit ?? "contain",
+              opacity,
+              transform: `scale(${scale})`,
+              transformOrigin: "center",
+            }}
+            draggable={false}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="nodrag nopan flex h-full w-full flex-col items-center justify-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            aria-label="Choose image"
+          >
+            <ImageIcon className="h-5 w-5" />
+            <span>Click to add image</span>
+          </button>
+        )}
+      </div>
       <CanvasNodeResizer
         isVisible={selected}
         lineClassName="!border-ring/70"
@@ -58,30 +81,6 @@ function ImageNodeComponent({ id, data, selected }: NodeProps<ImageNode>) {
       {HANDLE_POSITIONS.map(({ pos, key }) => (
         <Handle key={key} type="source" position={pos} id={key} />
       ))}
-      {data.src ? (
-        <img
-          src={data.src}
-          alt={data.alt ?? ""}
-          className="pointer-events-none h-full w-full select-none"
-          style={{
-            objectFit: data.fit ?? "contain",
-            opacity,
-            transform: `scale(${scale})`,
-            transformOrigin: "center",
-          }}
-          draggable={false}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="nodrag nopan flex h-full w-full flex-col items-center justify-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-          aria-label="Choose image"
-        >
-          <ImageIcon className="h-5 w-5" />
-          <span>Click to add image</span>
-        </button>
-      )}
       <input
         ref={inputRef}
         type="file"
