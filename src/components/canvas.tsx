@@ -67,6 +67,33 @@ type DimSeg = { from: number; to: number; along: number; value: number };
 export const DIMENSION_BADGE_CLASS =
   "rounded-[2px] bg-primary px-1.5 py-0.5 text-xs font-semibold leading-none text-white whitespace-nowrap shadow-sm";
 
+const CONNECT_PICKER_WIDTH = 320;
+const CONNECT_PICKER_MAX_HEIGHT = 400;
+const CONNECT_PICKER_MARGIN = 8;
+
+export function getConnectPickerPosition(
+  point: { x: number; y: number },
+  viewport: { width: number; height: number }
+) {
+  const height = Math.min(
+    CONNECT_PICKER_MAX_HEIGHT,
+    Math.max(0, viewport.height - CONNECT_PICKER_MARGIN * 2)
+  );
+  return {
+    left: Math.max(
+      CONNECT_PICKER_MARGIN,
+      Math.min(
+        point.x,
+        viewport.width - CONNECT_PICKER_WIDTH - CONNECT_PICKER_MARGIN
+      )
+    ),
+    top: Math.max(
+      CONNECT_PICKER_MARGIN,
+      Math.min(point.y, viewport.height - height - CONNECT_PICKER_MARGIN)
+    ),
+  };
+}
+
 function computeDimsToTarget(sel: AppNode, target: AppNode) {
   const { w: sw, h: sh } = nodeDims(sel);
   const { w: tw, h: th } = nodeDims(target);
@@ -1007,14 +1034,20 @@ function CanvasInner() {
             onMouseDown={() => setConnectPopover(null)}
           />
           <div
-            className="fixed z-50 w-80 rounded-xl border border-border/60 bg-popover p-2 shadow-xl"
-            style={{ left: connectPopover.screenX, top: connectPopover.screenY }}
+            className="fixed z-50 flex w-80 max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border border-border/60 bg-popover p-2 shadow-xl"
+            style={{
+              ...getConnectPickerPosition(
+                { x: connectPopover.screenX, y: connectPopover.screenY },
+                { width: window.innerWidth, height: window.innerHeight }
+              ),
+              maxHeight: "min(400px, calc(100vh - 16px))",
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <p className="px-2 pb-1.5 pt-0.5 text-xs font-semibold text-muted-foreground/90">
               Connect to…
             </p>
-            <div className="grid max-h-[400px] grid-cols-1 gap-0.5 overflow-y-auto">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-0.5 overflow-y-auto">
               {registry.map((b) => {
                 const Ic = resolveIcon(b.iconName);
                 const accent = ACCENT_CLASSES[b.accent];

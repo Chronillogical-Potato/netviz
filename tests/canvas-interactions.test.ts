@@ -116,4 +116,38 @@ describe("canvas tool interactions", () => {
     expect(popover).toContain("text-[13px] font-semibold text-foreground/80");
     expect(popover).not.toContain("b.subtitle");
   });
+
+  test("keeps the quick-connect picker inside the viewport", async () => {
+    const getPosition = (
+      CanvasComponents as unknown as {
+        getConnectPickerPosition?: (
+          point: { x: number; y: number },
+          viewport: { width: number; height: number }
+        ) => { left: number; top: number };
+      }
+    ).getConnectPickerPosition;
+
+    expect(typeof getPosition).toBe("function");
+    if (!getPosition) return;
+    expect(getPosition({ x: 400, y: 180 }, { width: 920, height: 720 })).toEqual({
+      left: 400,
+      top: 180,
+    });
+    expect(getPosition({ x: 900, y: 700 }, { width: 920, height: 720 })).toEqual({
+      left: 592,
+      top: 312,
+    });
+    expect(getPosition({ x: 0, y: 0 }, { width: 920, height: 300 })).toEqual({
+      left: 8,
+      top: 8,
+    });
+
+    const source = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+    expect(source).toContain(
+      'maxHeight: "min(400px, calc(100vh - 16px))"'
+    );
+    expect(source).toContain("min-h-0 flex-1");
+  });
 });
