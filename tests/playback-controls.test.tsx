@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import type { ScenarioV1 } from "../src/animation/model";
+import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import { scenarioRuntime } from "../src/animation/runtime-instance";
 import {
   PlaybackControls,
@@ -161,5 +162,32 @@ describe("PlaybackControls", () => {
     expect(source).toContain("betweenMs: videoBetweenDelayMs");
     expect(source).toContain("endMs: videoEndDelayMs");
     expect(source).toContain("videoStartDelayMs,");
+  });
+
+  test("plays a scheduled template preview without rebuilding it sequentially", async () => {
+    const controlsModule = (await import(
+      "../src/components/playback-controls"
+    )) as typeof import("../src/components/playback-controls") & {
+      prepareAllConnections?: () => void;
+    };
+    useFlowStore.setState({
+      nodes: [],
+      edges: [],
+      scenarioDocument: createEmptyScenarioDocument(),
+      activePageId: "page-playback-controls",
+    });
+    useFlowStore
+      .getState()
+      .insertTemplate("sharded-postgres-platform", { x: 0, y: 0 });
+    useFlowStore.getState().setWorkMode("animation");
+    const scheduledPreviewId =
+      useFlowStore.getState().scenarioDocument.defaultScenarioId;
+
+    expect(typeof controlsModule.prepareAllConnections).toBe("function");
+    controlsModule.prepareAllConnections?.();
+
+    expect(scenarioRuntime.getTransportSnapshot().scenarioId).toBe(
+      scheduledPreviewId
+    );
   });
 });

@@ -109,7 +109,7 @@ function useTransportSnapshot(): TransportSnapshot {
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
 
-function prepareAllConnections(
+export function prepareAllConnections(
   delays: number | SequentialPlaybackDelays = 400,
   force = false
 ) {
@@ -120,6 +120,20 @@ function prepareAllConnections(
   );
   if (scenarioDocument !== state.scenarioDocument) {
     useFlowStore.setState({ scenarioDocument });
+  }
+  const activeScenario = scenarioDocument.scenarios.find(
+    (scenario) =>
+      scenario.id === scenarioRuntime.getTransportSnapshot().scenarioId
+  );
+  if (
+    activeScenario?.markers.some((marker) =>
+      marker.id.startsWith("template-animation-start-")
+    )
+  ) {
+    scenarioRuntime.activate(state.activePageId, activeScenario);
+    scenarioRuntime.setTargetScope(null);
+    scenarioRuntime.setLoop(true);
+    return;
   }
   const sequence = buildSequentialCustomPathScenario(
     scenarioDocument,
