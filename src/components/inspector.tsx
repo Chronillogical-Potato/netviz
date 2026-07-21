@@ -133,20 +133,22 @@ export function Inspector() {
                 : "All connections"}
           </p>
         </div>
-        <PlaybackControls />
-        {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}
-        {isBuildingAnimationPath ? (
-          <AnimationPathBuilder />
-        ) : hasSelectedEdge ? (
-          <AnimationOptions />
-        ) : selectedNode ? (
-          <RequestFlowOptions
-            nodeId={selectedNode.id}
-            nodeLabel={getNodeDisplayName(selectedNode)}
-          />
-        ) : (
-          <AnimationOverview />
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <PlaybackControls />
+          {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}
+          {isBuildingAnimationPath ? (
+            <AnimationPathBuilder />
+          ) : hasSelectedEdge ? (
+            <AnimationOptions />
+          ) : selectedNode ? (
+            <RequestFlowOptions
+              nodeId={selectedNode.id}
+              nodeLabel={getNodeDisplayName(selectedNode)}
+            />
+          ) : (
+            <AnimationOverview />
+          )}
+        </div>
       </aside>
     );
   }
