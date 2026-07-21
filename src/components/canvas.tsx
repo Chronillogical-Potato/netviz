@@ -47,6 +47,7 @@ import {
   type ActiveSnap,
   type Guide,
 } from "@/lib/snapping";
+import { findLineBindingAtPoint } from "@/lib/line-bindings";
 
 const nodeTypes: NodeTypes = {
   infra: InfraNodeView,
@@ -323,6 +324,9 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
   const addShapeNode = useFlowStore((s) => s.addShapeNode);
   const addTextNode = useFlowStore((s) => s.addTextNode);
   const addLineNode = useFlowStore((s) => s.addLineNode);
+  const setLineEndpointBinding = useFlowStore(
+    (s) => s.setLineEndpointBinding
+  );
   const selectNodes = useFlowStore((s) => s.selectNodes);
   const ref = useRef<HTMLDivElement>(null);
   const draftRef = useRef<{
@@ -412,6 +416,22 @@ function DrawOverlay({ tool, onDone }: { tool: DrawTool; onDone: () => void }) {
           ? toFlow(pointerUp)
           : { x: origin.x + 176, y: origin.y }
       );
+      const startBinding = findLineBindingAtPoint(
+        r.left + current.x0,
+        r.top + current.y0
+      );
+      const endBinding = lineDragged
+        ? findLineBindingAtPoint(
+            r.left + pointerUp.x,
+            r.top + pointerUp.y
+          )
+        : null;
+      if (startBinding) {
+        setLineEndpointBinding(id, "start", startBinding);
+      }
+      if (endBinding) {
+        setLineEndpointBinding(id, "end", endBinding);
+      }
     } else {
       const shape: ShapeKind = tool === "circle" ? "circle" : "rectangle";
       id = dragged
@@ -869,6 +889,7 @@ function CanvasInner() {
         turbo && "turbo",
         isPreview && "preview-canvas",
         tool === "hand" && "hand-tool",
+        tool === "line" && "line-tool-active",
         isPickingAnimationPath && "animation-path-picking"
       )}
       style={wrapperStyle}

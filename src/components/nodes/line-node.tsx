@@ -5,6 +5,7 @@ import {
   normalizeLineEndpointDrag,
   type LineHandle,
 } from "@/lib/line-geometry";
+import { findLineBindingAtPoint } from "@/lib/line-bindings";
 import { useFlowStore, type ArrowShape, type LineNode } from "@/store/flow-store";
 
 function ArrowMarker({
@@ -74,6 +75,9 @@ function LineNodeComponent({
 }: NodeProps<LineNode>) {
   const { screenToFlowPosition } = useReactFlow();
   const updateLineGeometry = useFlowStore((s) => s.updateLineGeometry);
+  const setLineEndpointBinding = useFlowStore(
+    (s) => s.setLineEndpointBinding
+  );
   const w = width ?? 200;
   const h = height ?? 60;
   const curvature = data.curvature ?? 0;
@@ -115,6 +119,8 @@ function LineNodeComponent({
       event.stopPropagation();
       const pointerId = event.pointerId;
       event.currentTarget.setPointerCapture(pointerId);
+      setLineEndpointBinding(id, handle, null);
+      document.documentElement.classList.add("line-endpoint-dragging");
 
       const move = (moveEvent: PointerEvent) => {
         const current = useFlowStore
@@ -160,15 +166,27 @@ function LineNodeComponent({
         updateLineGeometry(id, geometry);
       };
 
-      const up = () => {
+      const finish = (upEvent: PointerEvent) => {
+        if (upEvent.type === "pointerup") {
+          const binding = findLineBindingAtPoint(
+            upEvent.clientX,
+            upEvent.clientY
+          );
+          if (binding) {
+            setLineEndpointBinding(id, handle, binding);
+          }
+        }
+        document.documentElement.classList.remove("line-endpoint-dragging");
         window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
       };
 
       window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up, { once: true });
+      window.addEventListener("pointerup", finish, { once: true });
+      window.addEventListener("pointercancel", finish, { once: true });
     },
-    [h, id, screenToFlowPosition, updateLineGeometry, w]
+    [h, id, screenToFlowPosition, setLineEndpointBinding, updateLineGeometry, w]
   );
 
   const markerEndId = `line-arrow-end-${id}`;

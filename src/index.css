@@ -211,6 +211,10 @@
 .react-flow__node:focus .react-flow__handle {
   opacity: 1;
 }
+.line-tool-active .react-flow__handle,
+.line-endpoint-dragging .react-flow__handle {
+  opacity: 1;
+}
 .react-flow__edge-path {
   stroke: hsl(var(--muted-foreground));
   stroke-width: 1.5;

@@ -21,6 +21,7 @@ import {
 import { CORE_BLOCKS, type Accent, type BlockDef } from "@/blocks/registry";
 import type { IconName } from "@/blocks/icons";
 import { lineGeometryFromPoints } from "@/lib/line-geometry";
+import { syncBoundLines } from "@/lib/line-bindings";
 import type {
   PageScenarioDocumentV1,
   ScenarioEffectV1,
@@ -135,6 +136,11 @@ export type StepNode = Node<StepNodeData, "step">;
 export type LineDirection = "tl-br" | "tr-bl" | "l-r" | "t-b";
 export type ArrowShape = "none" | "triangle" | "open" | "diamond" | "circle";
 export type LinePoint = { x: number; y: number };
+export type LineBindingHandle = "top" | "right" | "bottom" | "left";
+export type LineBinding = {
+  nodeId: string;
+  handleId: LineBindingHandle;
+};
 export type LineNodeData = WithGroup & {
   direction?: LineDirection;
   curvature?: number;
@@ -148,6 +154,8 @@ export type LineNodeData = WithGroup & {
   strokeColor?: string;
   strokeWidth?: number;
   dashed?: boolean;
+  startBinding?: LineBinding;
+  endBinding?: LineBinding;
 };
 export type LineNode = Node<LineNodeData, "line">;
 
@@ -329,6 +337,11 @@ type FlowState = Snapshot & {
       start: LinePoint;
       end: LinePoint;
     }
+  ) => void;
+  setLineEndpointBinding: (
+    id: string,
+    endpoint: "start" | "end",
+    binding: LineBinding | null
   ) => void;
   addImageNode: (
     src: string,
@@ -921,7 +934,33 @@ function deleteAuthoredElements(
     }
   }
   return {
-    nodes: state.nodes.filter((node) => !nodeIds.has(node.id)),
+    nodes: state.nodes
+      .filter((node) => !nodeIds.has(node.id))
+      .map((node) => {
+        if (node.type !== "line") return node;
+        const startBinding = node.data.startBinding;
+        const endBinding = node.data.endBinding;
+        if (
+          !nodeIds.has(startBinding?.nodeId ?? "") &&
+          !nodeIds.has(endBinding?.nodeId ?? "")
+        ) {
+          return node;
+        }
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            startBinding:
+              startBinding && nodeIds.has(startBinding.nodeId)
+                ? undefined
+                : startBinding,
+            endBinding:
+              endBinding && nodeIds.has(endBinding.nodeId)
+                ? undefined
+                : endBinding,
+          },
+        };
+      }),
     edges: state.edges.filter((edge) => !edgeIds.has(edge.id)),
     groups: state.groups.filter((group) => !groupIds.has(group.id)),
     scenarioDocument: pruneScenarioTargets(state.scenarioDocument, [
@@ -1118,7 +1157,7 @@ export const useFlowStore = create<FlowState>()(
         .filter((change) => change.type === "remove")
         .map((change) => change.id);
       if (removedNodeIds.length === 0) {
-        return { nodes: applyNodeChanges(changes, s.nodes) };
+        return { nodes: syncBoundLines(applyNodeChanges(changes, s.nodes)) };
       }
       const retainedChanges = changes.filter(
         (change) => change.type !== "remove"
@@ -1126,7 +1165,7 @@ export const useFlowStore = create<FlowState>()(
       return deleteAuthoredElements(
         {
           ...s,
-          nodes: applyNodeChanges(retainedChanges, s.nodes),
+          nodes: syncBoundLines(applyNodeChanges(retainedChanges, s.nodes)),
         },
         { nodeIds: removedNodeIds }
       );
@@ -1466,6 +1505,24 @@ export const useFlowStore = create<FlowState>()(
       ),
     })),
 
+  setLineEndpointBinding: (id, endpoint, binding) =>
+    set((s) => ({
+      nodes: syncBoundLines(
+        s.nodes.map((node) =>
+          node.id === id && node.type === "line"
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  [endpoint === "start" ? "startBinding" : "endBinding"]:
+                    binding ?? undefined,
+                },
+              }
+            : node
+        )
+      ),
+    })),
+
   addImageNode: (src, position, size) => {
     const id = nextNodeId();
     set((s) => ({
@@ -1565,20 +1622,24 @@ export const useFlowStore = create<FlowState>()(
           if (!IDENTITY_KEYS.has(k)) (shared as Record<string, unknown>)[k] = v;
         }
         return {
-          nodes: s.nodes.map((n) => {
-            if (n.id === id)
-              return { ...n, data: { ...n.data, ...patch } } as AppNode;
-            if (n.selected)
-              return { ...n, data: { ...n.data, ...shared } } as AppNode;
-            return n;
-          }),
+          nodes: syncBoundLines(
+            s.nodes.map((n) => {
+              if (n.id === id)
+                return { ...n, data: { ...n.data, ...patch } } as AppNode;
+              if (n.selected)
+                return { ...n, data: { ...n.data, ...shared } } as AppNode;
+              return n;
+            })
+          ),
         };
       }
       return {
-        nodes: s.nodes.map((n) =>
-          n.id === id
-            ? ({ ...n, data: { ...n.data, ...patch } } as AppNode)
-            : n
+        nodes: syncBoundLines(
+          s.nodes.map((n) =>
+            n.id === id
+              ? ({ ...n, data: { ...n.data, ...patch } } as AppNode)
+              : n
+          )
         ),
       };
     }),
