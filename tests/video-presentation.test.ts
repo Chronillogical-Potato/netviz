@@ -6,6 +6,33 @@ import {
 } from "../src/animation/video-presentation";
 
 describe("Video presentation launch", () => {
+  test("hands the editor viewport to the fullscreen presentation once", async () => {
+    const presentationModule = (await import(
+      "../src/animation/video-presentation"
+    )) as typeof import("../src/animation/video-presentation") & {
+      stageVideoPresentationViewport?: (snapshot: {
+        viewport: { x: number; y: number; zoom: number };
+        frame: { left: number; top: number };
+      }) => void;
+      takeVideoPresentationViewport?: () => unknown;
+    };
+    const stageViewport =
+      presentationModule.stageVideoPresentationViewport;
+    const takeViewport = presentationModule.takeVideoPresentationViewport;
+    expect(typeof stageViewport).toBe("function");
+    expect(typeof takeViewport).toBe("function");
+    if (!stageViewport || !takeViewport) return;
+
+    const snapshot = {
+      viewport: { x: 120, y: 90, zoom: 0.85 },
+      frame: { left: 251, top: 52 },
+    };
+    stageViewport(snapshot);
+
+    expect(takeViewport()).toEqual(snapshot);
+    expect(takeViewport()).toBeNull();
+  });
+
   test("hides the editor immediately and starts playback after three seconds", () => {
     let enteredPreview = 0;
     let startedPlayback = 0;

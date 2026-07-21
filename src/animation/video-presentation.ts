@@ -1,5 +1,10 @@
 export const VIDEO_START_DELAY_MS = 3_000;
 
+export type VideoPresentationViewportSnapshot = {
+  viewport: { x: number; y: number; zoom: number };
+  frame: { left: number; top: number };
+};
+
 type ScheduleVideoStart = (
   callback: () => void,
   delayMs: number
@@ -11,6 +16,19 @@ const scheduleWithTimeout: ScheduleVideoStart = (callback, delayMs) => {
 };
 
 let cancelPendingStart: (() => void) | null = null;
+let pendingViewport: VideoPresentationViewportSnapshot | null = null;
+
+export function stageVideoPresentationViewport(
+  snapshot: VideoPresentationViewportSnapshot
+) {
+  pendingViewport = snapshot;
+}
+
+export function takeVideoPresentationViewport() {
+  const snapshot = pendingViewport;
+  pendingViewport = null;
+  return snapshot;
+}
 
 export function beginVideoPresentation(
   actions: {
@@ -31,4 +49,5 @@ export function beginVideoPresentation(
 export function cancelPendingVideoPresentation() {
   cancelPendingStart?.();
   cancelPendingStart = null;
+  pendingViewport = null;
 }

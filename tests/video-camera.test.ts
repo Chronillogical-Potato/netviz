@@ -78,6 +78,44 @@ const track = () =>
   });
 
 describe("video camera track", () => {
+  test("preserves the exact zoom and screen position when editor chrome disappears", async () => {
+    const cameraModule = (await import(
+      "../src/animation/video-camera"
+    )) as typeof import("../src/animation/video-camera") & {
+      preserveVideoPresentationViewport?: (
+        viewport: { x: number; y: number; zoom: number },
+        previousFrame: { left: number; top: number },
+        nextFrame: { left: number; top: number }
+      ) => { x: number; y: number; zoom: number };
+    };
+    const preserveViewport =
+      cameraModule.preserveVideoPresentationViewport;
+
+    expect(typeof preserveViewport).toBe("function");
+    if (!preserveViewport) return;
+
+    const node = { x: 240, y: 180 };
+    const viewport = { x: 120, y: 90, zoom: 0.85 };
+    const editorFrame = { left: 251, top: 52 };
+    const presentationFrame = { left: 0, top: 0 };
+    const preserved = preserveViewport(
+      viewport,
+      editorFrame,
+      presentationFrame
+    );
+    const before = {
+      x: editorFrame.left + viewport.x + node.x * viewport.zoom,
+      y: editorFrame.top + viewport.y + node.y * viewport.zoom,
+    };
+    const after = {
+      x: presentationFrame.left + preserved.x + node.x * preserved.zoom,
+      y: presentationFrame.top + preserved.y + node.y * preserved.zoom,
+    };
+
+    expect(preserved.zoom).toBe(viewport.zoom);
+    expect(after).toEqual(before);
+  });
+
   test("does not move an already visible diagram", () => {
     const camera = buildVideoCameraTrack({
       scenario,

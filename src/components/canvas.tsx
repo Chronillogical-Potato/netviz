@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -54,9 +55,11 @@ import { findLineBindingAtPoint } from "@/lib/line-bindings";
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import {
   buildVideoCameraTrack,
+  preserveVideoPresentationViewport,
   sampleVideoCameraTrack,
   videoViewportTransform,
 } from "@/animation/video-camera";
+import { takeVideoPresentationViewport } from "@/animation/video-presentation";
 
 const nodeTypes: NodeTypes = {
   infra: InfraNodeView,
@@ -570,25 +573,54 @@ function VideoFollowOverlay({
 
   useEffect(() => scenarioRuntime.subscribeTransport(setTransport), []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const visibleNodes = nodes.filter((node) => !node.hidden);
     const scenario = scenarioRuntime.getActiveScenario();
-    if (
-      !enabled ||
-      !followEnabled ||
-      !scenario ||
-      visibleNodes.length === 0
-    ) {
-      return;
-    }
+    if (!enabled) return;
     const flow = document.querySelector(".react-flow");
     const viewportElement = flow?.querySelector(".react-flow__viewport");
     if (!(flow instanceof HTMLElement) || !(viewportElement instanceof HTMLElement)) {
       return;
     }
-    const initialViewport = getViewport();
-    const contentBounds = getNodesBounds(visibleNodes);
     const frameBounds = flow.getBoundingClientRect();
+    const launchViewport = takeVideoPresentationViewport();
+    const returnViewport = launchViewport?.viewport ?? getViewport();
+    const initialViewport = launchViewport
+      ? preserveVideoPresentationViewport(
+          launchViewport.viewport,
+          launchViewport.frame,
+          { left: frameBounds.left, top: frameBounds.top }
+        )
+      : returnViewport;
+    let lastTransform = "";
+    let lastViewport = initialViewport;
+    viewportElement.style.willChange = "transform";
+    viewportElement.style.backfaceVisibility = "hidden";
+
+    const applyViewport = (nextViewport: Viewport) => {
+      lastViewport = nextViewport;
+      const transform = videoViewportTransform(
+        nextViewport,
+        window.devicePixelRatio
+      );
+      if (transform === lastTransform) return;
+      lastTransform = transform;
+      viewportElement.style.transform = transform;
+    };
+
+    const restoreEditorViewport = () => {
+      viewportElement.style.willChange = "";
+      viewportElement.style.backfaceVisibility = "";
+      applyViewport(returnViewport);
+      void setViewport(returnViewport);
+    };
+
+    applyViewport(initialViewport);
+    if (!followEnabled || !scenario || visibleNodes.length === 0) {
+      return restoreEditorViewport;
+    }
+
+    const contentBounds = getNodesBounds(visibleNodes);
     const cameraTrack = buildVideoCameraTrack({
       scenario,
       nodeCenters: Object.fromEntries(
@@ -599,19 +631,6 @@ function VideoFollowOverlay({
       frame: { width: frameBounds.width, height: frameBounds.height },
       initialViewport,
     });
-    let lastTransform = "";
-    viewportElement.style.willChange = "transform";
-    viewportElement.style.backfaceVisibility = "hidden";
-
-    const applyViewport = (nextViewport: Viewport) => {
-      const transform = videoViewportTransform(
-        nextViewport,
-        window.devicePixelRatio
-      );
-      if (transform === lastTransform) return;
-      lastTransform = transform;
-      viewportElement.style.transform = transform;
-    };
 
     const renderCamera = () => {
       const { currentTimeMs } = scenarioRuntime.getTransportSnapshot();
@@ -619,45 +638,47 @@ function VideoFollowOverlay({
       applyViewport(nextViewport);
     };
 
-    const firstViewport = sampleVideoCameraTrack(
-      cameraTrack,
-      scenarioRuntime.getTransportSnapshot().currentTimeMs
-    );
-    const staging = animate(0, 1, {
-      duration: 1.2,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: (progress) =>
-        applyViewport({
-          x: initialViewport.x + (firstViewport.x - initialViewport.x) * progress,
-          y: initialViewport.y + (firstViewport.y - initialViewport.y) * progress,
-          zoom:
-            initialViewport.zoom +
-            (firstViewport.zoom - initialViewport.zoom) * progress,
-        }),
-    });
     let rendering = false;
+    let cameraTransition: { stop: () => void } | null = null;
     const syncCameraPlayback = (snapshot: { isPlaying: boolean }) => {
       if (snapshot.isPlaying && !rendering) {
-        staging.stop();
-        renderCamera();
         rendering = true;
-        frame.render(renderCamera, true);
+        const transitionFrom = lastViewport;
+        cameraTransition = animate(0, 1, {
+          duration: 1.2,
+          ease: [0.16, 1, 0.3, 1],
+          onUpdate: (progress) => {
+            const target = sampleVideoCameraTrack(
+              cameraTrack,
+              scenarioRuntime.getTransportSnapshot().currentTimeMs
+            );
+            applyViewport({
+              x: transitionFrom.x + (target.x - transitionFrom.x) * progress,
+              y: transitionFrom.y + (target.y - transitionFrom.y) * progress,
+              zoom:
+                transitionFrom.zoom +
+                (target.zoom - transitionFrom.zoom) * progress,
+            });
+          },
+          onComplete: () => {
+            cameraTransition = null;
+            frame.render(renderCamera, true);
+          },
+        });
       } else if (!snapshot.isPlaying && rendering) {
         rendering = false;
+        cameraTransition?.stop();
+        cameraTransition = null;
         cancelFrame(renderCamera);
-        renderCamera();
       }
     };
     const unsubscribePlayback =
       scenarioRuntime.subscribeTransport(syncCameraPlayback);
     return () => {
       unsubscribePlayback();
-      staging.stop();
+      cameraTransition?.stop();
       cancelFrame(renderCamera);
-      viewportElement.style.willChange = "";
-      viewportElement.style.backfaceVisibility = "";
-      applyViewport(initialViewport);
-      void setViewport(initialViewport);
+      restoreEditorViewport();
     };
   }, [
     edges,

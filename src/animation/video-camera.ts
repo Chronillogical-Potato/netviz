@@ -2,6 +2,7 @@ import type { ScenarioV1 } from "./model";
 
 type Point = { x: number; y: number };
 type Viewport = Point & { zoom: number };
+type FrameOrigin = { left: number; top: number };
 
 export interface VideoCameraCue {
   atMs: number;
@@ -29,6 +30,18 @@ const average = (points: readonly Point[]): Point => ({
 
 const samePoint = (left: Point, right: Point) =>
   Math.abs(left.x - right.x) < 0.01 && Math.abs(left.y - right.y) < 0.01;
+
+export function preserveVideoPresentationViewport(
+  viewport: Viewport,
+  previousFrame: FrameOrigin,
+  nextFrame: FrameOrigin
+): Viewport {
+  return {
+    x: viewport.x + previousFrame.left - nextFrame.left,
+    y: viewport.y + previousFrame.top - nextFrame.top,
+    zoom: viewport.zoom,
+  };
+}
 
 export function buildVideoCameraTrack({
   scenario,

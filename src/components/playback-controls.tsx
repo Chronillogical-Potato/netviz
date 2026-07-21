@@ -4,6 +4,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
+import { useReactFlow } from "@xyflow/react";
 import {
   prefersReducedMotion,
   scenarioRuntime,
@@ -26,7 +27,10 @@ import {
 } from "@/store/flow-store";
 import { Button } from "@/ui/button";
 import { Pause, Play, Restart } from "@/ui/icons";
-import { beginVideoPresentation } from "@/animation/video-presentation";
+import {
+  beginVideoPresentation,
+  stageVideoPresentationViewport,
+} from "@/animation/video-presentation";
 
 export type PlaybackShortcut = "toggle-playback" | "restart";
 
@@ -151,6 +155,7 @@ export function PlaybackControls({
   className?: string;
   motionPreference?: MotionPreference;
 }) {
+  const { getViewport } = useReactFlow();
   const workMode = useFlowStore((state) => state.workMode);
   const storedMotionPreference = useFlowStore(
     (state) => state.motionPreference
@@ -176,6 +181,14 @@ export function PlaybackControls({
     scenarioRuntime.stop();
     beginVideoPresentation({
       enterPreview: () => {
+        const flow = document.querySelector(".react-flow");
+        if (flow instanceof HTMLElement) {
+          const frame = flow.getBoundingClientRect();
+          stageVideoPresentationViewport({
+            viewport: getViewport(),
+            frame: { left: frame.left, top: frame.top },
+          });
+        }
         setWorkMode("preview");
         prepareAllConnections(
           {
@@ -192,6 +205,7 @@ export function PlaybackControls({
       },
     }, videoStartDelayMs);
   }, [
+    getViewport,
     setWorkMode,
     videoBetweenDelayMs,
     videoEndDelayMs,

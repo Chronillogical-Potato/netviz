@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
 import type { ScenarioV1 } from "../src/animation/model";
 import { scenarioRuntime } from "../src/animation/runtime-instance";
 import {
@@ -35,6 +37,11 @@ const shortcutEvent = (
     target,
   }) as unknown as KeyboardEvent;
 
+const renderControls = (controls: ReactNode) =>
+  renderToStaticMarkup(
+    <ReactFlowProvider>{controls}</ReactFlowProvider>
+  );
+
 describe("PlaybackControls", () => {
   afterEach(() => {
     useFlowStore.setState({ workMode: "design" });
@@ -46,7 +53,7 @@ describe("PlaybackControls", () => {
     scenarioRuntime.activate("page-playback-controls", scenario());
     scenarioRuntime.seek(2_500);
 
-    const markup = renderToStaticMarkup(<PlaybackControls />);
+    const markup = renderControls(<PlaybackControls />);
 
     expect(markup).toContain('role="toolbar"');
     expect(markup).toContain('aria-label="Animation playback"');
@@ -68,7 +75,7 @@ describe("PlaybackControls", () => {
     });
     scenarioRuntime.activate("page-playback-controls", scenario());
 
-    const markup = renderToStaticMarkup(
+    const markup = renderControls(
       <PlaybackControls motionPreference="reduced" />
     );
     expect(markup).toContain("Reduced motion is on");

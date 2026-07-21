@@ -1,6 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
 describe("Video mode camera follow", () => {
+  test("keeps chrome removal stationary and starts camera motion with playback", async () => {
+    const canvasSource = await Bun.file(
+      new URL("../src/components/canvas.tsx", import.meta.url)
+    ).text();
+    const controlsSource = await Bun.file(
+      new URL("../src/components/playback-controls.tsx", import.meta.url)
+    ).text();
+
+    expect(controlsSource).toContain("stageVideoPresentationViewport");
+    expect(controlsSource).toContain("getViewport()");
+    expect(canvasSource).toContain("takeVideoPresentationViewport");
+    expect(canvasSource).toContain("preserveVideoPresentationViewport");
+    expect(canvasSource).toContain("useLayoutEffect");
+    expect(canvasSource).not.toContain("const staging = animate");
+    expect(canvasSource).toContain("cameraTransition = animate");
+  });
+
   test("renders the active animation name through a compositor camera", async () => {
     const source = await Bun.file(
       new URL("../src/components/canvas.tsx", import.meta.url)
@@ -31,7 +48,7 @@ describe("Video mode camera follow", () => {
     expect(source).toContain("defaultViewport={savedViewport ?? undefined}");
     expect(source).toContain("onMoveEnd={persistViewport}");
     expect(source).not.toContain("void setViewport(nextViewport)");
-    expect(source).toContain("void setViewport(initialViewport)");
+    expect(source).toContain("void setViewport(returnViewport)");
     expect(source).not.toContain("void setViewport(lastViewport)");
     expect(source).toContain("useFlowStore.persist.onFinishHydration");
     expect(source).toContain("duration: 1.2");
