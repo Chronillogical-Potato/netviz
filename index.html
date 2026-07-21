@@ -3,6 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      html,
+      body,
+      #root {
+        min-height: 100%;
+      }
+      body {
+        margin: 0;
+      }
+      html.dark,
+      html.dark body {
+        background: #0a0a0a;
+        color-scheme: dark;
+      }
+      html.light,
+      html.light body {
+        background: #ffffff;
+        color-scheme: light;
+      }
+    </style>
+    <script data-theme-bootstrap>
+      (() => {
+        const root = document.documentElement;
+        let theme = "dark";
+        try {
+          const saved = localStorage.getItem("theme");
+          if (saved === "light" || saved === "dark") {
+            theme = saved;
+          } else if (saved === "system") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          }
+        } catch {}
+        root.classList.remove("light", "dark");
+        root.classList.add(theme);
+        root.style.colorScheme = theme;
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
