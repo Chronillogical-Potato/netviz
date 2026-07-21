@@ -89,6 +89,32 @@ describe("scenario runtime", () => {
     expect(runtime.getActiveScenarioName()).toBe("Request flow");
   });
 
+  test("reports the current marked animation name", () => {
+    const runtime = new ScenarioRuntime(new ManualScheduler());
+    runtime.activate("page-1", {
+      ...scenario(),
+      markers: [
+        { id: "first", name: "Inbound request", atMs: 0 },
+        { id: "second", name: "Database response", atMs: 600 },
+      ],
+    });
+
+    const activeAnimationName = (
+      runtime as unknown as { getActiveAnimationName?: () => string | null }
+    ).getActiveAnimationName;
+    expect(typeof activeAnimationName).toBe("function");
+    if (!activeAnimationName) return;
+
+    expect(activeAnimationName()).toBe("Inbound request");
+    runtime.seek(599);
+    expect(activeAnimationName()).toBe("Inbound request");
+    runtime.seek(600);
+    expect(activeAnimationName()).toBe("Database response");
+
+    runtime.activate("page-1", scenario());
+    expect(activeAnimationName()).toBe("Request flow");
+  });
+
   test("exposes active frames for camera-follow consumers", () => {
     const scheduler = new ManualScheduler();
     const runtime = new ScenarioRuntime(scheduler);

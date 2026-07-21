@@ -146,4 +146,15 @@ describe("PlaybackControls", () => {
     expect(videoLaunch).toContain("scenarioRuntime.restart()");
     expect(videoLaunch).toContain("scenarioRuntime.play()");
   });
+
+  test("rebuilds Video playback with the configured animation gap", async () => {
+    const source = await Bun.file(
+      new URL("../src/components/playback-controls.tsx", import.meta.url)
+    ).text();
+
+    expect(source).toContain("videoAnimationGapMs");
+    expect(source).toContain(
+      "prepareAllConnections(videoAnimationGapMs, true)"
+    );
+  });
 });

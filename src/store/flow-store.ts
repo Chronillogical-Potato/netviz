@@ -273,6 +273,8 @@ type Snapshot = {
   showControls: boolean;
   showSmartGuides: boolean;
   motionPreference: MotionPreference;
+  videoTitle: string;
+  videoAnimationGapMs: number;
   workMode: WorkMode;
   renderAllElements: boolean;
   setRenderAllElements: (v: boolean) => void;
@@ -442,6 +444,8 @@ type FlowState = Snapshot & {
   toggleControls: () => void;
   toggleSmartGuides: () => void;
   setMotionPreference: (preference: MotionPreference) => void;
+  setVideoTitle: (title: string) => void;
+  setVideoAnimationGapMs: (gapMs: number) => void;
   setWorkMode: (mode: WorkMode) => void;
   exitPreview: () => void;
 };
@@ -1146,6 +1150,8 @@ export const useFlowStore = create<FlowState>()(
   showControls: true,
   showSmartGuides: true,
   motionPreference: "system" as MotionPreference,
+  videoTitle: "",
+  videoAnimationGapMs: 400,
   workMode: "design" as WorkMode,
   previewReturnMode: "design" as EditorMode,
   animationPathDraft: null,
@@ -2807,6 +2813,13 @@ export const useFlowStore = create<FlowState>()(
   toggleSmartGuides: () =>
     set((s) => ({ showSmartGuides: !s.showSmartGuides })),
   setMotionPreference: (motionPreference) => set({ motionPreference }),
+  setVideoTitle: (videoTitle) => set({ videoTitle }),
+  setVideoAnimationGapMs: (gapMs) =>
+    set({
+      videoAnimationGapMs: Number.isFinite(gapMs)
+        ? Math.min(5_000, Math.max(0, Math.round(gapMs)))
+        : 400,
+    }),
   renderAllElements: false,
   setRenderAllElements: (v) => set({ renderAllElements: v }),
   setWorkMode: (mode) =>
@@ -2944,6 +2957,12 @@ export const useFlowStore = create<FlowState>()(
             )
           ),
           motionPreference: p.motionPreference ?? "system",
+          videoTitle: p.videoTitle ?? "",
+          videoAnimationGapMs:
+            typeof p.videoAnimationGapMs === "number" &&
+            Number.isFinite(p.videoAnimationGapMs)
+              ? Math.min(5_000, Math.max(0, Math.round(p.videoAnimationGapMs)))
+              : 400,
           turboColors: p.turboColors ?? DEFAULT_TURBO_COLORS,
           edgeCurveStyle: p.edgeCurveStyle ?? "stepped",
           workMode:
@@ -2971,6 +2990,8 @@ export const useFlowStore = create<FlowState>()(
         showControls: s.showControls,
         showSmartGuides: s.showSmartGuides,
         motionPreference: s.motionPreference,
+        videoTitle: s.videoTitle,
+        videoAnimationGapMs: s.videoAnimationGapMs,
         workMode:
           s.workMode === "preview" ? s.previewReturnMode : s.workMode,
       }),

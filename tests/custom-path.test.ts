@@ -139,6 +139,45 @@ describe("authored custom paths", () => {
     });
   });
 
+  test("uses the requested gap and marks each animation start", () => {
+    const first = {
+      ...document([track("user-firewall", 0)]).scenarios[0],
+      name: "Login",
+    };
+    const second = {
+      ...document([track("proxy-server", 0)]).scenarios[0],
+      id: "scenario-2",
+      name: "Checkout",
+    };
+
+    const combined = buildSequentialCustomPathScenario(
+      {
+        schemaVersion: 1,
+        defaultScenarioId: first.id,
+        scenarios: [first, second],
+      },
+      [
+        { id: "user-firewall", source: "user", target: "firewall" },
+        { id: "proxy-server", source: "proxy", target: "server" },
+      ],
+      1_200
+    );
+
+    expect(combined?.tracks.map((item) => item.clips[0]?.startMs)).toEqual([
+      0,
+      5_200,
+    ]);
+    expect(combined?.durationMs).toBe(9_200);
+    expect(combined?.markers).toEqual([
+      { id: "animation-start-scenario-1", name: "Login", atMs: 0 },
+      {
+        id: "animation-start-scenario-2",
+        name: "Checkout",
+        atMs: 5_200,
+      },
+    ]);
+  });
+
   test("reconstructs a connected path from persisted scenario timing", () => {
     expect(
       findAuthoredCustomPath(

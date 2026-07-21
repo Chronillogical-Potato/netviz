@@ -104,7 +104,7 @@ function useTransportSnapshot(): TransportSnapshot {
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
 
-function prepareAllConnections() {
+function prepareAllConnections(gapMs = 400, force = false) {
   const state = useFlowStore.getState();
   const scenarioDocument = applyNodeBorderEntrySides(
     normalizeGradientBeamDefaults(state.scenarioDocument),
@@ -115,12 +115,14 @@ function prepareAllConnections() {
   }
   const sequence = buildSequentialCustomPathScenario(
     scenarioDocument,
-    state.edges
+    state.edges,
+    gapMs
   );
   if (
     sequence &&
-    scenarioRuntime.getTransportSnapshot().scenarioId !==
-      PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID
+    (force ||
+      scenarioRuntime.getTransportSnapshot().scenarioId !==
+        PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID)
   ) {
     scenarioRuntime.activate(state.activePageId, sequence);
   }
@@ -153,6 +155,9 @@ export function PlaybackControls({
     (state) => state.setMotionPreference
   );
   const setWorkMode = useFlowStore((state) => state.setWorkMode);
+  const videoAnimationGapMs = useFlowStore(
+    (state) => state.videoAnimationGapMs
+  );
   const motionPreference =
     motionPreferenceOverride ?? storedMotionPreference;
   const motionBlocked = prefersReducedMotion(motionPreference);
@@ -162,13 +167,17 @@ export function PlaybackControls({
   const playVideo = useCallback(() => {
     scenarioRuntime.stop();
     beginVideoPresentation({
-      enterPreview: () => setWorkMode("preview"),
+      enterPreview: () => {
+        setWorkMode("preview");
+        prepareAllConnections(videoAnimationGapMs, true);
+        scenarioRuntime.stop();
+      },
       startPlayback: () => {
         scenarioRuntime.restart();
         scenarioRuntime.play();
       },
     });
-  }, [setWorkMode]);
+  }, [setWorkMode, videoAnimationGapMs]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

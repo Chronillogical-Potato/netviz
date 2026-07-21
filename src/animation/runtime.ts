@@ -65,6 +65,22 @@ export class ScenarioRuntime {
 
   getActiveScenarioName = () => this.scenario?.name ?? null;
 
+  getActiveAnimationName = () => {
+    if (!this.scenario) return null;
+    let activeName: string | null = null;
+    let activeAtMs = -1;
+    for (const marker of this.scenario.markers) {
+      if (
+        marker.atMs <= this.clockSnapshot.currentTimeMs &&
+        marker.atMs >= activeAtMs
+      ) {
+        activeName = marker.name;
+        activeAtMs = marker.atMs;
+      }
+    }
+    return activeName ?? this.scenario.name;
+  };
+
   getActiveTargetFrames = (): TargetFrame[] => {
     if (!this.projectionEnabled || !this.scenario) return [];
     const frames: TargetFrame[] = [];

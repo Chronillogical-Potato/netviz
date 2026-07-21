@@ -68,6 +68,54 @@ import {
   rotateLineToAngle,
 } from "@/lib/line-geometry";
 
+function VideoSettings() {
+  const videoTitle = useFlowStore((state) => state.videoTitle);
+  const videoAnimationGapMs = useFlowStore(
+    (state) => state.videoAnimationGapMs
+  );
+  const setVideoTitle = useFlowStore((state) => state.setVideoTitle);
+  const setVideoAnimationGapMs = useFlowStore(
+    (state) => state.setVideoAnimationGapMs
+  );
+
+  return (
+    <>
+      <Section title="Presentation">
+        <Row label="Title">
+          <FieldInput
+            value={videoTitle}
+            onChange={(event) => setVideoTitle(event.target.value)}
+            placeholder="Current animation name"
+            aria-label="Video title"
+          />
+        </Row>
+        <Row label="Gap">
+          <Slider
+            min={0}
+            max={5_000}
+            step={100}
+            value={videoAnimationGapMs}
+            onChange={(event) =>
+              setVideoAnimationGapMs(Number(event.target.value))
+            }
+            className="min-w-0 flex-1"
+            aria-label="Animation gap"
+          />
+          <span className="flex h-7 w-11 shrink-0 items-center justify-end rounded-md bg-input px-1.5 text-[11px] tabular-nums text-foreground">
+            {(videoAnimationGapMs / 1_000).toFixed(1)}s
+          </span>
+        </Row>
+      </Section>
+      <Section title="Camera follow">
+        <p className="text-xs font-medium leading-[18px] text-foreground/70">
+          The canvas follows the active request when the full diagram does not
+          fit onscreen. Use Animation mode to edit paths.
+        </p>
+      </Section>
+    </>
+  );
+}
+
 const ACCENTS: Accent[] = [
   "indigo",
   "red",
@@ -141,15 +189,7 @@ export function Inspector() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <PlaybackControls />
           {isVideo ? (
-            <div className="border-b border-border px-4 py-3.5">
-              <p className="text-[13px] font-semibold text-foreground">
-                Camera follow
-              </p>
-              <p className="pt-1 text-xs font-medium leading-[18px] text-foreground/70">
-                The canvas follows the active request when the full diagram
-                does not fit onscreen. Use Animation mode to edit paths.
-              </p>
-            </div>
+            <VideoSettings />
           ) : (
             <>
               {!isBuildingAnimationPath ? <ExistingAnimationPath /> : null}

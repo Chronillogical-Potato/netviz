@@ -46,7 +46,8 @@ export const PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID =
 
 export function buildSequentialCustomPathScenario(
   document: PageScenarioDocumentV1,
-  edges: readonly RequestFlowEdge[]
+  edges: readonly RequestFlowEdge[],
+  gapMs = 400
 ): ScenarioV1 | null {
   const paths = findAuthoredCustomPaths(document, edges);
   const scenarios = paths.flatMap((path) => {
@@ -57,9 +58,17 @@ export function buildSequentialCustomPathScenario(
   });
   if (scenarios.length === 0) return null;
 
-  const gapMs = 400;
+  const safeGapMs = Number.isFinite(gapMs)
+    ? Math.max(0, Math.round(gapMs))
+    : 400;
   let offsetMs = 0;
+  const markers: ScenarioV1["markers"] = [];
   const tracks = scenarios.flatMap((scenario, index) => {
+    markers.push({
+      id: `animation-start-${scenario.id}`,
+      name: scenario.name,
+      atMs: offsetMs,
+    });
     const shifted = scenario.tracks.map((track) => ({
       ...track,
       clips: track.clips.map((clip) => ({
@@ -68,7 +77,7 @@ export function buildSequentialCustomPathScenario(
       })),
     }));
     offsetMs += scenario.durationMs;
-    if (index < scenarios.length - 1) offsetMs += gapMs;
+    if (index < scenarios.length - 1) offsetMs += safeGapMs;
     return shifted;
   });
 
@@ -81,7 +90,7 @@ export function buildSequentialCustomPathScenario(
       loop: { mode: "repeat", startMs: 0, endMs: offsetMs },
     },
     tracks,
-    markers: [],
+    markers,
     triggers: [],
   };
 }
