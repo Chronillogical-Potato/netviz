@@ -100,6 +100,27 @@ describe("video camera track", () => {
     ]);
   });
 
+  test("uses a readable presentation zoom instead of inheriting fit-view zoom", () => {
+    const camera = buildVideoCameraTrack({
+      scenario,
+      nodeCenters: {
+        client: { x: 100, y: 100 },
+        firewall: { x: 600, y: 100 },
+        server: { x: 1_100, y: 100 },
+      },
+      edges: [
+        { id: "edge-a", source: "client", target: "firewall" },
+        { id: "edge-b", source: "firewall", target: "server" },
+      ],
+      contentBounds: { x: 0, y: 0, width: 1_200, height: 200 },
+      frame: { width: 800, height: 600 },
+      initialViewport: { x: 40, y: 80, zoom: 0.5 },
+    });
+
+    expect(camera.cues.length).toBeGreaterThan(1);
+    expect(camera.cues.every((cue) => cue.viewport.zoom === 0.85)).toBeTrue();
+  });
+
   test("plans the full connected route before playback without a hold at a block", () => {
     expect(track().cues).toEqual([
       { atMs: 0, viewport: { x: 260, y: 0, zoom: 1 } },

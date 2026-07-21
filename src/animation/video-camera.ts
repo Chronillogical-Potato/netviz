@@ -18,6 +18,8 @@ interface CameraEdge {
   target: string;
 }
 
+const MIN_PRESENTATION_ZOOM = 0.85;
+
 const average = (points: readonly Point[]): Point => ({
   x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
   y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
@@ -41,10 +43,12 @@ export function buildVideoCameraTrack({
   frame: { width: number; height: number };
   initialViewport: Viewport;
 }): VideoCameraTrack {
-  const overflowX =
-    contentBounds.width * initialViewport.zoom > frame.width * 0.9;
-  const overflowY =
-    contentBounds.height * initialViewport.zoom > frame.height * 0.9;
+  const presentationZoom = Math.max(
+    initialViewport.zoom,
+    MIN_PRESENTATION_ZOOM
+  );
+  const overflowX = contentBounds.width * presentationZoom > frame.width * 0.9;
+  const overflowY = contentBounds.height * presentationZoom > frame.height * 0.9;
   if (!overflowX && !overflowY) {
     return { cues: [{ atMs: 0, viewport: initialViewport }] };
   }
@@ -107,12 +111,12 @@ export function buildVideoCameraTrack({
   for (const { atMs, focus } of focuses) {
     const viewport = {
       x: overflowX
-        ? frame.width * 0.45 - focus.x * initialViewport.zoom
+        ? frame.width * 0.45 - focus.x * presentationZoom
         : initialViewport.x,
       y: overflowY
-        ? frame.height * 0.5 - focus.y * initialViewport.zoom
+        ? frame.height * 0.5 - focus.y * presentationZoom
         : initialViewport.y,
-      zoom: initialViewport.zoom,
+      zoom: presentationZoom,
     };
     const previous = cues[cues.length - 1];
     if (previous && samePoint(previous.viewport, viewport)) continue;

@@ -20,8 +20,9 @@ import {
   type NodeChange,
   type NodeTypes,
   type OnBeforeDelete,
+  type Viewport,
 } from "@xyflow/react";
-import { cancelFrame, frame } from "motion";
+import { animate, cancelFrame, frame } from "motion";
 import { resolveIcon } from "@/blocks/icons";
 import "@xyflow/react/dist/style.css";
 import {
@@ -577,7 +578,6 @@ function VideoFollowOverlay({
       return;
     }
     const initialViewport = getViewport();
-    let lastViewport = initialViewport;
     const contentBounds = getNodesBounds(visibleNodes);
     const frameBounds = flow.getBoundingClientRect();
     const cameraTrack = buildVideoCameraTrack({
@@ -594,23 +594,43 @@ function VideoFollowOverlay({
     viewportElement.style.willChange = "transform";
     viewportElement.style.backfaceVisibility = "hidden";
 
-    const renderCamera = () => {
-      const { currentTimeMs } = scenarioRuntime.getTransportSnapshot();
-      const nextViewport = sampleVideoCameraTrack(cameraTrack, currentTimeMs);
+    const applyViewport = (nextViewport: Viewport) => {
       const transform = videoViewportTransform(
         nextViewport,
         window.devicePixelRatio
       );
       if (transform === lastTransform) return;
       lastTransform = transform;
-      lastViewport = nextViewport;
       viewportElement.style.transform = transform;
     };
 
-    renderCamera();
+    const renderCamera = () => {
+      const { currentTimeMs } = scenarioRuntime.getTransportSnapshot();
+      const nextViewport = sampleVideoCameraTrack(cameraTrack, currentTimeMs);
+      applyViewport(nextViewport);
+    };
+
+    const firstViewport = sampleVideoCameraTrack(
+      cameraTrack,
+      scenarioRuntime.getTransportSnapshot().currentTimeMs
+    );
+    const staging = animate(0, 1, {
+      duration: 1.2,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (progress) =>
+        applyViewport({
+          x: initialViewport.x + (firstViewport.x - initialViewport.x) * progress,
+          y: initialViewport.y + (firstViewport.y - initialViewport.y) * progress,
+          zoom:
+            initialViewport.zoom +
+            (firstViewport.zoom - initialViewport.zoom) * progress,
+        }),
+    });
     let rendering = false;
     const syncCameraPlayback = (snapshot: { isPlaying: boolean }) => {
       if (snapshot.isPlaying && !rendering) {
+        staging.stop();
+        renderCamera();
         rendering = true;
         frame.render(renderCamera, true);
       } else if (!snapshot.isPlaying && rendering) {
@@ -623,10 +643,12 @@ function VideoFollowOverlay({
       scenarioRuntime.subscribeTransport(syncCameraPlayback);
     return () => {
       unsubscribePlayback();
+      staging.stop();
       cancelFrame(renderCamera);
       viewportElement.style.willChange = "";
       viewportElement.style.backfaceVisibility = "";
-      void setViewport(lastViewport);
+      applyViewport(initialViewport);
+      void setViewport(initialViewport);
     };
   }, [edges, enabled, getViewport, nodes, setViewport, transport.scenarioId]);
 
@@ -665,6 +687,8 @@ function CanvasInner() {
   const showControls = useFlowStore((s) => s.showControls);
   const showSmartGuides = useFlowStore((s) => s.showSmartGuides);
   const renderAll = useFlowStore((s) => s.renderAllElements);
+  const savedViewport = useFlowStore((s) => s.canvasViewport);
+  const setCanvasViewport = useFlowStore((s) => s.setCanvasViewport);
   const selectedSingle = useFlowStore((s) => {
     const sel = s.nodes.filter((n) => n.selected);
     return sel.length === 1 ? sel[0] : null;
@@ -681,14 +705,31 @@ function CanvasInner() {
     (s) => s.pages.find((p) => p.id === s.activePageId)?.bgColor
   );
   const isPreview = workMode === "preview";
-  const isVideoPlayback =
+  const isVideoCanvas =
     workMode === "video" ||
     (isPreview && previewReturnMode === "video");
+  const isVideoPresentation = isPreview && previewReturnMode === "video";
   const isPlaybackOnly = isPreview || workMode === "video";
   const isDesign = workMode === "design";
   const isPickingAnimationPath =
     workMode === "animation" && animationPathDraft !== null;
-  const { screenToFlowPosition, getZoom } = useReactFlow();
+  const { screenToFlowPosition, getZoom, setViewport } = useReactFlow();
+
+  useEffect(() => {
+    const restoreViewport = () => {
+      const viewport = useFlowStore.getState().canvasViewport;
+      if (viewport) void setViewport(viewport);
+    };
+    if (useFlowStore.persist.hasHydrated()) restoreViewport();
+    return useFlowStore.persist.onFinishHydration(restoreViewport);
+  }, [setViewport]);
+
+  const persistViewport = useCallback(
+    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
+      if (!isVideoPresentation) setCanvasViewport(viewport);
+    },
+    [isVideoPresentation, setCanvasViewport]
+  );
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const [tool, setTool] = useState<CanvasTool>("select");
@@ -1031,7 +1072,7 @@ function CanvasInner() {
         "relative h-full w-full",
         turbo && "turbo",
         isPreview && "preview-canvas",
-        isVideoPlayback && "video-canvas",
+        isVideoCanvas && "video-canvas",
         tool === "hand" && "hand-tool",
         tool === "line" && "line-tool-active",
         isPickingAnimationPath && "animation-path-picking"
@@ -1060,17 +1101,23 @@ function CanvasInner() {
         edgeTypes={edgeTypes}
         connectionMode={ConnectionMode.Loose}
         defaultEdgeOptions={defaultEdgeOptions}
+        defaultViewport={savedViewport ?? undefined}
         proOptions={{ hideAttribution: true }}
         selectionOnDrag={
           !isPlaybackOnly && !isPickingAnimationPath && tool === "select"
         }
         panOnDrag={
-          isVideoPlayback ? false : isPlaybackOnly || tool === "hand" ? true : [1]
+          isVideoPresentation
+            ? false
+            : isPlaybackOnly || tool === "hand"
+              ? true
+              : [1]
         }
-        panOnScroll={!isVideoPlayback}
-        zoomOnScroll={!isVideoPlayback}
-        zoomOnPinch={!isVideoPlayback}
-        zoomOnDoubleClick={!isVideoPlayback}
+        panOnScroll={!isVideoPresentation}
+        zoomOnScroll={!isVideoPresentation}
+        zoomOnPinch={!isVideoPresentation}
+        zoomOnDoubleClick={!isVideoPresentation}
+        onMoveEnd={persistViewport}
         selectionMode={SelectionMode.Partial}
         nodesDraggable={elementsInteractive}
         nodesConnectable={elementsInteractive}
@@ -1082,14 +1129,14 @@ function CanvasInner() {
             ? null
             : ["Backspace", "Delete"]
         }
-        onlyRenderVisibleElements={!renderAll && !isVideoPlayback}
+        onlyRenderVisibleElements={!renderAll && !isVideoPresentation}
         elevateNodesOnSelect={false}
-        fitView
+        fitView={savedViewport === null}
         fitViewOptions={{ padding: 0.4 }}
       >
       </ReactFlow>
       <VideoFollowOverlay
-        enabled={isVideoPlayback}
+        enabled={isVideoPresentation}
         nodes={nodes}
         edges={edges}
       />
