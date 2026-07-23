@@ -1939,10 +1939,15 @@ export const useFlowStore = create<FlowState>()(
       const edgeIds = s.edges
         .filter((edge) => edge.selected)
         .map((edge) => edge.id);
-      const scenarioDocument = patchEdgeEffects(s.scenarioDocument, {
-        edgeIds,
-        patch,
-      });
+      const scenarioDocument = s.scenarioDocument.scenarios.reduce(
+        (document, scenario) =>
+          patchEdgeEffects(document, {
+            edgeIds,
+            patch,
+            scenarioId: scenario.id,
+          }),
+        s.scenarioDocument
+      );
       return scenarioDocument === s.scenarioDocument
         ? s
         : { scenarioDocument };

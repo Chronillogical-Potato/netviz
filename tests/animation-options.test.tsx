@@ -148,6 +148,7 @@ describe("AnimationOptions", () => {
     expect(markup).toContain("Build custom path");
     expect(markup).not.toContain("Create selected path");
     expect(markup).toContain("Advanced");
+    expect(markup).toContain('aria-label="Animation beam length"');
     expect(markup).not.toContain("<details");
   });
 

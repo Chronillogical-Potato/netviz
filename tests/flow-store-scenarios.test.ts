@@ -599,6 +599,78 @@ describe("animation target lifecycle", () => {
     expect(activeForwardBeams.length).toBeGreaterThanOrEqual(2);
   });
 
+  test("updates one selected template edge in its preview and authored paths", () => {
+    useFlowStore.getState().insertTemplate("sharded-postgres-platform", {
+      x: 0,
+      y: 0,
+    });
+    const inserted = useFlowStore.getState();
+    const firewall = inserted.nodes.find(
+      (node) => node.data.label === "Edge Firewall"
+    );
+    const loadBalancer = inserted.nodes.find(
+      (node) => node.data.label === "Traffic Load Balancer"
+    );
+    const selectedEdge = inserted.edges.find(
+      (item) =>
+        item.source === firewall?.id && item.target === loadBalancer?.id
+    );
+    const otherEdge = inserted.edges.find(
+      (item) => item.id !== selectedEdge?.id
+    );
+    expect(selectedEdge).toBeDefined();
+    expect(otherEdge).toBeDefined();
+
+    useFlowStore.setState((state) => ({
+      edges: state.edges.map((item) => ({
+        ...item,
+        selected: item.id === selectedEdge?.id,
+      })),
+    }));
+    useFlowStore.getState().patchSelectedEdgeEffects({
+      durationMs: 3_750,
+      effect: { params: { beamLengthPx: 96 } },
+    });
+
+    const scenarios = useFlowStore.getState().scenarioDocument.scenarios;
+    const selectedClips = scenarios.flatMap((scenario) =>
+      scenario.tracks.flatMap((track) =>
+        track.property === "connection-effect" &&
+        track.target.type === "edge" &&
+        "id" in track.target &&
+        track.target.id === selectedEdge?.id
+          ? track.clips
+          : []
+      )
+    );
+    const otherClips = scenarios.flatMap((scenario) =>
+      scenario.tracks.flatMap((track) =>
+        track.property === "connection-effect" &&
+        track.target.type === "edge" &&
+        "id" in track.target &&
+        track.target.id === otherEdge?.id
+          ? track.clips
+          : []
+      )
+    );
+
+    expect(selectedClips.length).toBeGreaterThan(1);
+    expect(
+      selectedClips.every(
+        (clip) =>
+          clip.durationMs === 3_750 &&
+          clip.effect.params.beamLengthPx === 96
+      )
+    ).toBeTrue();
+    expect(
+      otherClips.some(
+        (clip) =>
+          clip.durationMs !== 3_750 ||
+          clip.effect.params.beamLengthPx !== 96
+      )
+    ).toBeTrue();
+  });
+
   test("plays several Kubernetes workload and telemetry beams together", () => {
     useFlowStore.getState().insertTemplate("kubernetes-production-platform", {
       x: 0,

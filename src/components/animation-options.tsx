@@ -427,6 +427,10 @@ export function summarizeAnimationSelection(
       }
       return undefined;
     }),
+    beamLength: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+      const value = clip.effect.params.beamLengthPx;
+      return typeof value === "number" ? value : undefined;
+    }),
     opacity: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
       const value = clip.effect.params.opacity;
       return typeof value === "number" ? value : undefined;
@@ -1410,6 +1414,24 @@ export function AnimationOptions() {
             disabled={!hasBeam}
             onChange={(value) =>
               patchEffects(createAnimationWidthPatch(value))
+            }
+          />
+          <ValueRow
+            label="Length"
+            ariaLabel="Animation beam length"
+            state={summary.beamLength}
+            min={8}
+            max={240}
+            step={1}
+            disabled={!hasBeam}
+            onChange={(value) =>
+              patchEffects({
+                effect: {
+                  params: {
+                    beamLengthPx: Math.min(240, Math.max(8, value)),
+                  },
+                },
+              })
             }
           />
           <ValueRow
