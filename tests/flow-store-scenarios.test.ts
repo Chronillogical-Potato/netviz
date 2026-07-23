@@ -484,8 +484,8 @@ describe("animation target lifecycle", () => {
       {
         id: "kubernetes-production-platform",
         preview: "Kubernetes production flows",
-        minimumNodes: 14,
-        minimumEdges: 16,
+        minimumNodes: 11,
+        minimumEdges: 12,
       },
       {
         id: "sharded-postgres-platform",
@@ -751,7 +751,7 @@ describe("animation target lifecycle", () => {
     ).toBeTrue();
   });
 
-  test("plays several Kubernetes workload and telemetry beams together", () => {
+  test("limits the simplified Kubernetes preview to two concurrent beams", () => {
     useFlowStore.getState().insertTemplate("kubernetes-production-platform", {
       x: 0,
       y: 0,
@@ -760,18 +760,30 @@ describe("animation target lifecycle", () => {
     const preview = state.scenarioDocument.scenarios.find(
       (scenario) => scenario.id === state.scenarioDocument.defaultScenarioId
     );
-    const activeBeams =
+    const clips =
       preview?.tracks
         .filter((track) => track.property === "connection-effect")
-        .flatMap((track) => track.clips)
-        .filter(
-          (clip) =>
-            clip.startMs <= 6_800 &&
-            clip.startMs + clip.durationMs > 6_800
-        ) ?? [];
+        .flatMap((track) => track.clips) ?? [];
+    const sampleTimes = clips.flatMap((clip) => [
+      clip.startMs,
+      clip.startMs + clip.durationMs / 2,
+      clip.startMs + clip.durationMs,
+    ]);
+    const maximumConcurrentBeams = Math.max(
+      0,
+      ...sampleTimes.map(
+        (time) =>
+          clips.filter(
+            (clip) =>
+              clip.startMs <= time &&
+              clip.startMs + clip.durationMs > time
+          ).length
+      )
+    );
 
     expect(preview?.name).toBe("Kubernetes production flows");
-    expect(activeBeams.length).toBeGreaterThanOrEqual(5);
+    expect(clips).toHaveLength(15);
+    expect(maximumConcurrentBeams).toBe(2);
   });
 
   test("reorders custom paths without moving the template preview scenario", () => {

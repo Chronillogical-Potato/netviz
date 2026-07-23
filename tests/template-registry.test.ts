@@ -6,6 +6,9 @@ import { TEMPLATES } from "../src/templates/registry";
 const productionTemplates = [
   {
     id: "event-driven-commerce",
+    minimumNodes: 14,
+    minimumEdges: 16,
+    minimumAnimations: 5,
     labels: [
       "API Gateway",
       "Order Service",
@@ -22,6 +25,9 @@ const productionTemplates = [
   },
   {
     id: "kubernetes-production-platform",
+    minimumNodes: 11,
+    minimumEdges: 12,
+    minimumAnimations: 4,
     labels: [
       "Kubernetes Ingress",
       "Web API",
@@ -32,13 +38,16 @@ const productionTemplates = [
     ],
     animations: [
       "Cached API request",
-      "Authenticated request",
+      "Database API request",
       "Asynchronous job",
-      "Autoscaling signal",
+      "Metrics dashboard",
     ],
   },
   {
     id: "sharded-postgres-platform",
+    minimumNodes: 18,
+    minimumEdges: 24,
+    minimumAnimations: 5,
     labels: [
       "Authoritative DNS",
       "Edge Firewall",
@@ -84,7 +93,7 @@ describe("production templates", () => {
     }
   });
 
-  test("offers three complex animated systems alongside the load balancer", () => {
+  test("offers three production systems alongside the load balancer", () => {
     expect(TEMPLATES.map((template) => template.id)).toEqual([
       "load-balanced-web-app",
       "event-driven-commerce",
@@ -97,9 +106,15 @@ describe("production templates", () => {
       expect(template).toBeDefined();
       expect(template?.edgeCurveStyle).toBe("smooth");
       expect(template?.previewName).toBeString();
-      expect(template?.nodes.length).toBeGreaterThanOrEqual(14);
-      expect(template?.edges.length).toBeGreaterThanOrEqual(16);
-      expect(template?.animations.length).toBeGreaterThanOrEqual(5);
+      expect(template?.nodes.length).toBeGreaterThanOrEqual(
+        expected.minimumNodes
+      );
+      expect(template?.edges.length).toBeGreaterThanOrEqual(
+        expected.minimumEdges
+      );
+      expect(template?.animations.length).toBeGreaterThanOrEqual(
+        expected.minimumAnimations
+      );
       const labels = template?.nodes.map((node) => node.label) ?? [];
       const animations =
         template?.animations.map((animation) => animation.name) ?? [];
@@ -131,27 +146,24 @@ describe("production templates", () => {
     ).toBeTrue();
   });
 
-  test("schedules concurrent workload and telemetry beams for Kubernetes", () => {
+  test("keeps the Kubernetes template focused with four readable flows", () => {
     const template = TEMPLATES.find(
       (item) => item.id === "kubernetes-production-platform"
     );
-    const starts = new Map(
+
+    expect(template?.nodes).toHaveLength(11);
+    expect(template?.edges).toHaveLength(12);
+    expect(
       template?.animations.map((animation) => [
         animation.name,
         animation.previewStartMs,
       ])
-    );
-
-    expect([
-      starts.get("Cached API request"),
-      starts.get("Authenticated request"),
-      starts.get("Asynchronous job"),
-    ]).toEqual([0, 900, 1_800]);
-    expect([
-      starts.get("Metrics dashboard"),
-      starts.get("Centralized log search"),
-      starts.get("Distributed trace"),
-    ]).toEqual([6_000, 6_000, 6_000]);
+    ).toEqual([
+      ["Cached API request", 0],
+      ["Database API request", 4_500],
+      ["Asynchronous job", 11_000],
+      ["Metrics dashboard", 16_000],
+    ]);
   });
 
   test("uses valid blocks and connected paths for every template animation", () => {
