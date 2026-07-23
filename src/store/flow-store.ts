@@ -33,11 +33,14 @@ import {
   cloneScenarioTargets,
   createDefaultScenarioDocument,
   createEmptyScenarioDocument,
+  patchAnimationBeam as patchAnimationBeamClip,
   patchEdgeEffects,
   pruneScenarioTargets,
   removeEdgeEffects,
+  removeAnimationBeam as removeAnimationBeamClip,
   removeNodeEffects,
   type ScenarioClipPatchV1,
+  type AnimationBeamReference,
 } from "@/animation/scenario-document";
 import {
   clearLegacyAnimatedFlags,
@@ -428,6 +431,11 @@ type FlowState = Snapshot & {
     clip?: ScenarioClipPatchV1
   ) => void;
   patchSelectedEdgeEffects: (patch: ScenarioClipPatchV1) => void;
+  patchAnimationBeam: (
+    reference: AnimationBeamReference,
+    patch: ScenarioClipPatchV1
+  ) => void;
+  removeAnimationBeam: (reference: AnimationBeamReference) => void;
   removeSelectedEdgeEffects: () => void;
   animateAllEdges: () => void;
   animateRequestFlow: (startNodeId: string) => void;
@@ -1947,6 +1955,28 @@ export const useFlowStore = create<FlowState>()(
             scenarioId: scenario.id,
           }),
         s.scenarioDocument
+      );
+      return scenarioDocument === s.scenarioDocument
+        ? s
+        : { scenarioDocument };
+    }),
+
+  patchAnimationBeam: (reference, patch) =>
+    set((s) => {
+      const scenarioDocument = patchAnimationBeamClip(s.scenarioDocument, {
+        ...reference,
+        patch,
+      });
+      return scenarioDocument === s.scenarioDocument
+        ? s
+        : { scenarioDocument };
+    }),
+
+  removeAnimationBeam: (reference) =>
+    set((s) => {
+      const scenarioDocument = removeAnimationBeamClip(
+        s.scenarioDocument,
+        reference
       );
       return scenarioDocument === s.scenarioDocument
         ? s

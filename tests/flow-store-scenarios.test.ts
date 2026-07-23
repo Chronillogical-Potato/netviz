@@ -671,6 +671,86 @@ describe("animation target lifecycle", () => {
     ).toBeTrue();
   });
 
+  test("edits only one beam occurrence inside one template animation", () => {
+    useFlowStore.getState().insertTemplate("sharded-postgres-platform", {
+      x: 0,
+      y: 0,
+    });
+    const inserted = useFlowStore.getState();
+    const firewall = inserted.nodes.find(
+      (item) => item.data.label === "Edge Firewall"
+    );
+    const loadBalancer = inserted.nodes.find(
+      (item) => item.data.label === "Traffic Load Balancer"
+    );
+    const edgeId = inserted.edges.find(
+      (item) =>
+        item.source === firewall?.id && item.target === loadBalancer?.id
+    )?.id;
+    const mobileScenario = inserted.scenarioDocument.scenarios.find(
+      (item) => item.name === "Mobile checkout request / response"
+    );
+    const mobileTrack = mobileScenario?.tracks.find(
+      (track) =>
+        track.property === "connection-effect" &&
+        track.target.type === "edge" &&
+        "id" in track.target &&
+        track.target.id === edgeId
+    );
+    const requestClip = mobileTrack?.clips.find(
+      (clip) => clip.effect.params.pathPhase !== "response"
+    );
+    expect(edgeId).toBeString();
+    expect(requestClip).toBeDefined();
+    useFlowStore.getState().patchAnimationBeam(
+      {
+        scenarioId: mobileScenario!.id,
+        trackId: mobileTrack!.id,
+        clipId: requestClip!.id,
+      },
+      {
+        durationMs: 3_250,
+        effect: { params: { beamLengthPx: 104 } },
+      }
+    );
+
+    const updated = useFlowStore.getState().scenarioDocument;
+    const matchingCopies = updated.scenarios.flatMap((scenario) =>
+      scenario.tracks.flatMap((track) =>
+        track.id === mobileTrack?.id
+          ? track.clips.filter((clip) => clip.id === requestClip?.id)
+          : []
+      )
+    );
+    const otherOccurrences = updated.scenarios.flatMap((scenario) =>
+      scenario.tracks.flatMap((track) =>
+        track.property === "connection-effect" &&
+        track.target.type === "edge" &&
+        "id" in track.target &&
+        track.target.id === edgeId &&
+        track.id !== mobileTrack?.id
+          ? track.clips
+          : []
+      )
+    );
+
+    expect(matchingCopies.length).toBeGreaterThanOrEqual(2);
+    expect(
+      matchingCopies.every(
+        (clip) =>
+          clip.durationMs === 3_250 &&
+          clip.effect.params.beamLengthPx === 104
+      )
+    ).toBeTrue();
+    expect(
+      otherOccurrences.some(
+        (clip) =>
+          clip.durationMs !== 3_250 ||
+          clip.effect.params.beamLengthPx !== 104
+      )
+    ).toBeTrue();
+  });
+
   test("plays several Kubernetes workload and telemetry beams together", () => {
     useFlowStore.getState().insertTemplate("kubernetes-production-platform", {
       x: 0,

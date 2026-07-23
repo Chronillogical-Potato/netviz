@@ -13,6 +13,7 @@ import type {
   FieldState,
   JsonObject,
   PageScenarioDocumentV1,
+  ScenarioClipV1,
 } from "@/animation/model";
 import {
   summarizeEdgeEffectField,
@@ -29,6 +30,7 @@ import {
 } from "@/animation/custom-path";
 import { scenarioRuntime } from "@/animation/runtime-instance";
 import { getNodeDisplayName, useFlowStore } from "@/store/flow-store";
+import { TEMPLATES } from "@/templates/registry";
 import { Button } from "@/ui/button";
 import {
   Dialog,
@@ -373,28 +375,130 @@ export function createAnimationWidthPatch(value: number): ScenarioClipPatchV1 {
   };
 }
 
-export function summarizeAnimationSelection(
+export interface AnimationBeamOccurrence {
+  scenarioId: string;
+  scenarioName: string;
+  trackId: string;
+  clipId: string;
+  edgeId: string;
+  clip: ScenarioClipV1;
+}
+
+const TEMPLATE_PREVIEW_NAMES = new Set(
+  TEMPLATES.flatMap((template) =>
+    template.previewName ? [template.previewName] : []
+  )
+);
+
+export function findAnimationBeamOccurrences(
   document: PageScenarioDocumentV1,
   selectedEdgeIds: readonly string[]
-) {
-  const preset = summarizeEdgeEffectField(
-    document,
-    selectedEdgeIds,
-    (clip) => clip.effect.type
+): AnimationBeamOccurrence[] {
+  const selected = new Set(selectedEdgeIds);
+  return document.scenarios.flatMap((scenario) =>
+    TEMPLATE_PREVIEW_NAMES.has(scenario.name)
+      ? []
+      : scenario.tracks.flatMap((track) => {
+          if (
+            !track.enabled ||
+            track.property !== "connection-effect" ||
+            track.target.type !== "edge" ||
+            !("id" in track.target) ||
+            !selected.has(track.target.id)
+          ) {
+            return [];
+          }
+          const edgeId = track.target.id;
+          return track.clips.flatMap((clip) =>
+            clip.effect.type === "edge.gradient-beam"
+              ? [
+                  {
+                    scenarioId: scenario.id,
+                    scenarioName: scenario.name,
+                    trackId: track.id,
+                    clipId: clip.id,
+                    edgeId,
+                    clip,
+                  },
+                ]
+              : []
+          );
+        })
   );
+}
+
+export function AnimationBeamScopeControls({
+  animationOptions,
+  activeScenarioId,
+  beamOptions,
+  activeBeamKey,
+  onAnimationChange,
+  onBeamChange,
+}: {
+  animationOptions: Array<{ value: string; label: string }>;
+  activeScenarioId: string;
+  beamOptions: Array<{ value: string; label: string }>;
+  activeBeamKey: string;
+  onAnimationChange: (scenarioId: string) => void;
+  onBeamChange: (beamKey: string) => void;
+}) {
+  return (
+    <>
+      <Row label="Animation">
+        <Picker
+          label="Animation occurrence"
+          value={activeScenarioId}
+          options={animationOptions}
+          onChange={onAnimationChange}
+        />
+      </Row>
+      <Row label="Beam">
+        <Picker
+          label="Beam occurrence"
+          value={activeBeamKey}
+          options={beamOptions}
+          onChange={onBeamChange}
+        />
+      </Row>
+      <p className="pb-1 text-[11px] font-medium leading-4 text-foreground/60">
+        Editing this beam only
+      </p>
+    </>
+  );
+}
+
+export function summarizeAnimationSelection(
+  document: PageScenarioDocumentV1,
+  selectedEdgeIds: readonly string[],
+  beam?: Pick<AnimationBeamOccurrence, "scenarioId" | "trackId" | "clipId">
+) {
+  const selectedClip = beam
+    ? document.scenarios
+        .find((scenario) => scenario.id === beam.scenarioId)
+        ?.tracks.find((track) => track.id === beam.trackId)
+        ?.clips.find((clip) => clip.id === beam.clipId)
+    : undefined;
+  const summarize = <T,>(
+    select: (clip: ScenarioClipV1) => T | undefined
+  ): FieldState<T | undefined> => {
+    if (!beam) {
+      return summarizeEdgeEffectField(document, selectedEdgeIds, select);
+    }
+    const value = selectedClip ? select(selectedClip) : undefined;
+    return value === undefined
+      ? { status: "none" }
+      : { status: "uniform", value };
+  };
+  const preset = summarize((clip) => clip.effect.type);
   return {
     preset,
-    direction: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+    direction: summarize((clip) => {
       const value = clip.effect.params.direction;
       return typeof value === "string" ? value : undefined;
     }),
-    duration: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) =>
-      clip.durationMs
-    ),
-    delay: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) =>
-      clip.startMs
-    ),
-    color: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+    duration: summarize((clip) => clip.durationMs),
+    delay: summarize((clip) => clip.startMs),
+    color: summarize((clip) => {
       const color = clip.effect.params.color;
       const colors = clip.effect.params.colors;
       if (typeof color === "string") return color;
@@ -402,19 +506,15 @@ export function summarizeAnimationSelection(
         ? colors[0]
         : undefined;
     }),
-    secondaryColor: summarizeEdgeEffectField(
-      document,
-      selectedEdgeIds,
-      (clip) => {
-        const colors = clip.effect.params.colors;
-        const secondary = clip.effect.params.secondaryColor;
-        if (Array.isArray(colors) && typeof colors[1] === "string") {
-          return colors[1];
-        }
-        return typeof secondary === "string" ? secondary : undefined;
+    secondaryColor: summarize((clip) => {
+      const colors = clip.effect.params.colors;
+      const secondary = clip.effect.params.secondaryColor;
+      if (Array.isArray(colors) && typeof colors[1] === "string") {
+        return colors[1];
       }
-    ),
-    width: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+      return typeof secondary === "string" ? secondary : undefined;
+    }),
+    width: summarize((clip) => {
       const keys =
         clip.effect.type === "edge.packet"
           ? ["sizePx", "packetSizePx", "widthPx"]
@@ -427,15 +527,15 @@ export function summarizeAnimationSelection(
       }
       return undefined;
     }),
-    beamLength: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+    beamLength: summarize((clip) => {
       const value = clip.effect.params.beamLengthPx;
       return typeof value === "number" ? value : undefined;
     }),
-    opacity: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+    opacity: summarize((clip) => {
       const value = clip.effect.params.opacity;
       return typeof value === "number" ? value : undefined;
     }),
-    glow: summarizeEdgeEffectField(document, selectedEdgeIds, (clip) => {
+    glow: summarize((clip) => {
       const value = clip.effect.params.glowBlurPx;
       return typeof value === "number" ? value : undefined;
     }),
@@ -1237,6 +1337,7 @@ export function AnimationPathBuilder() {
 
 export function AnimationOptions() {
   const edges = useFlowStore((state) => state.edges);
+  const nodes = useFlowStore((state) => state.nodes);
   const selectedEdgeIds = useMemo(
     () => edges.filter((edge) => edge.selected).map((edge) => edge.id),
     [edges]
@@ -1244,14 +1345,97 @@ export function AnimationOptions() {
   const document = useFlowStore((state) => state.scenarioDocument);
   const applyEffect = useFlowStore((state) => state.applySelectedEdgeEffect);
   const patchEffects = useFlowStore((state) => state.patchSelectedEdgeEffects);
+  const patchAnimationBeam = useFlowStore(
+    (state) => state.patchAnimationBeam
+  );
   const removeEffects = useFlowStore((state) => state.removeSelectedEdgeEffects);
+  const removeAnimationBeam = useFlowStore(
+    (state) => state.removeAnimationBeam
+  );
   const beginAnimationPath = useFlowStore(
     (state) => state.beginAnimationPath
   );
-  const summary = useMemo(
-    () => summarizeAnimationSelection(document, selectedEdgeIds),
+  const occurrences = useMemo(
+    () => findAnimationBeamOccurrences(document, selectedEdgeIds),
     [document, selectedEdgeIds]
   );
+  const [selectedScenarioId, setSelectedScenarioId] = useState("");
+  const [selectedBeamKey, setSelectedBeamKey] = useState("");
+  const animationOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          occurrences.map((occurrence) => [
+            occurrence.scenarioId,
+            {
+              value: occurrence.scenarioId,
+              label: occurrence.scenarioName,
+            },
+          ])
+        ).values()
+      ),
+    [occurrences]
+  );
+  const activeScenarioId = animationOptions.some(
+    (option) => option.value === selectedScenarioId
+  )
+    ? selectedScenarioId
+    : animationOptions[0]?.value ?? "";
+  const scenarioOccurrences = occurrences.filter(
+    (occurrence) => occurrence.scenarioId === activeScenarioId
+  );
+  const occurrenceKey = (occurrence: AnimationBeamOccurrence) =>
+    `${occurrence.trackId}:${occurrence.clipId}`;
+  const beamLabel = (occurrence: AnimationBeamOccurrence) => {
+    const edge = edges.find((item) => item.id === occurrence.edgeId);
+    const source = nodes.find((node) => node.id === edge?.source);
+    const target = nodes.find((node) => node.id === edge?.target);
+    const direction = occurrence.clip.effect.params.direction;
+    const reverse = direction === "reverse";
+    const fromNode = reverse ? target : source;
+    const toNode = reverse ? source : target;
+    const from = fromNode ? getNodeDisplayName(fromNode) : "Unknown block";
+    const to = toNode ? getNodeDisplayName(toNode) : "Unknown block";
+    const phase =
+      occurrence.clip.effect.params.pathPhase === "response"
+        ? "Response"
+        : occurrence.clip.effect.params.pathPreset === "request-response"
+          ? "Request"
+          : direction === "bidirectional"
+            ? "Bi-directional"
+            : "Beam";
+    return `${phase} · ${from} ${direction === "bidirectional" ? "↔" : "→"} ${to}`;
+  };
+  const beamOptions = scenarioOccurrences.map((occurrence) => ({
+    value: occurrenceKey(occurrence),
+    label: beamLabel(occurrence),
+  }));
+  const activeBeamKey = beamOptions.some(
+    (option) => option.value === selectedBeamKey
+  )
+    ? selectedBeamKey
+    : beamOptions[0]?.value ?? "";
+  const activeBeam = scenarioOccurrences.find(
+    (occurrence) => occurrenceKey(occurrence) === activeBeamKey
+  );
+  const summary = useMemo(
+    () => summarizeAnimationSelection(document, selectedEdgeIds, activeBeam),
+    [activeBeam, document, selectedEdgeIds]
+  );
+  const patchBeam = (patch: ScenarioClipPatchV1) => {
+    if (activeBeam) {
+      patchAnimationBeam(
+        {
+          scenarioId: activeBeam.scenarioId,
+          trackId: activeBeam.trackId,
+          clipId: activeBeam.clipId,
+        },
+        patch
+      );
+      return;
+    }
+    patchEffects(patch);
+  };
 
   const hasBeam =
     summary.preset.status === "uniform" &&
@@ -1266,6 +1450,22 @@ export function AnimationOptions() {
   return (
     <div className="flex-1 overflow-y-auto pb-4" data-animation-options>
       <div className="flex flex-col gap-2 border-b border-border px-4 py-3.5">
+        {occurrences.length > 0 ? (
+          <AnimationBeamScopeControls
+            animationOptions={animationOptions}
+            activeScenarioId={activeScenarioId}
+            beamOptions={beamOptions}
+            activeBeamKey={activeBeamKey}
+            onAnimationChange={(scenarioId) => {
+              setSelectedScenarioId(scenarioId);
+              const first = occurrences.find(
+                (occurrence) => occurrence.scenarioId === scenarioId
+              );
+              setSelectedBeamKey(first ? occurrenceKey(first) : "");
+            }}
+            onBeamChange={setSelectedBeamKey}
+          />
+        ) : null}
         {hasBeam ? (
           <div className="mb-1 flex h-7 items-center gap-2">
             <span className="h-[2px] w-6 rounded-full bg-gradient-to-r from-[#ffaa40] to-[#9c40ff]" />
@@ -1278,7 +1478,17 @@ export function AnimationOptions() {
               size="icon"
               className="ml-auto h-7 w-7 rounded-md"
               aria-label="Remove gradient beam"
-              onClick={removeEffects}
+              onClick={() => {
+                if (activeBeam) {
+                  removeAnimationBeam({
+                    scenarioId: activeBeam.scenarioId,
+                    trackId: activeBeam.trackId,
+                    clipId: activeBeam.clipId,
+                  });
+                } else {
+                  removeEffects();
+                }
+              }}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -1319,7 +1529,7 @@ export function AnimationOptions() {
             disabled={!hasBeam}
             onChange={(value) => {
               if (DIRECTIONS.some((item) => item.value === value)) {
-                patchEffects({
+                patchBeam({
                   effect: {
                     params: { direction: value as AnimationDirectionV1 },
                   },
@@ -1336,7 +1546,7 @@ export function AnimationOptions() {
           max={8}
           disabled={!hasBeam}
           onChange={(seconds) =>
-            patchEffects({
+            patchBeam({
               durationMs: Math.min(8_000, Math.max(400, seconds * 1_000)),
               easing: "linear",
             })
@@ -1350,7 +1560,7 @@ export function AnimationOptions() {
           max={10}
           disabled={!hasBeam}
           onChange={(seconds) =>
-            patchEffects({
+            patchBeam({
               startMs: Math.min(10_000, Math.max(0, seconds * 1_000)),
             })
           }
@@ -1379,11 +1589,11 @@ export function AnimationOptions() {
               disabled={!hasBeam}
               onChange={(color) => {
                 if (currentSecondary) {
-                  patchEffects({
+                  patchBeam({
                     effect: { params: { colors: [color, currentSecondary] } },
                   });
                 } else {
-                  patchEffects(createAnimationColorPatch(color));
+                  patchBeam(createAnimationColorPatch(color));
                 }
               }}
             />
@@ -1395,11 +1605,11 @@ export function AnimationOptions() {
               disabled={!hasBeam}
               onChange={(color) => {
                 if (currentPrimary) {
-                  patchEffects({
+                  patchBeam({
                     effect: { params: { colors: [currentPrimary, color] } },
                   });
                 } else {
-                  patchEffects({ effect: { params: { secondaryColor: color } } });
+                  patchBeam({ effect: { params: { secondaryColor: color } } });
                 }
               }}
             />
@@ -1413,7 +1623,7 @@ export function AnimationOptions() {
             step={0.5}
             disabled={!hasBeam}
             onChange={(value) =>
-              patchEffects(createAnimationWidthPatch(value))
+              patchBeam(createAnimationWidthPatch(value))
             }
           />
           <ValueRow
@@ -1425,7 +1635,7 @@ export function AnimationOptions() {
             step={1}
             disabled={!hasBeam}
             onChange={(value) =>
-              patchEffects({
+              patchBeam({
                 effect: {
                   params: {
                     beamLengthPx: Math.min(240, Math.max(8, value)),
@@ -1443,7 +1653,7 @@ export function AnimationOptions() {
             step={0.05}
             disabled={!hasBeam}
             onChange={(value) =>
-              patchEffects({
+              patchBeam({
                 effect: { params: { opacity: Math.min(1, Math.max(0, value)) } },
               })
             }
@@ -1457,7 +1667,7 @@ export function AnimationOptions() {
             step={1}
             disabled={!hasBeam}
             onChange={(value) =>
-              patchEffects({
+              patchBeam({
                 effect: {
                   params: { glowBlurPx: Math.min(32, Math.max(0, value)) },
                 },

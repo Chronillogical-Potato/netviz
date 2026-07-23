@@ -66,6 +66,16 @@ export interface PatchEdgeEffectsInput {
   scenarioId?: string;
 }
 
+export interface AnimationBeamReference {
+  scenarioId: string;
+  trackId: string;
+  clipId: string;
+}
+
+export interface PatchAnimationBeamInput extends AnimationBeamReference {
+  patch: ScenarioClipPatchV1;
+}
+
 export interface RemoveEdgeEffectsInput {
   edgeIds: readonly string[];
   scenarioId?: string;
@@ -319,6 +329,79 @@ export function patchEdgeEffects(
   if (!changed) return document;
   const nextScenario = fitScenarioToClips({ ...scenario, tracks });
   return replaceScenario(document, scenarioIndex, nextScenario);
+}
+
+export function patchAnimationBeam(
+  document: PageScenarioDocumentV1,
+  input: PatchAnimationBeamInput
+): PageScenarioDocumentV1 {
+  const sourceScenario = document.scenarios.find(
+    (scenario) => scenario.id === input.scenarioId
+  );
+  const sourceClip = sourceScenario?.tracks
+    .find((track) => track.id === input.trackId)
+    ?.clips.find((clip) => clip.id === input.clipId);
+  if (!sourceClip) return document;
+
+  const startDelta =
+    input.patch.startMs === undefined
+      ? null
+      : input.patch.startMs - sourceClip.startMs;
+  let changed = false;
+  const scenarios = document.scenarios.map((scenario) => {
+    let scenarioChanged = false;
+    const tracks = scenario.tracks.map((track) => {
+      if (track.id !== input.trackId) return track;
+      const clips = track.clips.map((clip) => {
+        if (clip.id !== input.clipId) return clip;
+        scenarioChanged = true;
+        changed = true;
+        return patchClip(clip, {
+          ...input.patch,
+          ...(startDelta === null
+            ? {}
+            : { startMs: clip.startMs + startDelta }),
+        });
+      });
+      return scenarioChanged ? { ...track, clips } : track;
+    });
+    return scenarioChanged
+      ? fitScenarioToClips({ ...scenario, tracks })
+      : scenario;
+  });
+
+  return changed ? { ...document, scenarios } : document;
+}
+
+export function removeAnimationBeam(
+  document: PageScenarioDocumentV1,
+  reference: AnimationBeamReference
+): PageScenarioDocumentV1 {
+  const sourceExists = document.scenarios
+    .find((scenario) => scenario.id === reference.scenarioId)
+    ?.tracks.find((track) => track.id === reference.trackId)
+    ?.clips.some((clip) => clip.id === reference.clipId);
+  if (!sourceExists) return document;
+
+  let changed = false;
+  const scenarios = document.scenarios.map((scenario) => {
+    let scenarioChanged = false;
+    const tracks = scenario.tracks.flatMap((track) => {
+      if (track.id !== reference.trackId) return [track];
+      const clips = track.clips.filter(
+        (clip) => clip.id !== reference.clipId
+      );
+      if (clips.length === track.clips.length) return [track];
+      changed = true;
+      scenarioChanged = true;
+      return clips.length > 0 ? [{ ...track, clips }] : [];
+    });
+    return scenarioChanged
+      ? fitScenarioToClips({ ...scenario, tracks })
+      : scenario;
+  });
+
+  return changed ? { ...document, scenarios } : document;
 }
 
 export function removeEdgeEffects(

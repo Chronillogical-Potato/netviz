@@ -165,6 +165,78 @@ describe("AnimationOptions", () => {
     expect(markup).toContain("Start delay");
   });
 
+  test("offers animation and beam scopes for a template edge occurrence", () => {
+    useFlowStore.setState({
+      nodes: [],
+      edges: [],
+      scenarioDocument: createEmptyScenarioDocument(),
+    });
+    useFlowStore
+      .getState()
+      .insertTemplate("sharded-postgres-platform", { x: 0, y: 0 });
+    const state = useFlowStore.getState();
+    const firewall = state.nodes.find(
+      (item) => item.data.label === "Edge Firewall"
+    );
+    const loadBalancer = state.nodes.find(
+      (item) => item.data.label === "Traffic Load Balancer"
+    );
+    expect(firewall).toBeDefined();
+    expect(loadBalancer).toBeDefined();
+    useFlowStore.setState((current) => ({
+      edges: current.edges.map((item) => ({
+        ...item,
+        selected:
+          item.source === firewall?.id && item.target === loadBalancer?.id,
+      })),
+    }));
+    const selected = useFlowStore
+      .getState()
+      .edges.filter((item) => item.selected);
+    expect(selected).toHaveLength(1);
+    const occurrences =
+      AnimationOptionComponents.findAnimationBeamOccurrences(
+        useFlowStore.getState().scenarioDocument,
+        selected.map((item) => item.id)
+      );
+    expect(occurrences.length).toBeGreaterThan(1);
+    expect(occurrences.map((item) => item.scenarioName)).toContain(
+      "Web profile request / response"
+    );
+    expect(
+      occurrences.some(
+        (item) => item.clip.effect.params.pathPhase === "response"
+      )
+    ).toBeTrue();
+    const first = occurrences[0]!;
+    const markup = renderToStaticMarkup(
+      <AnimationOptionComponents.AnimationBeamScopeControls
+        animationOptions={[
+          {
+            value: first.scenarioId,
+            label: first.scenarioName,
+          },
+        ]}
+        activeScenarioId={first.scenarioId}
+        beamOptions={[
+          {
+            value: first.clipId,
+            label: "Request · Edge Firewall → Traffic Load Balancer",
+          },
+        ]}
+        activeBeamKey={first.clipId}
+        onAnimationChange={() => {}}
+        onBeamChange={() => {}}
+      />
+    );
+
+    expect(markup).toContain('aria-label="Animation occurrence"');
+    expect(markup).toContain('aria-label="Beam occurrence"');
+    expect(markup).toContain("Web profile request / response");
+    expect(markup).toContain("Request");
+    expect(markup).toContain("Editing this beam only");
+  });
+
   test("shows mixed state when selected edges do not share an effect", () => {
     useFlowStore.setState({ edges: [edge("edge-a"), edge("edge-b")] });
     useFlowStore.setState((state) => ({

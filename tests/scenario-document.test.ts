@@ -11,8 +11,10 @@ import {
   createDefaultScenarioDocument,
   createEmptyScenarioDocument,
   createScenario,
+  patchAnimationBeam,
   patchEdgeEffects,
   pruneScenarioTargets,
+  removeAnimationBeam,
   removeEdgeEffects,
   summarizeEdgeEffectField,
   summarizeField,
@@ -92,6 +94,94 @@ describe("scenario document factories", () => {
 });
 
 describe("scenario document edits", () => {
+  test("patches and removes one beam clip without changing sibling beams", () => {
+    let document = applyEdgeEffect(createEmptyScenarioDocument(), {
+      edgeIds: ["edge-a"],
+      effect: {
+        type: "edge.gradient-beam",
+        params: { colors: ["#ffaa40", "#9c40ff"], direction: "forward" },
+      },
+      clip: { startMs: 1_000, durationMs: 1_500 },
+      idFactory: ids("scenario-source", "track-a", "clip-request"),
+    });
+    document = applyEdgeEffect(document, {
+      edgeIds: ["edge-a"],
+      effect: {
+        type: "edge.gradient-beam",
+        params: { colors: ["#38bdf8", "#818cf8"], direction: "reverse" },
+      },
+      clip: { startMs: 4_000, durationMs: 1_500 },
+      append: true,
+      idFactory: ids("clip-response"),
+    });
+    const source = document.scenarios[0]!;
+    const preview = {
+      ...source,
+      id: "scenario-preview",
+      name: "Combined preview",
+      tracks: source.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => ({
+          ...clip,
+          startMs: clip.startMs + 5_000,
+        })),
+      })),
+    };
+    document = {
+      ...document,
+      scenarios: [preview, source],
+      defaultScenarioId: preview.id,
+    };
+    const updated = patchAnimationBeam(document, {
+      scenarioId: source.id,
+      trackId: "track-a",
+      clipId: "clip-request",
+      patch: {
+        startMs: 1_600,
+        durationMs: 2_750,
+        effect: { params: { beamLengthPx: 92 } },
+      },
+    });
+
+    const sourceClips = updated.scenarios[1]?.tracks[0]?.clips;
+    const previewClips = updated.scenarios[0]?.tracks[0]?.clips;
+    expect(sourceClips?.[0]).toMatchObject({
+      id: "clip-request",
+      startMs: 1_600,
+      durationMs: 2_750,
+      effect: { params: { beamLengthPx: 92 } },
+    });
+    expect(previewClips?.[0]).toMatchObject({
+      id: "clip-request",
+      startMs: 6_600,
+      durationMs: 2_750,
+      effect: { params: { beamLengthPx: 92 } },
+    });
+    expect(sourceClips?.[1]).toMatchObject({
+      id: "clip-response",
+      startMs: 4_000,
+      durationMs: 1_500,
+    });
+    expect(previewClips?.[1]).toMatchObject({
+      id: "clip-response",
+      startMs: 9_000,
+      durationMs: 1_500,
+    });
+
+    const removed = removeAnimationBeam(updated, {
+      scenarioId: source.id,
+      trackId: "track-a",
+      clipId: "clip-request",
+    });
+    expect(
+      removed.scenarios.map((scenario) =>
+        scenario.tracks.flatMap((track) =>
+          track.id === "track-a" ? track.clips.map((clip) => clip.id) : []
+        )
+      )
+    ).toEqual([["clip-response"], ["clip-response"]]);
+  });
+
   test("applies a border effect to a node target", () => {
     const updated = applyNodeEffect(createEmptyScenarioDocument(), {
       nodeIds: ["node-a"],
