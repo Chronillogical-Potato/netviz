@@ -114,6 +114,8 @@ export function prepareAllConnections(
   force = false
 ) {
   const state = useFlowStore.getState();
+  const playbackRate =
+    scenarioRuntime.getTransportSnapshot().playbackRate;
   const scenarioDocument = applyNodeBorderEntrySides(
     normalizeGradientBeamDefaults(state.scenarioDocument),
     state.edges
@@ -131,6 +133,7 @@ export function prepareAllConnections(
     )
   ) {
     scenarioRuntime.activate(state.activePageId, activeScenario);
+    scenarioRuntime.setPlaybackRate(playbackRate);
     scenarioRuntime.setTargetScope(null);
     scenarioRuntime.setLoop(true);
     return;
@@ -147,6 +150,7 @@ export function prepareAllConnections(
         PLAY_ALL_CUSTOM_PATHS_SCENARIO_ID)
   ) {
     scenarioRuntime.activate(state.activePageId, sequence);
+    scenarioRuntime.setPlaybackRate(playbackRate);
   }
   scenarioRuntime.setTargetScope(null);
   scenarioRuntime.setLoop(true);

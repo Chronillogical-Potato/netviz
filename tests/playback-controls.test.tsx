@@ -190,4 +190,27 @@ describe("PlaybackControls", () => {
       scheduledPreviewId
     );
   });
+
+  test("keeps the chosen playback speed when preparing a template preview", async () => {
+    const controlsModule = (await import(
+      "../src/components/playback-controls"
+    )) as typeof import("../src/components/playback-controls") & {
+      prepareAllConnections?: () => void;
+    };
+    useFlowStore.setState({
+      nodes: [],
+      edges: [],
+      scenarioDocument: createEmptyScenarioDocument(),
+      activePageId: "page-playback-controls",
+    });
+    useFlowStore
+      .getState()
+      .insertTemplate("sharded-postgres-platform", { x: 0, y: 0 });
+    useFlowStore.getState().setWorkMode("animation");
+    scenarioRuntime.setPlaybackRate(2);
+
+    controlsModule.prepareAllConnections?.();
+
+    expect(scenarioRuntime.getTransportSnapshot().playbackRate).toBe(2);
+  });
 });
