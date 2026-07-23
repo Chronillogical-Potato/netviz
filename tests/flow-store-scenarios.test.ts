@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import { scenarioRuntime } from "../src/animation/runtime-instance";
 import { findAuthoredCustomPaths } from "../src/animation/custom-path";
+import { normalizeGradientBeamDefaults } from "../src/animation/gradient-beam";
 import type { FlowSnapshotV2 } from "../src/animation/snapshot-migrations";
 import {
   DEFAULT_MARKER,
@@ -749,6 +750,72 @@ describe("animation target lifecycle", () => {
           clip.effect.params.beamLengthPx !== 104
       )
     ).toBeTrue();
+  });
+
+  test("keeps downstream block shimmers synchronized with an edited travel time", () => {
+    useFlowStore.getState().insertTemplate("kubernetes-production-platform", {
+      x: 0,
+      y: 0,
+    });
+    const inserted = useFlowStore.getState();
+    const scenario = inserted.scenarioDocument.scenarios.find(
+      (item) => item.name === "Cached API request"
+    );
+    const firstTrack = scenario?.tracks.find(
+      (track) =>
+        track.property === "connection-effect" &&
+        track.clips[0]?.effect.type === "edge.gradient-beam"
+    );
+    const firstClip = firstTrack?.clips[0];
+
+    expect(scenario).toBeDefined();
+    expect(firstTrack).toBeDefined();
+    expect(firstClip).toBeDefined();
+    useFlowStore.getState().patchAnimationBeam(
+      {
+        scenarioId: scenario!.id,
+        trackId: firstTrack!.id,
+        clipId: firstClip!.id,
+      },
+      { durationMs: 400 }
+    );
+    useFlowStore.setState((state) => ({
+      scenarioDocument: normalizeGradientBeamDefaults(state.scenarioDocument),
+    }));
+
+    const updated = useFlowStore
+      .getState()
+      .scenarioDocument.scenarios.find((item) => item.id === scenario?.id);
+    const edgeStarts = updated?.tracks
+      .filter((track) => track.property === "connection-effect")
+      .flatMap((track) => track.clips)
+      .sort((left, right) => left.startMs - right.startMs)
+      .map((clip) => clip.startMs);
+    const shimmerStarts = updated?.tracks
+      .filter((track) => track.property === "node-effect")
+      .flatMap((track) => track.clips)
+      .sort((left, right) => left.startMs - right.startMs)
+      .map((clip) => clip.startMs);
+    const pathTrackIds = new Set(scenario?.tracks.map((track) => track.id));
+    const preview = useFlowStore
+      .getState()
+      .scenarioDocument.scenarios.find(
+        (item) => item.name === "Kubernetes production flows"
+      );
+    const previewEdgeStarts = preview?.tracks
+      .filter(
+        (track) =>
+          pathTrackIds.has(track.id) &&
+          track.property === "connection-effect"
+      )
+      .flatMap((track) => track.clips)
+      .sort((left, right) => left.startMs - right.startMs)
+      .map((clip) => clip.startMs);
+
+    expect(edgeStarts).toEqual([800, 1_800, 3_900, 6_000, 8_100]);
+    expect(shimmerStarts).toEqual([0, 1_000, 3_100, 5_200, 7_300, 9_400]);
+    expect(updated?.durationMs).toBe(10_200);
+    expect(previewEdgeStarts).toEqual(edgeStarts);
   });
 
   test("limits the simplified Kubernetes preview to two concurrent beams", () => {

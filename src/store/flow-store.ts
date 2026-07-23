@@ -33,7 +33,6 @@ import {
   cloneScenarioTargets,
   createDefaultScenarioDocument,
   createEmptyScenarioDocument,
-  patchAnimationBeam as patchAnimationBeamClip,
   patchEdgeEffects,
   pruneScenarioTargets,
   removeEdgeEffects,
@@ -59,6 +58,7 @@ import {
   createNodeBorderEffect,
   GRADIENT_BEAM_DURATION_MS,
   normalizeGradientBeamDefaults,
+  patchSynchronizedGradientBeam,
   REQUEST_FLOW_ARRIVAL_LEAD_MS,
   REQUEST_FLOW_EDGE_DELAY_MS,
   REQUEST_FLOW_HOP_DELAY_MS,
@@ -1963,10 +1963,11 @@ export const useFlowStore = create<FlowState>()(
 
   patchAnimationBeam: (reference, patch) =>
     set((s) => {
-      const scenarioDocument = patchAnimationBeamClip(s.scenarioDocument, {
-        ...reference,
-        patch,
-      });
+      const scenarioDocument = patchSynchronizedGradientBeam(
+        s.scenarioDocument,
+        { ...reference, patch },
+        s.edges
+      );
       return scenarioDocument === s.scenarioDocument
         ? s
         : { scenarioDocument };
