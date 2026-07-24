@@ -1,10 +1,10 @@
 # Netviz
 
-Netviz is a browser-based app for designing network architectures visually. 
+Netviz is a browser-based app for designing and animating network architectures visually.
 
-Add components like servers, proxies, and databases to a canvas, connect them to map data flow, organize them into layers, and customize every detail.
+Add components like servers, proxies, and databases to a canvas, connect them to map data flow, then build animated request paths for presentations and recordings.
 
-<img src="/.github/screenshot.png"/>
+<img src="/.github/screenshot.png" alt="Netviz animation editor showing a load-balanced request flow"/>
 
 > [!IMPORTANT]  
 > This project was entirely created using AI, but the application has been thoroughly tested.
@@ -13,8 +13,10 @@ Add components like servers, proxies, and databases to a canvas, connect them to
 
 ## Features
 
-- Drag and drop blocks from a sidebar
+- Drag and drop blocks or insert production templates
 - Connect blocks with edges
+- Build and tune custom request-flow animations
+- Preview animations with optional camera follow
 - Inspector panel to edit selected items
 - Custom blocks with your own icons
 - Duplicate blocks
