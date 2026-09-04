@@ -1203,7 +1203,6 @@ function InfraEditor({ node }: { node: InfraNode }) {
   );
   const block = resolveBlock(node.data.blockId, customBlocks);
   const iconName = node.data.iconName ?? block?.iconName ?? "box";
-  const accent = node.data.accent ?? block?.accent ?? "slate";
   const iconPosition =
     node.data.iconPosition ?? (block?.variant === "card" ? "top" : "left");
   const textAlign =
@@ -1260,10 +1259,6 @@ function InfraEditor({ node }: { node: InfraNode }) {
             }))}
           />
         </Row>
-        <AccentRow
-          value={accent}
-          onChange={(a) => updateNodeData(node.id, { accent: a })}
-        />
       </Section>
       <Section title="Style">
         <Row label="Shape">
