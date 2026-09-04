@@ -1,14 +1,14 @@
-FROM oven/bun:alpine AS build
+FROM ghcr.io/shadowarcanist/aube:v2.2.0 AS build
 
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json aube-lock.yaml aube-workspace.yaml ./
 
-RUN bun install --frozen-lockfile
+RUN aube ci
 
 COPY . .
 
-RUN bun run build
+RUN aube run build
 
 FROM ghcr.io/shadowarcanist/rustinx:v1.0
 

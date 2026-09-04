@@ -27,25 +27,21 @@ Add components like servers, proxies, and databases to a canvas, connect them to
 
 ## Requirements
 
-- Node.js 20 or newer (or Bun 1.1 or newer)
-- npm, pnpm, or bun
+- Node.js 20 or newer
+- Aube 2.1 or newer
 
 ## Local development
 
 Install dependencies:
 
 ```bash
-bun install
-# or
-npm install
+aube install --frozen-lockfile
 ```
 
 Start the dev server:
 
 ```bash
-bun run dev
-# or
-npm run dev
+aube run dev
 ```
 
 Open http://localhost:8888 in your browser.
@@ -55,23 +51,19 @@ Open http://localhost:8888 in your browser.
 Create a production build in `dist/`:
 
 ```bash
-bun run build
-# or
-npm run build
+aube run build
 ```
 
 Preview the build locally:
 
 ```bash
-bun run preview
-# or
-npm run preview
+aube run preview
 ```
 
 ## Deploy
 
 ### Option 1: Any static host
-1. Run `bun run build`
+1. Run `aube run build`
 2. The `dist/` folder is a plain static site. Upload it to any static host, that's it.
 
 ### Option 2: Coolify
