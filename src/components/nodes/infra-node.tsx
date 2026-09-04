@@ -30,6 +30,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
   const iconPosition = data.iconPosition ?? (isCard ? "top" : "left");
   const textAlign = data.textAlign ?? (isCard ? "center" : "left");
   const customIcon = data.customIcon;
+  const isCircle = data.shape === "circle";
 
   const titleStyle = data.titleColor ? { color: data.titleColor } : undefined;
   const subtitleStyle = data.subtitleColor
@@ -41,9 +42,19 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
   const iconTile = showIcon ? (
     <div
       className={cn(
-        "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg",
+        "flex shrink-0 items-center justify-center overflow-hidden",
+        isCircle
+          ? "h-24 w-24 rounded-full border border-border bg-card shadow-sm"
+          : "h-10 w-10 rounded-lg",
         !customIcon && accent.tile
       )}
+      style={isCircle ? {
+        ...(data.bgColor ? { backgroundColor: data.bgColor } : {}),
+        ...(data.borderColor ? { borderColor: data.borderColor } : {}),
+        ...(typeof data.borderWidth === "number"
+          ? { borderWidth: data.borderWidth }
+          : {}),
+      } : undefined}
     >
       {customIcon ? (
         <img
@@ -53,7 +64,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
           draggable={false}
         />
       ) : (
-        <Icon className={cn("h-5 w-5", accent.icon)} />
+        <Icon className={cn(isCircle ? "h-8 w-8" : "h-5 w-5", accent.icon)} />
       )}
     </div>
   ) : null;
@@ -88,16 +99,26 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
 
   const iconFirst = iconPosition === "left" || iconPosition === "top";
 
+  const circleContent = (
+    <div className="flex h-full w-full flex-col items-center justify-start gap-2">
+      {iconTile}
+      {textBlock}
+    </div>
+  );
+
   return (
     <div
       className={cn(
-        "infra-card group relative flex h-full w-full select-none rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color]",
+        "infra-card group relative flex h-full w-full select-none text-card-foreground transition-[box-shadow,border-color]",
+        isCircle
+          ? "bg-transparent"
+          : "rounded-xl border border-border bg-card shadow-sm",
         "hover:shadow-md"
       )}
       style={{
-        ...(data.bgColor ? { backgroundColor: data.bgColor } : {}),
-        ...(data.borderColor ? { borderColor: data.borderColor } : {}),
-        ...(typeof data.borderRadius === "number"
+        ...(!isCircle && data.bgColor ? { backgroundColor: data.bgColor } : {}),
+        ...(!isCircle && data.borderColor ? { borderColor: data.borderColor } : {}),
+        ...(!isCircle && typeof data.borderRadius === "number"
           ? { borderRadius: data.borderRadius }
           : {}),
         ...(typeof data.borderWidth === "number"
@@ -107,16 +128,27 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
     >
       <NodeMotionBorder nodeId={id} />
       <CanvasNodeResizer
-        isVisible={selected}
+        isVisible={selected && !isCircle}
 
         lineClassName="!border-ring/70"
         handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
       />
       {HANDLE_POSITIONS.map(({ pos, key }) => (
-        <Handle key={key} type="source" position={pos} id={key} />
+        <Handle
+          key={key}
+          type="source"
+          position={pos}
+          id={key}
+          style={isCircle ? (
+            key === "left" ? { left: 22, top: 48 } :
+            key === "right" ? { right: 22, top: 48 } :
+            key === "bottom" ? { top: 96, bottom: "auto" } :
+            undefined
+          ) : undefined}
+        />
       ))}
 
-      <div
+      {isCircle ? circleContent : <div
         className={cn(
           "flex h-full w-full gap-3 p-3",
           isVertical ? "flex-col" : "flex-row",
@@ -134,7 +166,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
         {iconFirst && iconTile}
         {textBlock}
         {!iconFirst && iconTile}
-      </div>
+      </div>}
     </div>
   );
 }

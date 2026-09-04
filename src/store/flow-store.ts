@@ -75,6 +75,7 @@ import {
 import { findTemplate, TEMPLATES } from "@/templates/registry";
 
 export type InfraVariant = "row" | "card";
+export type InfraShape = "square" | "circle";
 export type IconPosition = "left" | "right" | "top" | "bottom";
 export type TextAlign = "left" | "center" | "right";
 
@@ -101,6 +102,7 @@ export type InfraNodeData = WithGroup &
     iconName?: IconName;
     accent?: Accent;
     variant?: InfraVariant;
+    shape?: InfraShape;
     iconPosition?: IconPosition;
     textAlign?: TextAlign;
     customIcon?: string;
@@ -370,6 +372,7 @@ type FlowState = Snapshot & {
     position: { x: number; y: number }
   ) => void;
   updateNodeData: (id: string, patch: NodeDataPatch) => void;
+  setInfraShape: (id: string, shape: InfraShape) => void;
   duplicateNodes: (
     ids: string[],
     offset?: { x: number; y: number }
@@ -1770,6 +1773,22 @@ export const useFlowStore = create<FlowState>()(
         ),
       };
     }),
+
+  setInfraShape: (id, shape) =>
+    set((s) => ({
+      nodes: s.nodes.map((node) =>
+        node.id === id && node.type === "infra"
+          ? {
+              ...node,
+              style:
+                shape === "circle"
+                  ? { ...node.style, width: 140, height: 140 }
+                  : infraSize(node.data.variant ?? "row"),
+              data: { ...node.data, shape },
+            }
+          : node
+      ),
+    })),
 
   updateEdgeLabel: (id, label) =>
     set((s) => ({

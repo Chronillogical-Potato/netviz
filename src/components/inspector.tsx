@@ -36,6 +36,7 @@ import {
   type IconPosition,
   type ImageNode,
   type InfraNode,
+  type InfraShape,
   type LineNode,
   type ShapeNode,
   type StepNode,
@@ -1195,6 +1196,7 @@ const CODE_LANGUAGES: CodeLanguage[] = [
 function InfraEditor({ node }: { node: InfraNode }) {
   const customBlocks = useFlowStore((s) => s.customBlocks);
   const updateNodeData = useFlowStore((s) => s.updateNodeData);
+  const setInfraShape = useFlowStore((s) => s.setInfraShape);
   const onIconChange = useCallback(
     (name: string) => updateNodeData(node.id, { iconName: name }),
     [node.id, updateNodeData]
@@ -1264,6 +1266,18 @@ function InfraEditor({ node }: { node: InfraNode }) {
         />
       </Section>
       <Section title="Style">
+        <Row label="Shape">
+          <Segmented<InfraShape>
+            className="flex-1"
+            value={node.data.shape ?? "square"}
+            onChange={(shape) => setInfraShape(node.id, shape)}
+            options={[
+              { value: "square", label: "Square" },
+              { value: "circle", label: "Circle" },
+            ]}
+          />
+        </Row>
+        {node.data.shape !== "circle" && (
         <SliderRow
           label="Radius"
           value={node.data.borderRadius ?? 12}
@@ -1271,6 +1285,7 @@ function InfraEditor({ node }: { node: InfraNode }) {
           max={48}
           onChange={(v) => updateNodeData(node.id, { borderRadius: v })}
         />
+        )}
         <SliderRow
           label="Border"
           value={node.data.borderWidth ?? 1}
