@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import {
   VIDEO_START_DELAY_MS,
   beginVideoPresentation,

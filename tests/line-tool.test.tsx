@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReactFlowProvider } from "@xyflow/react";
 import { CanvasToolbar } from "../src/components/canvas-toolbar";
@@ -38,10 +39,10 @@ describe("line tool", () => {
   });
 
   test("does not offer the removed bar arrow", async () => {
-    const inspector = await Bun.file(
+    const inspector = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
-    const lineNode = await Bun.file(
+    const lineNode = await testFile(
       new URL("../src/components/nodes/line-node.tsx", import.meta.url)
     ).text();
 
@@ -50,7 +51,7 @@ describe("line tool", () => {
   });
 
   test("disables rotation when either line endpoint is connected", async () => {
-    const inspector = await Bun.file(
+    const inspector = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
     expect(inspector).toContain(

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Toolbar } from "../src/components/toolbar";
@@ -18,10 +19,10 @@ describe("project sharing UI", () => {
   });
 
   test("moves sharing into File settings and uses a settings icon", async () => {
-    const toolbar = await Bun.file(
+    const toolbar = await testFile(
       new URL("../src/components/toolbar.tsx", import.meta.url)
     ).text();
-    const settings = await Bun.file(
+    const settings = await testFile(
       new URL("../src/components/settings-dialog.tsx", import.meta.url)
     ).text();
 

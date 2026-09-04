@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 
 describe("block border radius", () => {
   test("applies border radius to every block-like node", async () => {
@@ -10,7 +11,7 @@ describe("block border radius", () => {
       "image-node",
       "code-node",
     ]) {
-      const source = await Bun.file(
+      const source = await testFile(
         new URL(`../src/components/nodes/${file}.tsx`, import.meta.url)
       ).text();
       expect(source).toContain("borderRadius");
@@ -18,7 +19,7 @@ describe("block border radius", () => {
   });
 
   test("offers radius control for step blocks", async () => {
-    const inspector = await Bun.file(
+    const inspector = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
     const stepEditor = inspector.slice(

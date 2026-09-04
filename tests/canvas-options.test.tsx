@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CanvasOptions } from "../src/components/canvas-options";
 import { useFlowStore, type LabeledEdge } from "../src/store/flow-store";

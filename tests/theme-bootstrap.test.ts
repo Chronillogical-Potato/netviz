@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 
 describe("theme bootstrap", () => {
   test("applies the saved theme and background before the app bundle loads", async () => {
-    const html = await Bun.file(
+    const html = await testFile(
       new URL("../index.html", import.meta.url)
     ).text();
     const bootstrapIndex = html.indexOf("data-theme-bootstrap");
@@ -18,7 +19,7 @@ describe("theme bootstrap", () => {
   });
 
   test("keeps the System option aligned with the pre-paint bootstrap", async () => {
-    const provider = await Bun.file(
+    const provider = await testFile(
       new URL("../src/components/theme-provider.tsx", import.meta.url)
     ).text();
 

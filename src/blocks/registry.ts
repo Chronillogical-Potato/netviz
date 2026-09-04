@@ -31,6 +31,7 @@ export type BlockDef = {
   builtin: boolean;
   variant?: InfraVariantDef;
   bgColor?: string;
+  iconColor?: string;
   titleColor?: string;
   subtitleColor?: string;
   borderColor?: string;

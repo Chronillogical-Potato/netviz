@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { PageScenarioDocumentV1, ScenarioTrackV1 } from "../src/animation/model";
 import {
   buildSequentialCustomPathScenario,

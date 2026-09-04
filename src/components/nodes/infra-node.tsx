@@ -64,7 +64,10 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
           draggable={false}
         />
       ) : (
-        <Icon className={cn(isCircle ? "h-8 w-8" : "h-5 w-5", accent.icon)} />
+        <Icon
+          className={cn(isCircle ? "h-8 w-8" : "h-5 w-5", accent.icon)}
+          style={data.iconColor ? { color: data.iconColor } : undefined}
+        />
       )}
     </div>
   ) : null;

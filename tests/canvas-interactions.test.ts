@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import * as CanvasComponents from "../src/components/canvas";
 
 describe("canvas tool interactions", () => {
@@ -89,7 +90,7 @@ describe("canvas tool interactions", () => {
   });
 
   test("uses a neutral grey connection preview", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
     const popover = source.slice(
@@ -103,7 +104,7 @@ describe("canvas tool interactions", () => {
   });
 
   test("matches the larger block selector row styling", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
     const popover = source.slice(
@@ -142,7 +143,7 @@ describe("canvas tool interactions", () => {
       top: 8,
     });
 
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
     expect(source).toContain(

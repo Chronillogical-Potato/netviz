@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import { scenarioRuntime } from "../src/animation/runtime-instance";
 import { findAuthoredCustomPaths } from "../src/animation/custom-path";
@@ -220,7 +220,7 @@ describe("page-owned animation state", () => {
     useFlowStore.getState().setWorkMode("preview");
 
     expect(useFlowStore.getState().previewIntent).toBe("clean");
-    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBeFalse();
+    expect(scenarioRuntime.getTransportSnapshot().isPlaying).toBe(false);
   });
 
   test("persists the Video presentation title, delays, and camera follow", () => {
@@ -332,7 +332,7 @@ describe("page-owned animation state", () => {
       type: "edge.pulse",
       params: { direction: "forward" },
     });
-    await Bun.sleep(350);
+    await new Promise((resolve) => setTimeout(resolve, 350));
     expect(useFlowStore.getState().scenarioDocument.scenarios).toHaveLength(1);
 
     useFlowStore.temporal.getState().undo();
@@ -469,7 +469,7 @@ describe("animation target lifecycle", () => {
       )?.clips[0]?.startMs;
 
     expect(defaultScenario?.name).toBe("Load-balanced requests");
-    expect(startsAt(edgeToA?.id)).toBeNumber();
+    expect(startsAt(edgeToA?.id)).toEqual(expect.any(Number));
     expect(startsAt(edgeToB?.id)).toBeGreaterThan(startsAt(edgeToA?.id) ?? 0);
     expect(startsAt(edgeToC?.id)).toBeGreaterThan(startsAt(edgeToB?.id) ?? 0);
   });
@@ -504,7 +504,7 @@ describe("animation target lifecycle", () => {
 
       expect(state.nodes.length).toBeGreaterThanOrEqual(template.minimumNodes);
       expect(state.edges.length).toBeGreaterThanOrEqual(template.minimumEdges);
-      expect(state.edges.every((edge) => edge.data?.curveStyle === "smooth")).toBeTrue();
+      expect(state.edges.every((edge) => edge.data?.curveStyle === "smooth")).toBe(true);
       expect(Math.min(...state.nodes.map((node) => node.position.x))).toBe(80);
       expect(Math.min(...state.nodes.map((node) => node.position.y))).toBe(120);
       expect(active?.name).toBe(template.preview);
@@ -578,14 +578,14 @@ describe("animation target lifecycle", () => {
         responseEdges.some(
           (edge) => edge.source === dns?.id || edge.target === dns?.id
         )
-      ).toBeFalse();
+      ).toBe(false);
       expect(
         responseEdges.some(
           (edge) =>
             (edge.source === client?.id && edge.target === firewall?.id) ||
             (edge.source === firewall?.id && edge.target === client?.id)
         )
-      ).toBeTrue();
+      ).toBe(true);
     }
     const activeForwardBeams =
       preview?.tracks
@@ -662,14 +662,14 @@ describe("animation target lifecycle", () => {
           clip.durationMs === 3_750 &&
           clip.effect.params.beamLengthPx === 96
       )
-    ).toBeTrue();
+    ).toBe(true);
     expect(
       otherClips.some(
         (clip) =>
           clip.durationMs !== 3_750 ||
           clip.effect.params.beamLengthPx !== 96
       )
-    ).toBeTrue();
+    ).toBe(true);
   });
 
   test("edits only one beam occurrence inside one template animation", () => {
@@ -701,7 +701,7 @@ describe("animation target lifecycle", () => {
     const requestClip = mobileTrack?.clips.find(
       (clip) => clip.effect.params.pathPhase !== "response"
     );
-    expect(edgeId).toBeString();
+    expect(edgeId).toEqual(expect.any(String));
     expect(requestClip).toBeDefined();
     useFlowStore.getState().patchAnimationBeam(
       {
@@ -742,14 +742,14 @@ describe("animation target lifecycle", () => {
           clip.durationMs === 3_250 &&
           clip.effect.params.beamLengthPx === 104
       )
-    ).toBeTrue();
+    ).toBe(true);
     expect(
       otherOccurrences.some(
         (clip) =>
           clip.durationMs !== 3_250 ||
           clip.effect.params.beamLengthPx !== 104
       )
-    ).toBeTrue();
+    ).toBe(true);
   });
 
   test("keeps downstream block shimmers synchronized with an edited travel time", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { canonicalIconName } from "../src/blocks/icons";
 import { CORE_BLOCKS } from "../src/blocks/registry";
 import { TEMPLATES } from "../src/templates/registry";
@@ -76,7 +76,7 @@ describe("production templates", () => {
     );
     expect(
       TEMPLATES.every((template) => canonicalIconName(template.iconName))
-    ).toBeTrue();
+    ).toBe(true);
   });
 
   test("keeps production stages spacious and uses purpose-specific icons", () => {
@@ -89,7 +89,7 @@ describe("production templates", () => {
       expect(Math.min(...gaps)).toBeGreaterThanOrEqual(320);
       expect(
         template.nodes.every((node) => canonicalIconName(node.iconName))
-      ).toBeTrue();
+      ).toBe(true);
     }
   });
 
@@ -105,7 +105,7 @@ describe("production templates", () => {
       const template = TEMPLATES.find((item) => item.id === expected.id);
       expect(template).toBeDefined();
       expect(template?.edgeCurveStyle).toBe("smooth");
-      expect(template?.previewName).toBeString();
+      expect(template?.previewName).toEqual(expect.any(String));
       expect(template?.nodes.length).toBeGreaterThanOrEqual(
         expected.minimumNodes
       );
@@ -118,10 +118,10 @@ describe("production templates", () => {
       const labels = template?.nodes.map((node) => node.label) ?? [];
       const animations =
         template?.animations.map((animation) => animation.name) ?? [];
-      expect(expected.labels.every((label) => labels.includes(label))).toBeTrue();
+      expect(expected.labels.every((label) => labels.includes(label))).toBe(true);
       expect(
         expected.animations.every((animation) => animations.includes(animation))
-      ).toBeTrue();
+      ).toBe(true);
     }
   });
 
@@ -143,7 +143,7 @@ describe("production templates", () => {
     ]);
     expect(
       requestResponse.every((animation) => animation.responseColors?.length === 2)
-    ).toBeTrue();
+    ).toBe(true);
   });
 
   test("keeps the Kubernetes template focused with four readable flows", () => {
@@ -184,19 +184,19 @@ describe("production templates", () => {
       expect(new Set(template.edges.map((edge) => edge.key)).size).toBe(
         template.edges.length
       );
-      expect(template.nodes.every((node) => blockIds.has(node.blockId))).toBeTrue();
+      expect(template.nodes.every((node) => blockIds.has(node.blockId))).toBe(true);
       expect(
         template.edges.every(
           (edge) => nodeKeys.has(edge.source) && nodeKeys.has(edge.target)
         )
-      ).toBeTrue();
+      ).toBe(true);
       expect(
         template.animations.every((animation) =>
           animation.nodeKeys.slice(0, -1).every((key, index) =>
             edgePairs.has(`${key}:${animation.nodeKeys[index + 1]}`)
           )
         )
-      ).toBeTrue();
+      ).toBe(true);
       expect(
         template.animations.every(
           (animation) =>
@@ -207,7 +207,7 @@ describe("production templates", () => {
               )
             )
         )
-      ).toBeTrue();
+      ).toBe(true);
     }
   });
 });

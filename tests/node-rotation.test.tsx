@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import * as NodeControls from "../src/components/nodes/canvas-node-resizer";
 
 describe("node corner rotation", () => {
@@ -22,7 +23,7 @@ describe("node corner rotation", () => {
 
   test("adds corner rotation controls to shapes and text", async () => {
     for (const file of ["shape-node", "text-node"]) {
-      const source = await Bun.file(
+      const source = await testFile(
         new URL(`../src/components/nodes/${file}.tsx`, import.meta.url)
       ).text();
       expect(source).toContain("NodeRotationControls");
@@ -31,7 +32,7 @@ describe("node corner rotation", () => {
   });
 
   test("uses invisible Figma-style rotation zones at every corner", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL(
         "../src/components/nodes/canvas-node-resizer.tsx",
         import.meta.url

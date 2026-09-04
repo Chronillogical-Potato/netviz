@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { ScenarioV1 } from "../src/animation/model";
 import {
   buildVideoCameraTrack,
@@ -219,7 +219,7 @@ describe("video camera track", () => {
     });
 
     expect(camera.cues.length).toBeGreaterThan(1);
-    expect(camera.cues.every((cue) => cue.viewport.zoom === 0.85)).toBeTrue();
+    expect(camera.cues.every((cue) => cue.viewport.zoom === 0.85)).toBe(true);
   });
 
   test("plans the full connected route before playback without a hold at a block", () => {

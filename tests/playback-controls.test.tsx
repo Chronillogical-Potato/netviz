@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -143,7 +144,7 @@ describe("PlaybackControls", () => {
   });
 
   test("starts the runtime after the delayed Video launch", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/playback-controls.tsx", import.meta.url)
     ).text();
 
@@ -152,7 +153,7 @@ describe("PlaybackControls", () => {
   });
 
   test("rebuilds Video playback with all configured delays", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/playback-controls.tsx", import.meta.url)
     ).text();
 

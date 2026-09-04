@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import {
   useFlowStore,
   type LineNode,
@@ -32,7 +33,7 @@ describe("line endpoint bindings", () => {
       }
     ).setLineEndpointBinding;
 
-    expect(bind).toBeFunction();
+    expect(bind).toEqual(expect.any(Function));
     if (!bind) return;
     bind(lineId, "start", { nodeId: first, handleId: "right" });
     bind(lineId, "end", { nodeId: second, handleId: "left" });
@@ -71,10 +72,10 @@ describe("line endpoint bindings", () => {
   });
 
   test("uses block handles when drawing and reconnecting line endpoints", async () => {
-    const canvas = await Bun.file(
+    const canvas = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
-    const lineNode = await Bun.file(
+    const lineNode = await testFile(
       new URL("../src/components/nodes/line-node.tsx", import.meta.url)
     ).text();
 

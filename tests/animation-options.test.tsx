@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createEmptyScenarioDocument } from "../src/animation/scenario-document";
 import * as AnimationOptionComponents from "../src/components/animation-options";
@@ -207,7 +207,7 @@ describe("AnimationOptions", () => {
       occurrences.some(
         (item) => item.clip.effect.params.pathPhase === "response"
       )
-    ).toBeTrue();
+    ).toBe(true);
     const first = occurrences[0]!;
     const markup = renderToStaticMarkup(
       <AnimationOptionComponents.AnimationBeamScopeControls

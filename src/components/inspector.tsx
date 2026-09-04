@@ -1297,6 +1297,7 @@ function InfraEditor({ node }: { node: InfraNode }) {
       <ColorsSection
         targets={[
           { key: "bg", label: "Background", value: node.data.bgColor, onChange: (v) => updateNodeData(node.id, { bgColor: v }) },
+          { key: "icon", label: "Icon", value: node.data.iconColor, onChange: (v) => updateNodeData(node.id, { iconColor: v }) },
           { key: "title", label: "Title", value: node.data.titleColor, onChange: (v) => updateNodeData(node.id, { titleColor: v }) },
           { key: "desc", label: "Info", value: node.data.subtitleColor, onChange: (v) => updateNodeData(node.id, { subtitleColor: v }) },
           { key: "border", label: "Border", value: node.data.borderColor, onChange: (v) => updateNodeData(node.id, { borderColor: v }) },

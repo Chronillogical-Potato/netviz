@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 
 describe("inspector layout", () => {
   test("scrolls the complete animation inspector when paths overflow", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
     const animationBranch = source.slice(
@@ -14,7 +15,7 @@ describe("inspector layout", () => {
   });
 
   test("offers persistent Video delay and camera controls", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
     expect(source).toContain("<VideoSettings />");

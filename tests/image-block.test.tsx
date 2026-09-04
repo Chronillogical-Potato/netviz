@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReactFlowProvider } from "@xyflow/react";
 import { ImageNodeView } from "../src/components/nodes/image-node";
@@ -54,7 +55,7 @@ describe("image block", () => {
   });
 
   test("lets the image frame resize freely", async () => {
-    const imageNode = await Bun.file(
+    const imageNode = await testFile(
       new URL("../src/components/nodes/image-node.tsx", import.meta.url)
     ).text();
 
@@ -80,7 +81,7 @@ describe("image block", () => {
   });
 
   test("shows fit, scale, opacity, and border controls in the inspector", async () => {
-    const inspector = await Bun.file(
+    const inspector = await testFile(
       new URL("../src/components/inspector.tsx", import.meta.url)
     ).text();
 
@@ -93,7 +94,7 @@ describe("image block", () => {
   });
 
   test("removes legacy alt text from the image model and layer name", async () => {
-    const store = await Bun.file(
+    const store = await testFile(
       new URL("../src/store/flow-store.ts", import.meta.url)
     ).text();
 

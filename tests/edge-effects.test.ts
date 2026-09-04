@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { ScenarioClipV1 } from "../src/animation/model";
 import { evaluateClipTiming } from "../src/animation/timing";
 import { projectEdgeEffect } from "../src/animation/edge-effects";

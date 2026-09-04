@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ScenarioClipV1 } from "../src/animation/model";
 import type { TargetFrame } from "../src/animation/runtime";

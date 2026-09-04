@@ -1,11 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
+import { testFile } from "./test-file";
 
 describe("Video mode camera follow", () => {
   test("preserves the clean Preview viewport while editor chrome is hidden", async () => {
-    const toolbarSource = await Bun.file(
+    const toolbarSource = await testFile(
       new URL("../src/components/toolbar.tsx", import.meta.url)
     ).text();
-    const canvasSource = await Bun.file(
+    const canvasSource = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
 
@@ -19,10 +20,10 @@ describe("Video mode camera follow", () => {
   });
 
   test("keeps chrome removal stationary and starts camera motion with playback", async () => {
-    const canvasSource = await Bun.file(
+    const canvasSource = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
-    const controlsSource = await Bun.file(
+    const controlsSource = await testFile(
       new URL("../src/components/playback-controls.tsx", import.meta.url)
     ).text();
 
@@ -40,10 +41,10 @@ describe("Video mode camera follow", () => {
   });
 
   test("renders the active animation name through a compositor camera", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
-    const packageJson = await Bun.file(
+    const packageJson = await testFile(
       new URL("../package.json", import.meta.url)
     ).json();
 
@@ -52,7 +53,7 @@ describe("Video mode camera follow", () => {
     expect(source).toContain("videoTitle.trim()");
     expect(source).toContain("getActiveScenario");
     expect(source).not.toContain("Now playing");
-    expect(packageJson.dependencies.motion).toBeString();
+    expect(packageJson.dependencies.motion).toEqual(expect.any(String));
     expect(source).toContain('from "motion"');
     expect(source).not.toContain("requestAnimationFrame");
     expect(source).not.toContain("advanceVideoCameraMotion");
@@ -81,7 +82,7 @@ describe("Video mode camera follow", () => {
   });
 
   test("keeps the Video title visible when camera follow is disabled", async () => {
-    const source = await Bun.file(
+    const source = await testFile(
       new URL("../src/components/canvas.tsx", import.meta.url)
     ).text();
 

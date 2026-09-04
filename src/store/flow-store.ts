@@ -85,6 +85,7 @@ export type TextAlign = "left" | "center" | "right";
 type WithGroup = { groupId?: string | null; name?: string };
 type WithColors = {
   bgColor?: string;
+  iconColor?: string;
   titleColor?: string;
   subtitleColor?: string;
   borderColor?: string;
@@ -1349,6 +1350,7 @@ export const useFlowStore = create<FlowState>()(
               subtitle: block.subtitle,
               variant,
               bgColor: block.bgColor,
+              iconColor: block.iconColor,
               titleColor: block.titleColor,
               subtitleColor: block.subtitleColor,
               borderColor: block.borderColor,
@@ -1391,6 +1393,7 @@ export const useFlowStore = create<FlowState>()(
               iconName: item.iconName,
               variant,
               bgColor: block.bgColor,
+              iconColor: block.iconColor,
               titleColor: block.titleColor,
               subtitleColor: block.subtitleColor,
               borderColor: block.borderColor,

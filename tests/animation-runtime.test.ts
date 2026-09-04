@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import type { ScenarioClipV1, ScenarioV1 } from "../src/animation/model";
 import type { AnimationFrameScheduler } from "../src/animation/clock";
 import { ScenarioRuntime, type TargetFrame } from "../src/animation/runtime";
