@@ -44,7 +44,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden",
         isCircle
-          ? "h-24 w-24 rounded-full border border-border bg-card shadow-sm"
+          ? "aspect-square h-[calc(100%-2.75rem)] rounded-full border border-border bg-card shadow-sm"
           : "h-10 w-10 rounded-lg",
         !customIcon && accent.tile
       )}
@@ -65,7 +65,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
         />
       ) : (
         <Icon
-          className={cn(isCircle ? "h-8 w-8" : "h-5 w-5", accent.icon)}
+          className={cn(isCircle ? "h-1/3 w-1/3" : "h-5 w-5", accent.icon)}
           style={data.iconColor ? { color: data.iconColor } : undefined}
         />
       )}
@@ -131,7 +131,10 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
     >
       <NodeMotionBorder nodeId={id} />
       <CanvasNodeResizer
-        isVisible={selected && !isCircle}
+        isVisible={selected}
+        keepAspectRatio={isCircle}
+        minWidth={isCircle ? 88 : undefined}
+        minHeight={isCircle ? 88 : undefined}
 
         lineClassName="!border-ring/70"
         handleClassName="!h-1.5 !w-1.5 !rounded-[1px] !border !border-ring !bg-white !shadow-sm"
@@ -143,9 +146,9 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
           position={pos}
           id={key}
           style={isCircle ? (
-            key === "left" ? { left: 22, top: 48 } :
-            key === "right" ? { right: 22, top: 48 } :
-            key === "bottom" ? { top: 96, bottom: "auto" } :
+            key === "left" ? { left: 22, top: "calc((100% - 44px) / 2)" } :
+            key === "right" ? { right: 22, top: "calc((100% - 44px) / 2)" } :
+            key === "bottom" ? { top: "calc(100% - 44px)", bottom: "auto" } :
             undefined
           ) : undefined}
         />

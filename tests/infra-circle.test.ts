@@ -21,7 +21,8 @@ describe("infra circle display", () => {
     ).text();
 
     expect(node).toContain('data.shape === "circle"');
-    expect(node).toContain("h-24 w-24 rounded-full");
+    expect(node).toContain("aspect-square");
+    expect(node).toContain("keepAspectRatio={isCircle}");
     expect(node).toContain("data.iconColor");
     expect(node).toContain("{iconTile}");
     expect(node).toContain("{textBlock}");
