@@ -11,7 +11,7 @@ import {
 } from "@/ui/icons";
 import type { AppIcon } from "@/ui/icons";
 import { useReactFlow, getNodesBounds, getViewportForBounds } from "@xyflow/react";
-import { toPng, toSvg } from "html-to-image";
+import { loadIconCatalog } from "@/blocks/icons";
 import { useFlowStore } from "@/store/flow-store";
 import {
   createFlowSnapshot,
@@ -289,6 +289,11 @@ export function Toolbar() {
     if (!viewport || nodes.length === 0) return;
     const bounds = customBounds ?? getNodesBounds(nodes);
     if (bounds.width === 0 || bounds.height === 0) return;
+
+    const [{ toPng, toSvg }] = await Promise.all([
+      import("html-to-image"),
+      loadIconCatalog(),
+    ]);
 
     // Force React Flow to mount all nodes/edges (disables virtualization temporarily)
     setRenderAll(true);

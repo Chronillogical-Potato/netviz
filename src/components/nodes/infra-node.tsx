@@ -42,10 +42,10 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
   const iconTile = showIcon ? (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden",
+        "flex shrink-0 items-center justify-center",
         isCircle
-          ? "aspect-square h-[calc(100%-2.75rem)] rounded-full border border-border bg-card shadow-sm"
-          : "h-10 w-10 rounded-lg",
+          ? "infra-card relative aspect-square h-[calc(100%-2.75rem)] rounded-full border border-border bg-card shadow-sm"
+          : "h-10 w-10 overflow-hidden rounded-lg",
         !customIcon && accent.tile
       )}
       style={isCircle ? {
@@ -56,11 +56,12 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
           : {}),
       } : undefined}
     >
+      {isCircle && <NodeMotionBorder nodeId={id} />}
       {customIcon ? (
         <img
           src={customIcon}
           alt=""
-          className="h-full w-full object-cover"
+          className="h-full w-full rounded-[inherit] object-cover"
           draggable={false}
         />
       ) : (
@@ -112,11 +113,10 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
   return (
     <div
       className={cn(
-        "infra-card group relative flex h-full w-full select-none text-card-foreground transition-[box-shadow,border-color]",
+        "group relative flex h-full w-full select-none text-card-foreground transition-[box-shadow,border-color]",
         isCircle
           ? "bg-transparent"
-          : "rounded-xl border border-border bg-card shadow-sm",
-        "hover:shadow-md"
+          : "infra-card rounded-xl border border-border bg-card shadow-sm hover:shadow-md"
       )}
       style={{
         ...(!isCircle && data.bgColor ? { backgroundColor: data.bgColor } : {}),
@@ -129,7 +129,7 @@ function InfraNodeComponent({ id, data, selected }: NodeProps<InfraNode>) {
           : {}),
       }}
     >
-      <NodeMotionBorder nodeId={id} />
+      {!isCircle && <NodeMotionBorder nodeId={id} />}
       <CanvasNodeResizer
         isVisible={selected}
         keepAspectRatio={isCircle}

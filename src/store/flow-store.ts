@@ -1167,16 +1167,18 @@ function reorderNodesInArray(
 }
 
 export function descendantGroupIds(groups: Group[], rootId: string): Set<string> {
+  const children = new Map<string, string[]>();
+  for (const group of groups) {
+    if (!group.parentGroupId) continue;
+    const siblings = children.get(group.parentGroupId);
+    if (siblings) siblings.push(group.id);
+    else children.set(group.parentGroupId, [group.id]);
+  }
   const result = new Set<string>([rootId]);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const g of groups) {
-      if (g.parentGroupId && result.has(g.parentGroupId) && !result.has(g.id)) {
-        result.add(g.id);
-        changed = true;
-      }
-    }
+  // Set iteration visits newly added descendants too, without recursion or
+  // repeatedly scanning every group. The membership check also handles cycles.
+  for (const id of result) {
+    for (const child of children.get(id) ?? []) result.add(child);
   }
   return result;
 }

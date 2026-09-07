@@ -335,7 +335,8 @@ export class ScenarioRuntime {
     }
 
     const nextActiveTargets = new Set<string>();
-    for (const targetId of this.targetListeners.keys()) {
+    for (const targetId of this.tracksByTarget.keys()) {
+      if (!this.targetListeners.has(targetId)) continue;
       if (this.targetScope !== null && !this.targetScope.has(targetId)) continue;
       const frame = this.createTargetFrame(targetId, timeMs);
       if (frame.clips.length === 0) continue;
