@@ -43,13 +43,28 @@
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
     <title>Netviz</title>
+      <style id="cookie-offline-fonts">
+      @font-face {
+        font-family: 'Fira Code Nerd Font Propo';
+        src: url('/fonts/FiraCodeNerdFontPropo-Retina.ttf') format('truetype');
+        font-weight: 400; font-style: normal; font-display: swap;
+      }
+      @font-face {
+        font-family: 'Fira Code Nerd Font Mono';
+        src: url('/fonts/FiraCodeNerdFontMono-Retina.ttf') format('truetype');
+        font-weight: 400; font-style: normal; font-display: swap;
+      }
+      @font-face {
+        font-family: 'Geist Pixel Line';
+        src: url('/fonts/GeistPixel-Line.otf') format('opentype');
+        font-weight: 400; font-style: normal; font-display: swap;
+      }
+      /* Geist titles only in standalone header containers */
+      .cookie-title, header.cookie-title-block, [data-cookie-title] {
+        font-family: 'Geist Pixel Line', monospace;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
